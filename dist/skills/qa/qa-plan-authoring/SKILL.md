@@ -61,6 +61,28 @@ command -v mysql >/dev/null 2>&1 && echo "mysql: available" || echo "mysql: unav
 command -v playwright >/dev/null 2>&1 && echo "Playwright CLI: available" || echo "Playwright CLI: unavailable"
 ```
 
+## Step 4.5: Harness execution scope — plan only what the runner can execute
+
+The QA runner (the `zmora` executor Perun dispatches to) can ONLY:
+
+- **FE:** drive a browser via Playwright (navigate, click, fill, assert, screenshot).
+- **BE:** make HTTP requests with `curl`, and query a database with `psql` / `sqlite3`.
+
+It **cannot** run `docker`, `docker compose`, `make`, build / deploy / install commands, image or network inspection, or `docker exec` — Perun's sanitiser rejects every such step. It also does **not** stand up or tear down the application; it tests an **already-running** instance reachable at the `base-url`.
+
+Consequences for the plan you write:
+
+- **Every scenario step must be a Playwright action, a `curl` request, or a `psql`/`sqlite3` query** against the running app. A step like `docker compose build`, `make up`, `docker image inspect`, `docker network inspect`, or `docker exec …` is NOT executable — never emit it as a scenario step.
+- **Infrastructure changes are tested by their *effect* on the running stack, not by their build/up/inspect commands.** Examples:
+  - reverse-proxy / TLS / headers → `curl -kI https://host/` and assert the security headers, the HTTP→HTTPS redirect, the status code.
+  - SPA serving / client-side routing → `curl` the root and a deep route; assert `index.html` is returned and asset cache headers.
+  - health / DB reachability → `curl /healthz`; `psql` a `SELECT 1` against the declared DSN.
+  - `/api` routing through the proxy → `curl https://host/api/openapi.json`.
+  - Things checkable ONLY with `docker`/`make` (image size, non-root UID, layer secrets, network `Internal: true`, `make smoke`) are **out of harness scope** — omit them, or list them under a short `## Out of harness scope` note for the human to check manually. Do NOT pad the plan with un-runnable scenarios.
+- **Bringing the stack up is a human Setup prerequisite, not a scenario.** If the scenarios need a running stack, declare it under `## Setup → **Required services:**` AND name the command the human runs to start it (free text after the backtick), e.g. ``- `https://localhost` — prod stack; start with `make prod.up` before running QA``. Perun asks the user to run it; the runner never starts it.
+- **`detected-tools` lists only harness-executable tools** (`curl`, `httpie`, `psql`, `sqlite3`, `mysql`, `playwright`). Never put `docker` / `docker-compose` / `make` there — listing them falsely signals the runner can use them.
+- If, after excluding non-observable steps, an infrastructure change has **nothing** observable over Playwright / HTTP / DB, say so honestly: emit few or zero scenarios and let `fe_count` / `be_count` reflect reality. A small honest plan beats a large un-runnable one.
+
 ## Step 5: Output format + Setup section
 
 Load the format skill: `skill(name: "test-plan-format")`. Follow it for frontmatter (`source`, `branch`, `base-url`, `detected-tools`) and overall structure.
@@ -68,12 +90,14 @@ Load the format skill: `skill(name: "test-plan-format")`. Follow it for frontmat
 Generate the `## Setup` section (placed after frontmatter, before `## FE Test Scenarios` / `## BE Test Scenarios`) by inferring from the diff:
 
 - New `process.env.X` / `os.environ["X"]` / `getenv("X")` / `ENV["X"]` → add `X` to `**Required environment variables:**` (name must match `^[A-Z_][A-Z0-9_]*$`).
-- New service URL (`https?://localhost:\d+`, `redis://`, `postgres://`, `mongodb://`) → `**Required services:**`.
+- New service URL (`https?://localhost:\d+`, `redis://`, `postgres://`, `mongodb://`) → `**Required services:**` (if the user must start it, name the start command after the backtick — see Step 4.5).
 - New DB connection string → `**Required databases:**` with an explicit scheme (`postgresql://…`, `mysql://…`, `redis://…`, `sqlite:///…`).
 
 Rules: one backtick group per item; free text after it is for humans; ≤50 items; omit the whole `## Setup` section if nothing is needed. Mark items as best-effort inferences for the user to review.
 
 ## Step 6: Generate scenarios
+
+Every scenario step MUST be executable by the runner (see Step 4.5): a Playwright action, a `curl` request, or a `psql`/`sqlite3` query against the **running** app. Do not emit `docker` / `make` / build / inspect steps — model "bring the stack up" as a Setup prerequisite instead.
 
 - **FE** (if FE changes): one scenario per changed component/page/feature, concrete UI element names from the code, ≥2 edge cases each.
 - **BE** (if BE changes): one scenario per changed endpoint, real paths/methods/payloads, DB checks with real table/column names, ≥2 edge cases each (error handling, auth, validation).
