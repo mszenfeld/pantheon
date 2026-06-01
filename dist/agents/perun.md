@@ -330,16 +330,20 @@ Then re-run /run-qa.
 
 Bindings status:
   ✅ <BINDING_OK> — already provisioned
-  ⏸ <BINDING_MISSING_INPUTS> — needs <INPUT1>, <INPUT2> to mint
+  ⏸ <BINDING_MISSING_INPUTS> — needs <INPUT1>, <INPUT2> to mint (egress: <EGRESS_HOST>)
   ⏸ <BINDING_DEPENDENT> — depends on <BINDING_MISSING_INPUTS>
 
+These inputs are declared by the plan's binding recipe — paste them in chat
+and they are recorded immediately (no restart). The recipe can only reach the
+egress host shown above.
+
 To proceed:
-  1. Set in shell, then RESTART OpenCode and reply 'resume' (safest for secrets):
+  1. Reply with the value(s) directly in chat — recorded immediately.
+     Format: NAME=value, one per line.
+  2. Prefer to keep a value out of the chat transcript (e.g. a real password)?
+     Set it in the shell that launched OpenCode, RESTART OpenCode, then reply
+     'resume':
        export INPUT1=…
-       export INPUT2=…
-  2. Reply with the value(s) directly in chat — values WILL persist in chat
-     transcript. OK for non-secret inputs (emails, IDs); NOT recommended for
-     passwords. Format: NAME=value, one per line.
   3. Reply 'abort' to stop the run.
 ```
 

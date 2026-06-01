@@ -41,7 +41,18 @@ export function makeRecordInputHandler(
       }
     }
 
-    const write = deps.store.writeBinding(parentID, args.name, args.value, "secret", "user-paste")
+    // A name the plan declares as a recipe input is authorised by the
+    // consented plan (its egress is validated and surfaced at consent time),
+    // so it is exempt from the credential-PREFIX denylist — process-control
+    // names (PATH, LD_*, …) stay denied regardless. This lets the user paste
+    // legitimate inputs like SUPABASE_URL / SUPABASE_ANON_KEY in chat instead
+    // of being forced to export them and restart.
+    const declaredInputs = new Set(
+      (deps.state.getBindings(parentID) ?? []).flatMap((b) => b.inputs),
+    )
+    const declaredInput = declaredInputs.has(args.name)
+
+    const write = deps.store.writeBinding(parentID, args.name, args.value, "secret", "user-paste", { declaredInput })
     if (write.status === "ok") return { status: "ok" }
     if (write.status === "duplicate") return { status: "ok" }
     return { status: "rejected", reason: write.reason }

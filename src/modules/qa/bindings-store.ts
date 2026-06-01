@@ -64,8 +64,25 @@ const DENYLIST_PREFIXES = [
   "K8S_", "KUBE",
 ]
 
-function nameIsDenied(name: string): boolean {
-  if (NAME_DENYLIST.has(name)) return true
+/**
+ * Process-control names corrupt the host shell environment for subsequent
+ * recipe / Zmora bash invocations (overriding PATH hijacks binary resolution,
+ * etc.). They are NEVER acceptable as a user-paste binding name — not even
+ * when a plan declares them as a recipe input.
+ */
+function nameInProcessControlDenylist(name: string): boolean {
+  return NAME_DENYLIST.has(name)
+}
+
+/**
+ * Credential / cloud / secret-manager prefixes. Guards against a malicious
+ * plan phishing the user into pasting a real credential under a plausible
+ * name. Only applies to names that are NOT declared inputs of a binding the
+ * user has already consented to — declared inputs are authorised by the plan
+ * (the recipe's `Egress` is validated and shown at consent time), mirroring
+ * the exemption that minted `QA_BIND_*` bindings already enjoy.
+ */
+function nameMatchesCredentialPrefix(name: string): boolean {
   for (const prefix of DENYLIST_PREFIXES) {
     if (name.startsWith(prefix)) return true
   }
@@ -153,6 +170,7 @@ export class BindingsStore {
     value: string,
     type: BindingType,
     source: BindingSource,
+    opts: { declaredInput?: boolean } = {},
   ): WriteResult {
     if (source === "minted-recipe") {
       if (!QA_BIND_RE.test(name)) {
@@ -162,8 +180,14 @@ export class BindingsStore {
       if (!ENV_NAME_RE.test(name)) {
         return { status: "error", reason: `name must match ^[A-Z_][A-Z0-9_]*$ (got '${name}')` }
       }
-      if (nameIsDenied(name)) {
+      if (nameInProcessControlDenylist(name)) {
         return { status: "error", reason: `name '${name}' is in the process-control denylist` }
+      }
+      // The credential-prefix denylist is skipped only for names the plan
+      // declares as a recipe input — those are authorised by the consented
+      // plan and its validated egress.
+      if (opts.declaredInput !== true && nameMatchesCredentialPrefix(name)) {
+        return { status: "error", reason: `name '${name}' matches a credential-prefix denylist (declare it as a binding Input to use it)` }
       }
     }
 

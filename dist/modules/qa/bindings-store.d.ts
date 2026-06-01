@@ -27,7 +27,9 @@ declare class BindingsStore {
     pinSnapshot(parentID: string): BindingSnapshot;
     releaseSnapshot(id: string): void;
     isPinned(parentID: string, name: string): boolean;
-    writeBinding(parentID: string, name: string, value: string, type: BindingType, source: BindingSource): WriteResult;
+    writeBinding(parentID: string, name: string, value: string, type: BindingType, source: BindingSource, opts?: {
+        declaredInput?: boolean;
+    }): WriteResult;
     /**
      * Purge entries older than TTL (excluding pinned). Returns count purged.
      * Called periodically from the plugin sweep timer.

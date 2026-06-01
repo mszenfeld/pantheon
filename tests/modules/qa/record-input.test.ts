@@ -2,6 +2,18 @@ import { describe, it, expect } from "vitest"
 import { BindingsStore } from "../../../src/modules/qa/bindings-store.js"
 import { QaRunState, MAX_DIALOG_ROUNDS } from "../../../src/modules/qa/qa-run-state.js"
 import { makeRecordInputHandler } from "../../../src/modules/qa/record-input.js"
+import type { ParsedBinding } from "../../../src/modules/qa/binding-parser.js"
+
+function bindingWithInputs(inputs: string[]): ParsedBinding {
+  return {
+    name: "QA_BIND_JWT",
+    type: "secret",
+    description: "test binding",
+    inputs,
+    egress: "$SUPABASE_URL",
+    recipe: "curl -sf $SUPABASE_URL",
+  }
+}
 
 function makeContext(sessionID: string) {
   return { sessionID, agent: "Perun - Coordinator" } as const
@@ -65,6 +77,32 @@ describe("record_input tool handler", () => {
     const r2 = await handler({ name: "X", value: "v2" }, makeContext("p1"))
     expect(r2.status).toBe("ok")
     expect(store.getBinding("p1", "X")?.value.unwrap()).toBe("v1")
+  })
+})
+
+describe("record_input — declared-input exemption", () => {
+  it("accepts a credential-prefix name that the plan declares as a recipe input", async () => {
+    const { store, state, handler } = makeDeps("p1")
+    state.storePlan("p1", [bindingWithInputs(["SUPABASE_URL", "SUPABASE_ANON_KEY"])])
+    const result = await handler({ name: "SUPABASE_ANON_KEY", value: "anon" }, makeContext("p1"))
+    expect(result.status).toBe("ok")
+    expect(store.getBinding("p1", "SUPABASE_ANON_KEY")?.value.unwrap()).toBe("anon")
+  })
+
+  it("rejects a credential-prefix name that no binding declares as an input", async () => {
+    const { handler, state } = makeDeps("p1")
+    // Plan exists but declares only TEST_USER_EMAIL — SUPABASE_ANON_KEY is undeclared.
+    state.storePlan("p1", [bindingWithInputs(["TEST_USER_EMAIL"])])
+    const result = await handler({ name: "SUPABASE_ANON_KEY", value: "anon" }, makeContext("p1"))
+    expect(result.status).toBe("rejected")
+    if (result.status === "rejected") expect(result.reason).toContain("denylist")
+  })
+
+  it("rejects a process-control name even when the plan declares it as an input", async () => {
+    const { handler, state } = makeDeps("p1")
+    state.storePlan("p1", [bindingWithInputs(["PATH"])])
+    const result = await handler({ name: "PATH", value: "/tmp/evil" }, makeContext("p1"))
+    expect(result.status).toBe("rejected")
   })
 })
 

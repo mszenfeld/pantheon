@@ -9,7 +9,11 @@ function makeRecordInputHandler(deps) {
         reason: `dialog_round_exceeded: max ${MAX_DIALOG_ROUNDS} rounds per QA run`
       };
     }
-    const write = deps.store.writeBinding(parentID, args.name, args.value, "secret", "user-paste");
+    const declaredInputs = new Set(
+      (deps.state.getBindings(parentID) ?? []).flatMap((b) => b.inputs)
+    );
+    const declaredInput = declaredInputs.has(args.name);
+    const write = deps.store.writeBinding(parentID, args.name, args.value, "secret", "user-paste", { declaredInput });
     if (write.status === "ok") return { status: "ok" };
     if (write.status === "duplicate") return { status: "ok" };
     return { status: "rejected", reason: write.reason };

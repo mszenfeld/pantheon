@@ -90,6 +90,29 @@ describe("BindingsStore.writeBinding — validation", () => {
     }
   })
 
+  it("exempts a credential-prefix name from the prefix denylist when it is a declared plan input", () => {
+    // SUPABASE_ANON_KEY matches the SUPABASE_ prefix but is a public,
+    // plan-declared recipe input — the user consented to the plan and the
+    // egress is validated, so the prefix denylist must not block it.
+    const result = store.writeBinding("perun1", "SUPABASE_ANON_KEY", "anon-key", "secret", "user-paste", { declaredInput: true })
+    expect(result).toEqual({ status: "ok" })
+    expect(store.getBinding("perun1", "SUPABASE_ANON_KEY")?.value.unwrap()).toBe("anon-key")
+  })
+
+  it("still rejects a credential-prefix name when NOT a declared input (SEC-007 preserved)", () => {
+    const result = store.writeBinding("perun1", "SUPABASE_ANON_KEY", "anon-key", "secret", "user-paste", { declaredInput: false })
+    expect(result.status).toBe("error")
+    if (result.status === "error") expect(result.reason).toContain("denylist")
+  })
+
+  it("NEVER exempts a process-control name, even when declared as an input", () => {
+    // PATH overriding the recipe's child env would let a malicious plan
+    // hijack binary resolution — process-control names stay denied regardless.
+    const result = store.writeBinding("perun1", "PATH", "/tmp/evil", "secret", "user-paste", { declaredInput: true })
+    expect(result.status).toBe("error")
+    if (result.status === "error") expect(result.reason).toContain("denylist")
+  })
+
   it("rejects names not matching identifier regex", () => {
     for (const name of ["", "lowercase", "1LEADING_DIGIT", "has-dash", "has space"]) {
       const result = store.writeBinding("perun1", name, "x", "plain", "user-paste")

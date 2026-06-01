@@ -263,7 +263,7 @@ export const AppVerkQAPlugin: Plugin = async ({ client }) => {
           name: tool.schema
             .string()
             .describe(
-              "Env var name (regular identifier, not necessarily QA_BIND_*), e.g. \"TEST_USER_EMAIL\". Must match /^[A-Z_][A-Z0-9_]*$/ and not be in the process-control denylist (PATH, NODE_OPTIONS, ...).",
+              "Env var name (regular identifier, not necessarily QA_BIND_*), e.g. \"TEST_USER_EMAIL\". Must match /^[A-Z_][A-Z0-9_]*$/ and never a process-control name (PATH, NODE_OPTIONS, ...). Credential-prefixed names (AWS_, SUPABASE_, DATABASE_, ...) are accepted only when the parsed plan declares them as a binding Input; otherwise rejected.",
             ),
           value: tool.schema
             .string()

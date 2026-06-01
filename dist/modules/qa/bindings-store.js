@@ -58,8 +58,10 @@ const DENYLIST_PREFIXES = [
   "K8S_",
   "KUBE"
 ];
-function nameIsDenied(name) {
-  if (NAME_DENYLIST.has(name)) return true;
+function nameInProcessControlDenylist(name) {
+  return NAME_DENYLIST.has(name);
+}
+function nameMatchesCredentialPrefix(name) {
   for (const prefix of DENYLIST_PREFIXES) {
     if (name.startsWith(prefix)) return true;
   }
@@ -130,7 +132,7 @@ class BindingsStore {
   isPinned(parentID, name) {
     return (this.#pinCounts.get(parentID)?.get(name) ?? 0) > 0;
   }
-  writeBinding(parentID, name, value, type, source) {
+  writeBinding(parentID, name, value, type, source, opts = {}) {
     if (source === "minted-recipe") {
       if (!QA_BIND_RE.test(name)) {
         return { status: "error", reason: `minted bindings must match ^QA_BIND_[A-Z][A-Z0-9_]*$ (got '${name}')` };
@@ -139,8 +141,11 @@ class BindingsStore {
       if (!ENV_NAME_RE.test(name)) {
         return { status: "error", reason: `name must match ^[A-Z_][A-Z0-9_]*$ (got '${name}')` };
       }
-      if (nameIsDenied(name)) {
+      if (nameInProcessControlDenylist(name)) {
         return { status: "error", reason: `name '${name}' is in the process-control denylist` };
+      }
+      if (opts.declaredInput !== true && nameMatchesCredentialPrefix(name)) {
+        return { status: "error", reason: `name '${name}' matches a credential-prefix denylist (declare it as a binding Input to use it)` };
       }
     }
     const vCheck = valueIsValid(value);
