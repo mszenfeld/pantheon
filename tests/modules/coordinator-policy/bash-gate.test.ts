@@ -10,7 +10,7 @@ function client(agent: string | undefined) {
     },
   } as never
 }
-const ALLOW = ["mkdir", "ls", "./scripts/qa-preflight.sh"]
+const ALLOW = ["mkdir", "ls"]
 
 describe("coordinator bash gate", () => {
   // Distinct sessionIDs per case: the gate resolves identity through a process-global

@@ -153,6 +153,43 @@ describe("createSDKSpecialist.startTask", () => {
     })
   })
 
+  it("invokes onSessionCreated with the new session id BEFORE session.prompt runs", async () => {
+    // Regression for the binding-propagation bug: `session.prompt` blocks for
+    // the entire subagent turn — including the bash calls that fire the
+    // `shell.env` hook. So the child→agent registration MUST happen between
+    // `session.create` and `session.prompt`; doing it after `startTask`
+    // resolves is too late (the hook already ran with no agent mapping and
+    // injected no bindings). This asserts the callback fires while
+    // `session.prompt` has NOT yet been called.
+    const fake = makeFakeClient({
+      createResponses: [{ data: { id: "sess-child-7" } }],
+    })
+    const specialist = createSDKSpecialist(fake.client, "parent-session-42")
+
+    const observed: Array<{ id: string; promptCallsAtCallback: number }> = []
+    const returnedId = await specialist.startTask("zmora-be", "run BE-01", (id) => {
+      observed.push({ id, promptCallsAtCallback: fake.calls.sessionPrompt.length })
+    })
+
+    expect(returnedId).toBe("sess-child-7")
+    expect(observed).toEqual([{ id: "sess-child-7", promptCallsAtCallback: 0 }])
+    // The prompt still runs afterwards.
+    expect(fake.calls.sessionPrompt).toHaveLength(1)
+  })
+
+  it("does not invoke onSessionCreated when session.create returns no id", async () => {
+    const fake = makeFakeClient({ createResponses: [{ data: { id: "" } }] })
+    const specialist = createSDKSpecialist(fake.client, "parent-session-42")
+
+    let called = false
+    await expect(
+      specialist.startTask("zmora-be", "ignored", () => {
+        called = true
+      }),
+    ).rejects.toThrow("createSession returned no session id")
+    expect(called).toBe(false)
+  })
+
   it("throws when session.create returns no session id and does not call session.prompt", async () => {
     const fake = makeFakeClient({
       createResponses: [{ data: { id: "" } }],

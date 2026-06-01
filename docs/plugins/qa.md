@@ -301,36 +301,34 @@ If you do accidentally paste a secret — anywhere, not just in a `NEED_INFO` re
 
 Rules:
 
-- One backtick group per item: env var NAME, service URL, or DB DSN. DSNs must include an explicit scheme (`postgresql://…`, `mysql://…`, `redis://…`, `sqlite:///…`); schemeless forms are rejected by preflight.
-- Free text after the backtick group is for the human reader; preflight ignores it.
-- Omit the section entirely if a plan needs no prerequisites — preflight emits a "no Setup section, skipping" toast and the run proceeds as before.
+- One backtick group per item: env var NAME, service URL, or DB DSN. DSNs must include an explicit scheme (`postgresql://…`, `mysql://…`, `redis://…`, `sqlite:///…`); schemeless forms are flagged with a warning.
+- Free text after the backtick group is for the human reader; it is ignored.
+- Omit the section entirely if a plan needs no prerequisites — Perun emits a "no Setup section, skipping" toast and the run proceeds as before.
 
 ### Preflight abort prompt
 
-After parsing the plan, Perun pipes the declared prerequisites through `scripts/qa-preflight.sh`, which probes each env var, service, and DB. If any item is `MISSING`, **Perun aborts before any Zmora dispatch** and emits a prompt of the form:
+After parsing the plan, Perun calls the **`preflight` tool** with the declared env-var names. The tool checks each name against the run's bindings store (values pasted via `record_input`, or already-minted bindings) and OpenCode's process env — the same resolution `execute_recipe` uses — and returns `{status:"ok"}` or `{status:"missing", missing:[…]}`. It runs in-process: no shell, no network, no filesystem, and it never sees a value (only presence). Service and database **liveness is not preflighted** — a host that is up now may be down at dispatch, so reachability is verified per-scenario via the `NEED_INFO` backstop (below). If any env name is `missing`, **Perun aborts before any Zmora dispatch** and emits a prompt of the form:
 
 ```
-⚠️ Cannot start QA — <N> prerequisite(s) missing:
+⚠️ Cannot start QA — <N> required value(s) missing:
 
-Environment variables not set in OpenCode's process:
   • <NAME_1>
-Services not reachable:
-  • <URL> (<reason>)
+  • <NAME_2>
 
 To proceed:
-  1. In the SAME shell that launches OpenCode, set the env vars:
-     `export <NAME_1>=…` (or `source .env` in that shell before starting OpenCode)
-  2. Start the missing services (e.g. `docker compose up -d`).
-  3. RESTART OpenCode if it's already running — env changes don't propagate live.
+  1. Reply with the value(s) directly in chat — recorded immediately (no restart).
+     Format: NAME=value, one per line.
+  2. Prefer to keep a value out of the chat transcript? Set it in the SAME shell
+     that launches OpenCode (`export <NAME>=…`), RESTART OpenCode, then reply `resume`.
 
 Then re-run /run-qa.
 ```
 
-This is not a bug — it means the plan declared a prerequisite the current process can't satisfy. Fix the gap and re-run `/run-qa` to retry; preflight runs again from scratch.
+This is not a bug — it means the plan declared a prerequisite the current process can't satisfy. Provide the values (in chat, or via shell + restart) and reply `resume`; preflight runs again from scratch.
 
 ### Mid-run `NEED_INFO` pause
 
-Preflight is a snapshot. A service that responded at preflight time may go down before its scenario runs, a credential may turn out to be expired, or a required CLI may be missing on `PATH` inside the Zmora subagent's allowlist. When a scenario detects such a runtime gap it returns status `NEED_INFO` (treated as `SKIP` for the report) with a structured payload classifying the gap by `kind`:
+Preflight only checks env-var presence. Service/DB **liveness** and **credential validity** are not checked up front — a host may be down at dispatch, a credential may turn out to be expired, or a required CLI may be missing on `PATH` inside the Zmora subagent's allowlist. When a scenario detects such a runtime gap it returns status `NEED_INFO` (treated as `SKIP` for the report) with a structured payload classifying the gap by `kind`:
 
 | `kind` | Meaning | `missing` payload |
 |---|---|---|

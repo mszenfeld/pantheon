@@ -62,16 +62,27 @@ function makeSpecialistRecorder(
   let startCallIndex = 0
 
   const specialist: DispatchSpecialist = {
-    async startTask(agentName: string, prompt: string): Promise<string> {
+    async startTask(
+      agentName: string,
+      prompt: string,
+      onSessionCreated?: (sessionId: string) => void,
+    ): Promise<string> {
       calls.startTask.push({ agentName, prompt })
+      // Model the production contract: `onSessionCreated` fires once a valid
+      // child session id exists (after create, before the turn) — never when
+      // start fails. The real SDK adapter fires it between session.create and
+      // the blocking session.prompt.
       if (config.startTaskHandler !== undefined) {
-        return config.startTaskHandler(agentName, prompt)
+        const id = await config.startTaskHandler(agentName, prompt)
+        onSessionCreated?.(id)
+        return id
       }
       const id = sessionIdSequence[startCallIndex++] ?? agentName
       const cfg = sessionMap[id]
       if (cfg?.startError !== undefined) {
         throw cfg.startError
       }
+      onSessionCreated?.(id)
       return id
     },
     async fetchMessages(sessionId: string): Promise<PollerMessage[]> {

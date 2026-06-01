@@ -21,7 +21,11 @@ export function createSDKSpecialist(
   parentSessionID: string,
 ): DispatchSpecialist {
   return {
-    async startTask(agentName: string, prompt: string): Promise<string> {
+    async startTask(
+      agentName: string,
+      prompt: string,
+      onSessionCreated?: (sessionId: string) => void,
+    ): Promise<string> {
       // OpenCode's session.create body accepts only parentID/title — the target
       // agent is bound on the subsequent session.prompt call. Two-step is required.
       const created = await client.session.create({
@@ -33,6 +37,17 @@ export function createSDKSpecialist(
       const sessionId: string = created.data?.id ?? ""
       if (sessionId.length === 0) {
         throw new Error(`createSession returned no session id for agent ${agentName}`)
+      }
+
+      // Fire the created-callback BEFORE prompting. `session.prompt` blocks for
+      // the full turn (incl. the bash calls that trigger the `shell.env` hook),
+      // so the child→agent mapping must be recorded here — recording it after
+      // `startTask` resolves would be after the hook already ran. Defensive
+      // try/catch: a callback fault must not abort the dispatch.
+      try {
+        onSessionCreated?.(sessionId)
+      } catch {
+        /* swallow: registration is best-effort and must not break the turn */
       }
 
       await client.session.prompt({

@@ -10,6 +10,7 @@ import { QaRunState } from "./qa-run-state.js";
 import { SessionAgentRegistry, makeShellEnvHook } from "./shell-env-hook.js";
 import { makeExecuteRecipeHandler } from "./execute-recipe.js";
 import { makeRecordInputHandler } from "./record-input.js";
+import { makePreflightHandler } from "./preflight.js";
 import { parseBindings } from "./binding-parser.js";
 import { scrubSecrets } from "./scrubber.js";
 import { makeRunBash } from "./run-bash.js";
@@ -63,6 +64,7 @@ const AppVerkQAPlugin = async ({ client }) => {
     runBash: makeRunBash(),
     processEnv: process.env
   });
+  const preflightHandler = makePreflightHandler({ store, resolveParentID, processEnv: process.env });
   const shellEnvHook = makeShellEnvHook({ store, registry, resolveParentID });
   registerDispatchExtensions({
     sessionAgentRegistry: registry,
@@ -104,7 +106,8 @@ const AppVerkQAPlugin = async ({ client }) => {
           tools: {
             execute_recipe: stack === "setup",
             record_input: false,
-            parse_plan: false
+            parse_plan: false,
+            preflight: false
           }
         };
       }
@@ -129,6 +132,28 @@ const AppVerkQAPlugin = async ({ client }) => {
       }
     },
     tool: {
+      preflight: tool({
+        description: [
+          "Verify that the env-var names a QA plan's `## Setup` declares as required are resolvable for this run, BEFORE dispatching any scenario. Perun-only. Call it after parsing the `## Setup` section and before the first `dispatch_parallel`.",
+          "",
+          "A name is 'present' if it is bound in the run's bindings store (user-pasted via `record_input`, or minted) OR set to a non-empty value in OpenCode's process env (which dispatched zmora children inherit) \u2014 the same resolution order `execute_recipe` uses for recipe inputs.",
+          "",
+          'Service / database *liveness* is NOT probed here \u2014 a host that is up now may be down at dispatch, so reachability is verified per-scenario via the `NEED_INFO` backstop (which reports `kind: "service"`). This tool only catches the most common gap: a missing credential / binding input.',
+          "",
+          "Result shape (JSON-stringified):",
+          '- `{ status: "ok" }` \u2014 every requested name is resolvable; proceed to dispatch.',
+          '- `{ status: "missing", missing: string[] }` \u2014 these names are unresolvable; ABORT the dispatch and emit the preflight prompt asking the user to provide them.'
+        ].join("\n"),
+        args: {
+          env: tool.schema.array(tool.schema.string()).describe(
+            "Env-var names parsed from the plan's `**Required environment variables:**` bullets (each matching /^[A-Z_][A-Z0-9_]*$/). Pass an empty array if the plan declares none."
+          )
+        },
+        async execute(args, ctx) {
+          const result = await preflightHandler({ env: args.env }, { sessionID: ctx.sessionID });
+          return JSON.stringify(result);
+        }
+      }),
       parse_plan: tool({
         description: [
           "Parse a QA plan's `## Setup` \u2192 `**Bindings:**` subsection into the plugin's per-run state. Perun MUST call this exactly once per QA run, after reading the plan and BEFORE the first `dispatch_parallel` that includes a zmora-setup task. Without this call `execute_recipe` returns `{status:\"unknown_binding\"}` for every recipe.",

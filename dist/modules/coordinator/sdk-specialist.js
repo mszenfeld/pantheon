@@ -1,6 +1,6 @@
 function createSDKSpecialist(client, parentSessionID) {
   return {
-    async startTask(agentName, prompt) {
+    async startTask(agentName, prompt, onSessionCreated) {
       const created = await client.session.create({
         body: {
           parentID: parentSessionID,
@@ -10,6 +10,10 @@ function createSDKSpecialist(client, parentSessionID) {
       const sessionId = created.data?.id ?? "";
       if (sessionId.length === 0) {
         throw new Error(`createSession returned no session id for agent ${agentName}`);
+      }
+      try {
+        onSessionCreated?.(sessionId);
+      } catch {
       }
       await client.session.prompt({
         path: { id: sessionId },

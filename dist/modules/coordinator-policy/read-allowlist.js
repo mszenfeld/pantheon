@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { parseAllowedBashPrograms } from "@appverk/opencode-skill-utils";
-const FALLBACK_ALLOWLIST = ["mkdir", "ls", "./scripts/qa-preflight.sh"];
+const FALLBACK_ALLOWLIST = ["mkdir", "ls"];
 function readCoordinatorBashAllowlist() {
   try {
     const perunMd = fileURLToPath(new URL("../../agents/perun.md", import.meta.url));

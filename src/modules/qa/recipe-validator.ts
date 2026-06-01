@@ -184,8 +184,7 @@ function hostOfURL(urlOrTemplate: string): string | null {
   // `[\w.-]+` excludes `@`, so it would capture the userinfo segment as the
   // host and let `https://egress.example.com@attacker.com` pass the egress
   // equality check while curl actually connects to attacker.com. No legitimate
-  // recipe needs `user@host`. Mirrors `${rest##*@}` stripping in
-  // scripts/qa-preflight.sh.
+  // recipe needs `user@host`.
   try {
     const u = new URL(urlOrTemplate.includes("://") ? urlOrTemplate : `scheme://${urlOrTemplate}`)
     if (u.username !== "" || u.password !== "") return null

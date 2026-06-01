@@ -14,7 +14,15 @@ interface DispatchResult {
     error?: string;
 }
 interface DispatchSpecialist {
-    startTask(agentName: string, prompt: string): Promise<string>;
+    /**
+     * Start a foreground task: create the child session, then run the turn via
+     * `session.prompt` (which blocks for the entire turn). `onSessionCreated`, if
+     * provided, fires with the child session id AFTER the session is created but
+     * BEFORE the turn runs — this is the only point at which a caller can record
+     * the child→agent mapping in time for the `shell.env` hook, which fires
+     * mid-turn. Resolves the child session id once the turn completes.
+     */
+    startTask(agentName: string, prompt: string, onSessionCreated?: (sessionId: string) => void): Promise<string>;
     fetchMessages(sessionId: string): Promise<PollerMessage[]>;
     /**
      * Cancel a previously-started session. Called when `ToolContext.abort`

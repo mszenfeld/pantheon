@@ -10,7 +10,7 @@ import { parseAllowedBashPrograms } from "@appverk/opencode-skill-utils"
  * `Promise.all` plugin-init) or silently blocking the coordinator's own `mkdir`/`ls`.
  * `read-allowlist.test.ts` guards this constant against `perun.md` frontmatter drift.
  */
-export const FALLBACK_ALLOWLIST = ["mkdir", "ls", "./scripts/qa-preflight.sh"]
+export const FALLBACK_ALLOWLIST = ["mkdir", "ls"]
 
 /** Read Perun's allowed bash programs from its agent markdown frontmatter (single source of truth). */
 export function readCoordinatorBashAllowlist(): string[] {

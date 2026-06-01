@@ -78,6 +78,18 @@ Rules: one backtick group per item; free text after it is for humans; ≤50 item
 - **FE** (if FE changes): one scenario per changed component/page/feature, concrete UI element names from the code, ≥2 edge cases each.
 - **BE** (if BE changes): one scenario per changed endpoint, real paths/methods/payloads, DB checks with real table/column names, ≥2 edge cases each (error handling, auth, validation).
 
+## Step 6.5: Binding completeness check
+
+Every `$QA_BIND_*` token you reference in ANY scenario (auth headers, payloads, DB connection strings) MUST have a matching declaration in the Setup `**Bindings:**` subsection. A `$QA_BIND_*` with no declaration can never be provisioned — `execute_recipe` returns `unknown_binding` and every scenario using it stalls on `NEED_INFO`.
+
+This bites hardest with **multi-principal** scenarios. When a scenario exercises a SECOND authenticated user (e.g. "user B exports user A's resource → 404", or RLS-isolation tests that reference `$QA_BIND_JWT_FOR_USER_B`), you MUST declare a SEPARATE binding for that principal — it cannot share the first user's token:
+
+- Give it a distinct name (e.g. `QA_BIND_JWT_FOR_USER_B`).
+- Give it its own `Inputs:` for the second principal (e.g. `TEST_USER_B_EMAIL`, `TEST_USER_B_PASSWORD`) — and add those names to `**Required environment variables:**` so preflight verifies them.
+- Reuse the same `Egress:` and `Recipe:` shape as the first binding, substituting the second principal's input names.
+
+Before saving, scan every scenario for `$QA_BIND_*` tokens and confirm each one is declared. If you cannot construct a recipe for a referenced principal, drop or rewrite the scenario rather than emit a dangling binding reference.
+
 ## Step 7: Save
 
 ```bash

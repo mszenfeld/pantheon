@@ -23,7 +23,19 @@ export interface DispatchResult {
 }
 
 export interface DispatchSpecialist {
-  startTask(agentName: string, prompt: string): Promise<string>
+  /**
+   * Start a foreground task: create the child session, then run the turn via
+   * `session.prompt` (which blocks for the entire turn). `onSessionCreated`, if
+   * provided, fires with the child session id AFTER the session is created but
+   * BEFORE the turn runs — this is the only point at which a caller can record
+   * the child→agent mapping in time for the `shell.env` hook, which fires
+   * mid-turn. Resolves the child session id once the turn completes.
+   */
+  startTask(
+    agentName: string,
+    prompt: string,
+    onSessionCreated?: (sessionId: string) => void,
+  ): Promise<string>
   fetchMessages(sessionId: string): Promise<PollerMessage[]>
   /**
    * Cancel a previously-started session. Called when `ToolContext.abort`
@@ -396,16 +408,19 @@ async function runTask(
 
   try {
     const fullPrompt = task.context ? `${task.prompt}\n\n${task.context}` : task.prompt
-    const id = await specialist.startTask(task.name, fullPrompt)
-    // Mirror into the outer `let` so the catch block's abort-path cleanup can
-    // see the session id even when failure occurs after `startTask` resolves.
-    sessionId = id
-
-    // Register (childSessionID → agent name) so plugin hooks (e.g. shell.env)
-    // can resolve which agent owns a given session. Registration persists for
-    // the OpenCode session lifetime; cleanup is the plugin's `session.deleted`
-    // handler, not this dispatcher.
-    options.sessionAgentRegistry?.register(id, task.name)
+    const id = await specialist.startTask(task.name, fullPrompt, (createdId) => {
+      // Runs after the child session is created but BEFORE its turn executes.
+      //  - Mirror into the outer `let` so the catch block's abort-path cleanup
+      //    can cancel a child that fails (or is aborted) mid-turn.
+      //  - Register (childSessionID → agent name) so plugin hooks resolve which
+      //    agent owns the session. This MUST happen before the turn: the
+      //    `shell.env` hook fires during `session.prompt` (which blocks for the
+      //    whole turn), so registering after `startTask` resolves is too late —
+      //    the hook would see no mapping and inject no bindings. Cleanup is the
+      //    plugin's `session.deleted` handler, not this dispatcher.
+      sessionId = createdId
+      options.sessionAgentRegistry?.register(createdId, task.name)
+    })
 
     const rawResult = await pollUntilIdle({
       fetchMessages: () => specialist.fetchMessages(id),

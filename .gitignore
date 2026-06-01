@@ -31,5 +31,6 @@ docs/eval/scenarios/**/private/
 # repo's path/scope can never be committed by accident.
 docs/eval/scenarios/veles/*
 !docs/eval/scenarios/veles/qa-plan-from-diff.md
+!docs/eval/scenarios/veles/qa-plan-multi-principal.md
 !docs/eval/scenarios/veles/TEMPLATE.md
 !docs/eval/scenarios/veles/README.md

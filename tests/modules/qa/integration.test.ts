@@ -304,7 +304,14 @@ describe("COMP-001 wire-up: parse_plan + dispatch + shell.env + scrub", () => {
     // We reach into the registered singleton's registry to confirm dispatch
     // registered (sessionID → agentName).
     const fakeSpecialist = {
-      async startTask(): Promise<string> {
+      async startTask(
+        _agentName: string,
+        _prompt: string,
+        onSessionCreated?: (sessionId: string) => void,
+      ): Promise<string> {
+        // Model the real SDK adapter: fire the created-callback (which dispatch
+        // uses to register childSessionID→agent) BEFORE the turn would run.
+        onSessionCreated?.(childSessionID)
         return childSessionID
       },
       async fetchMessages(): Promise<PollerMessage[]> {

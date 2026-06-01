@@ -27,11 +27,13 @@ describe("readCoordinatorBashAllowlist (happy path against real perun.md frontma
     expect(allowlist).toEqual(SRC_PERUN_PROGRAMS)
   })
 
-  it("grants the coordinator's own mkdir / ls / qa-preflight", () => {
+  it("grants the coordinator's own mkdir / ls and NOT the removed qa-preflight script", () => {
     const allowlist = readCoordinatorBashAllowlist()
     expect(allowlist).toContain("mkdir")
     expect(allowlist).toContain("ls")
-    expect(allowlist).toContain("./scripts/qa-preflight.sh")
+    // Preflight is now the `preflight` plugin tool, not a shell script — the
+    // coordinator must not be granted any qa-preflight.sh bash entry.
+    expect(allowlist).not.toContain("./scripts/qa-preflight.sh")
   })
 
   it("does NOT grant git (it is absent from perun.md allowed-tools)", () => {

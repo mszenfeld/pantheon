@@ -145,9 +145,10 @@ async function runTask(task, specialist, options) {
     const fullPrompt = task.context ? `${task.prompt}
 
 ${task.context}` : task.prompt;
-    const id = await specialist.startTask(task.name, fullPrompt);
-    sessionId = id;
-    options.sessionAgentRegistry?.register(id, task.name);
+    const id = await specialist.startTask(task.name, fullPrompt, (createdId) => {
+      sessionId = createdId;
+      options.sessionAgentRegistry?.register(createdId, task.name);
+    });
     const rawResult = await pollUntilIdle({
       fetchMessages: () => specialist.fetchMessages(id),
       timeoutMs: options.taskTimeoutMs,

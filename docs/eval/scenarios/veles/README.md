@@ -11,6 +11,12 @@ Scenarios for picking the best model for the **Veles** planning agent, run via
   login-feature diff (1 FE + 1 BE file). The reproducible discriminator for
   ranking candidate models; runs straight from `git clone`, isolates the Veles
   model (the diff is self-contained, so triglav stays out of the loop).
+- `qa-plan-multi-principal.md` — **Layer 1**, public, self-contained. An embedded
+  per-owner authorization endpoint whose tests need a SECOND authenticated user.
+  Discriminates **binding completeness**: catches a plan that references a
+  `$QA_BIND_*` it never declares (the dangling-reference regression) or that
+  reuses one token across two principals. A dangling `$QA_BIND_*` is a hard
+  `degenerate` gate here.
 - `TEMPLATE.md` — public starting point for **Layer 2** (a private real repo).
   Copy it to a gitignored `local-*.md` and fill in your repo.
 
