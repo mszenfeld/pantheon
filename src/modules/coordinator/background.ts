@@ -51,6 +51,14 @@ export async function startBackgroundTask(
   const childSessionId = await specialist.startBackground(agent, fullPrompt)
 
   const id = `bg_${randomUUID().slice(0, 8)}`
+  // Background tasks register ONLY in the BackgroundTaskStore — intentionally
+  // NOT in the QA `sessionAgentRegistry` (the foreground `dispatch_parallel`
+  // path does the latter via `onSessionCreated`). The asymmetry is deliberate:
+  // background dispatch is reserved for read-only `triglav` exploration, which
+  // needs no per-session QA bindings injected by the `shell.env` hook. Wiring
+  // registration here would also require unregistering on `session.deleted`
+  // (in the QA module) to avoid a stale cross-session mapping for a child that
+  // outlives the parent turn. See `sdk-specialist.ts` `startBackground`.
   store.register({ id, childSessionId, parentSessionId, agent, startedAt: Date.now() })
   return { id, agent, status: "running" }
 }

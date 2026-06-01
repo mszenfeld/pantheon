@@ -194,6 +194,10 @@ export const AppVerkQAPlugin: Plugin = async ({ client }) => {
       }
     },
     tool: {
+      // The "resolvable = bound in store OR non-empty in process env; liveness
+      // NOT probed" claim restated below for the LLM mirrors the dev-facing
+      // JSDoc on `makePreflightHandler` in preflight.ts. Worded separately for
+      // two audiences on purpose — keep both in sync if the contract changes.
       preflight: tool({
         description: [
           "Verify that the env-var names a QA plan's `## Setup` declares as required are resolvable for this run, BEFORE dispatching any scenario. Perun-only. Call it after parsing the `## Setup` section and before the first `dispatch_parallel`.",

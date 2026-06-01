@@ -46,8 +46,25 @@ export function createSDKSpecialist(
       // try/catch: a callback fault must not abort the dispatch.
       try {
         onSessionCreated?.(sessionId)
-      } catch {
-        /* swallow: registration is best-effort and must not break the turn */
+      } catch (err) {
+        // Swallow: registration is best-effort and must not break the turn.
+        // But leave an observability breadcrumb — without it, a failed binding
+        // registration silently stops `shell.env` injection with no trace (the
+        // exact symptom this dispatch path is meant to fix). The breadcrumb
+        // call is itself best-effort: `client.app.log` returns a promise we do
+        // NOT await (the turn must not block on it), and a `.catch` keeps a
+        // rejected log from resurfacing as an unhandled rejection — neither the
+        // swallow semantics nor the dispatch are affected.
+        void client.app
+          .log({
+            body: {
+              service: "perun/dispatch",
+              level: "warn",
+              message: `onSessionCreated callback threw for agent ${agentName} (session ${sessionId}); binding injection may not occur — continuing dispatch`,
+              extra: { error: err instanceof Error ? err.message : String(err) },
+            },
+          })
+          .catch(() => {})
       }
 
       await client.session.prompt({
@@ -80,6 +97,17 @@ export function createSDKSpecialist(
       await client.session.abort({ path: { id: sessionId } })
     },
     async startBackground(agentName: string, prompt: string): Promise<string> {
+      // NOTE: unlike `startTask`, `startBackground` deliberately takes no
+      // `onSessionCreated` callback and never registers the child in
+      // `sessionAgentRegistry`. Background dispatch is steered (by Perun's
+      // prompt) exclusively at read-only `triglav` exploration, which needs no
+      // QA bindings injected via the `shell.env` hook. Threading the callback
+      // here would ALSO require the QA module's `session.deleted` handler to
+      // unregister background-child sessions — otherwise a long-lived child
+      // would leave a stale (childSessionID → agent) mapping after the parent
+      // turn ends. Until a background path actually needs bindings, we keep the
+      // background adapter binding-free rather than wire that extra cleanup.
+      // See background.ts `startBackgroundTask` for the registration-site note.
       const created = await client.session.create({
         body: {
           parentID: parentSessionID,

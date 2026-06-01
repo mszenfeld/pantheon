@@ -13,7 +13,16 @@ function createSDKSpecialist(client, parentSessionID) {
       }
       try {
         onSessionCreated?.(sessionId);
-      } catch {
+      } catch (err) {
+        void client.app.log({
+          body: {
+            service: "perun/dispatch",
+            level: "warn",
+            message: `onSessionCreated callback threw for agent ${agentName} (session ${sessionId}); binding injection may not occur \u2014 continuing dispatch`,
+            extra: { error: err instanceof Error ? err.message : String(err) }
+          }
+        }).catch(() => {
+        });
       }
       await client.session.prompt({
         path: { id: sessionId },

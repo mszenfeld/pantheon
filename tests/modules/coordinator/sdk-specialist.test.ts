@@ -26,6 +26,7 @@ interface FakeClient {
     sessionMessages: Array<Record<string, unknown>>
     sessionAbort: Array<Record<string, unknown>>
     appAgents: Array<Record<string, unknown> | undefined>
+    appLog: Array<Record<string, unknown>>
   }
 }
 
@@ -34,6 +35,8 @@ interface FakeClientConfig {
   promptResponse?: { data?: unknown }
   messagesResponses?: Record<string, { data?: Array<{ info: Message; parts: Array<{ type: string; text?: string }> }> }>
   agentsResponse?: { data?: Agent[] } | Error
+  /** When set, `app.log` rejects with this error — used to prove the breadcrumb is itself best-effort. */
+  logRejectsWith?: Error
 }
 
 function makeFakeClient(config: FakeClientConfig = {}): FakeClient {
@@ -43,6 +46,7 @@ function makeFakeClient(config: FakeClientConfig = {}): FakeClient {
     sessionMessages: [],
     sessionAbort: [],
     appAgents: [],
+    appLog: [],
   }
 
   let createIndex = 0
@@ -76,6 +80,13 @@ function makeFakeClient(config: FakeClientConfig = {}): FakeClient {
           throw config.agentsResponse
         }
         return config.agentsResponse ?? { data: [] }
+      },
+      async log(options: Record<string, unknown>) {
+        calls.appLog.push(options)
+        if (config.logRejectsWith !== undefined) {
+          throw config.logRejectsWith
+        }
+        return { data: true }
       },
     },
   }
@@ -214,6 +225,59 @@ describe("createSDKSpecialist.startTask", () => {
     )
 
     expect(fake.calls.sessionPrompt).toHaveLength(0)
+  })
+
+  it("emits a client warning breadcrumb but still completes the dispatch when onSessionCreated throws", async () => {
+    // MAINT-001: a callback fault must NOT abort the dispatch (swallow
+    // semantics), but it must leave an observability breadcrumb — otherwise a
+    // failed binding registration silently stops `shell.env` injection with no
+    // trace. Assert: the warning is logged via the client mechanism AND the
+    // turn still proceeds (prompt runs, session id returned).
+    const fake = makeFakeClient({
+      createResponses: [{ data: { id: "sess-child-9" } }],
+    })
+    const specialist = createSDKSpecialist(fake.client, "parent-session-42")
+
+    const returnedId = await specialist.startTask("zmora-be", "run BE-09", () => {
+      throw new Error("registry Map.set blew up")
+    })
+
+    // Dispatch is NOT aborted: id returned and prompt fired afterwards.
+    expect(returnedId).toBe("sess-child-9")
+    expect(fake.calls.sessionPrompt).toHaveLength(1)
+
+    // A single warn-level breadcrumb was logged via the client mechanism,
+    // naming the agent and carrying the underlying error in `extra`.
+    expect(fake.calls.appLog).toHaveLength(1)
+    const logged = fake.calls.appLog[0]?.body as {
+      service: string
+      level: string
+      message: string
+      extra?: { error?: string }
+    }
+    expect(logged.level).toBe("warn")
+    expect(logged.message).toContain("zmora-be")
+    expect(logged.extra?.error).toBe("registry Map.set blew up")
+  })
+
+  it("still completes the dispatch even if the warning breadcrumb itself fails to log", async () => {
+    // The breadcrumb is best-effort too: if `client.app.log` rejects, the
+    // rejection must not resurface (no unhandled rejection) and the dispatch
+    // must still finish. Guards against the observability fix re-introducing a
+    // throw on the very path it set out to make safe.
+    const fake = makeFakeClient({
+      createResponses: [{ data: { id: "sess-child-10" } }],
+      logRejectsWith: new Error("log endpoint 500"),
+    })
+    const specialist = createSDKSpecialist(fake.client, "parent-session-42")
+
+    const returnedId = await specialist.startTask("zmora-be", "run BE-10", () => {
+      throw new Error("callback fault")
+    })
+
+    expect(returnedId).toBe("sess-child-10")
+    expect(fake.calls.sessionPrompt).toHaveLength(1)
+    expect(fake.calls.appLog).toHaveLength(1)
   })
 })
 

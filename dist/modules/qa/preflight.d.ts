@@ -20,6 +20,12 @@ import './secret.js';
  * not run under the coordinator bash policy (the documented `printf … | …`
  * invocation is a compound command) and was never provisioned into target
  * repos — leaving Perun to write a script into the user's project.
+ *
+ * NOTE: the "resolvable = bound in the store OR non-empty in process env;
+ * liveness is NOT probed" semantics above are restated for the LLM in the
+ * `preflight` tool description in `index.ts`. The two are intentionally worded
+ * for different audiences (dev rationale here vs. operational instruction
+ * there) — if you change this contract, update the tool description to match.
  */
 interface PreflightHandlerDeps {
     store: BindingsStore;
