@@ -172,6 +172,20 @@ in general, derive them by reading the changed code — Step 0 applies.)
   (Step 6 grounding). **Scenario count is not a quality signal** — do not pad to a
   number.
 
+## Step 6.7: Self-check before finishing
+
+Scan the draft and confirm, on the in-memory draft (pre-save):
+
+1. Every behavioral assertion carries a visible `(file:line)` citation OR an
+   `(unverified — confirm at run time)` tag.
+2. The Step 6.6 coverage matrix is filled (or omissions are listed under
+   `## Out of harness scope`).
+3. The filename will carry the `-test-plan` suffix (Step 7).
+
+Fix any gap before saving. (Veles additionally hard-stops on this check before
+emitting its result JSON — see `veles.md`. The `/create-qa-plan` command inherits
+this self-check as guidance, without a hard gate.)
+
 ## Step 7: Save
 
 ```bash
