@@ -268,6 +268,20 @@ playwright_browser_close()
 
 ---
 
+## Tag handling (plan grounding tags)
+
+Expected-result text may carry these author tags — handle them, do not match on
+the tag text itself:
+
+- `(unverified — confirm at run time)` — the author could not ground this. A
+  mismatch here is reported as **LOW** (not HIGH), with a note that the
+  expectation was author-flagged as unverified.
+- `(exact text — brittle)` — match the quoted message as **substring/contains,
+  not equality**.
+- `(file:line)` — a source citation for humans/`momus`; **ignore** it when matching.
+
+---
+
 ## Result Format
 
 For each scenario, return results in this format:

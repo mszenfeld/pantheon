@@ -102,6 +102,8 @@ Every test report MUST follow this exact structure:
 | **MEDIUM** | Non-core functionality broken, degraded UX | UI element not responding, slow response, missing validation |
 | **LOW** | Cosmetic issues, minor inconsistencies | Wrong error message text, minor layout issue |
 
+> A mismatch on an expectation the plan tagged `(unverified — confirm at run time)` is **LOW** — the author explicitly flagged it as unconfirmed, so it is not a HIGH regression.
+
 ---
 
 ## Issue Format Details
