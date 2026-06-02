@@ -157,6 +157,21 @@ This bites hardest with **multi-principal** scenarios. When a scenario exercises
 
 Before saving, scan every scenario for `$QA_BIND_*` tokens and confirm each one is declared. If you cannot construct a recipe for a referenced principal, drop or rewrite the scenario rather than emit a dangling binding reference.
 
+## Step 6.6: Targeted coverage sweep
+
+For each changed surface, confirm coverage of the *specific* behavior classes the
+change exposes — the success path, **each** error path the code can return, each
+auth/authz branch, and each boundary. (For the export-PDF surface the named
+classes are catalogued in `docs/eval/scenarios/veles/fixtures/coverage-classes.md`;
+in general, derive them by reading the changed code — Step 0 applies.)
+
+- **Anti-padding stays supreme (Step 4.5):** a class with nothing observable over
+  Playwright / HTTP / DB goes under a short `## Out of harness scope` note, never
+  a fake scenario.
+- A "covered" claim for an error path needs a `(file:line)` citation for that path
+  (Step 6 grounding). **Scenario count is not a quality signal** — do not pad to a
+  number.
+
 ## Step 7: Save
 
 ```bash
