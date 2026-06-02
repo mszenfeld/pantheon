@@ -34,3 +34,6 @@ docs/eval/scenarios/veles/*
 !docs/eval/scenarios/veles/qa-plan-multi-principal.md
 !docs/eval/scenarios/veles/TEMPLATE.md
 !docs/eval/scenarios/veles/README.md
+!docs/eval/scenarios/veles/fixtures/
+docs/eval/scenarios/veles/fixtures/*
+!docs/eval/scenarios/veles/fixtures/coverage-classes.md
