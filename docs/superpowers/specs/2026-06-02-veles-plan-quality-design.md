@@ -1,9 +1,11 @@
 # Design: Raising Veles QA-plan quality
 
 **Date:** 2026-06-02
-**Status:** v4 — after three mixture-of-agents review rounds (round 1 reshaped
+**Status:** v5 — after four mixture-of-agents review rounds (round 1 reshaped
 v1→v2; round 2 audited v2; round 3 audited a sequential-thinking proposal and
-reshaped it into Section D). Ready for implementation planning.
+reshaped it into Section D; round 4 audited all of v4 and found the
+source-on-disk grounding precondition + open items). Ready for implementation
+planning, modulo the named Open items.
 **Scope:** `src/skills/qa/qa-plan-authoring`, `src/skills/qa/test-plan-format`,
 `src/modules/plan/veles.md`, the QA runner skills
 (`src/skills/qa/{be-testing,fe-testing,report-format}`),
@@ -47,6 +49,18 @@ reshaped it into Section D). Ready for implementation planning.
   scenario *generation***, not verification. v4 adds that as **Section D**:
   MAY-use, Veles-only, real token, no detector/toast, no shared-skill placement,
   no new gate.
+- **v4 → v5** (round-4 review): a full re-audit found a real defect three rounds
+  missed — A1/A2/§0.2 silently assumed the **target repo's source is on disk**,
+  which fails in the Layer-1 embedded-diff eval and for foreign-repo/pasted diffs,
+  making a `(file:line)` citation *well-formed but ungrounded* (worse than
+  `(unverified)`). v5 adds **§A0** (source-on-disk precondition + `(unverified)`
+  fallback), **scopes C1 down** to validating citation *form* (real grounding moves
+  to the Layer-2 real-repo eval), **corrects the M-2 invariant** statement (two
+  separate subsets, not a chain; serena — not dispatch — is the precedent),
+  requires **Section D's graceful-degradation clause**, adds a **principle
+  carve-out** for optional process aids, routes **D2 to the zmora overlays**, maps
+  "warning" → **LOW**, and consolidates the residual **Open items** (ST token,
+  eval artefacts, refute-prompt).
 
 ## Motivation
 
@@ -117,6 +131,12 @@ Every behavioral assertion either carries a **visible `(file:line)` citation** t
 code the author read, or is tagged `(unverified — confirm at run time)`. The
 model never guesses silently, and the evidence travels with the claim.
 
+> **Carve-out.** The corollary "adding more forceful prose/process is the weakest
+> lever" targets *prose presented as a fix* (restated guidance the model already
+> ignored). It does **not** forbid an *optional, near-zero-cost* process aid that
+> claims no enforcement strength — Section D (MAY-use ST) is such an exception:
+> honestly weak, opt-in, and never load-bearing for a success criterion.
+
 ## Decisions locked during brainstorming + review
 
 - **Mechanism:** layered — content rules in the shared skills + Veles-side
@@ -169,6 +189,29 @@ Ground the rules in data before writing them.
 
 ## Section A — content rules (shared skills)
 
+### A0. Grounding precondition — the target source must be on disk (round-4 finding)
+
+A1/A2/§0.2 all assume Veles can **read the target repo's source at plan time**.
+That holds on the normal production path (Veles runs with the target repo as its
+working tree / a checkout), but **not** when it is handed a diff whose paths are
+not on disk: a foreign-repo PR reference, a pasted diff, or the Layer-1
+embedded-diff eval (where reading repo paths is by design a negative signal).
+
+**Rule (governs A1 + A2):** a `(file:line)` citation may be emitted **only** for a
+file actually present and read in the working tree. When the source is absent,
+Veles must tag the assertion `(unverified — confirm at run time)` instead — a
+well-formed citation to absent/foreign/unread source is **worse** than
+`(unverified)`, because it manufactures false confidence and suppresses the
+skepticism the tag would invite (this is the honest counter-weight to the
+guiding principle's "evidence travels with the claim"). Likewise A2's
+config-file detection only fires when those files are in the tree; from a
+diff-embedded config block it may read the *diff text* but must not claim to have
+read an on-disk file.
+
+This precondition is why C1 (embedded-diff eval) can validate only citation/tag
+**form**, while real read-grounding is validated by the Layer-2 real-repo eval
+(see C1 and Success criteria).
+
 ### A1. Visible citation-or-`(unverified)` — amends `qa-plan-authoring` Step 6 in place
 
 > A1 is an **in-place amendment to the existing Step 6 ("Generate scenarios")**,
@@ -196,6 +239,8 @@ implicit in the real SQL; for derived values cite the producer (e.g.
   prove it was read *correctly*. The "misread the cited code" failure is what
   §B-expensive (re-read) and, later, `momus` address. Escalation ladder: visible
   attribution now → experiment-gated re-read → independent `momus` later.
+- **Source-absent case:** see **A0** — when the cited file is not in the working
+  tree, tag `(unverified)` instead of emitting a citation that cannot be backed.
 
 ### A2. Test-environment detection — new `qa-plan-authoring` Step 4.6 (after 4.5, before 5)
 
@@ -323,6 +368,15 @@ committed** (a real `supabase/config.toml` would pollute the harness repo):
 **Explicitly:** passing C1 proves the three named regressions are absent — it
 does **not** prove general quality improvement (that is C1b's job, deferred).
 
+**Scope limit (round-4, see A0):** because C1 is a Layer-1 *embedded-diff*
+scenario, the changed files are not on disk — so C1 validates citation/tag
+**form** (every assertion is `(file:line)`-cited or `(unverified)`-tagged) and the
+local-vs-remote infra choice read from the diff-embedded config block. It does
+**not** validate read-*grounding* (a citation here is parsed off the diff hunk,
+not a real file). Real read-grounding is validated by the **Layer-2 real-repo
+eval** (`README.md` private-repo path), where Veles resolves a real diff against
+on-disk source and A1/A2 genuinely fire.
+
 ### C2. Strengthen existing grounding signals (first cut)
 
 Both `qa-plan-from-diff.md` and `qa-plan-multi-principal.md` already have a
@@ -365,26 +419,48 @@ double-standard.
 
 - **MAY-use, not mandatory.** Veles *may* reach for ST when it judges a change
   genuinely tangled; for simple diffs it does not. This matches the repo's own ST
-  precedent (`packages/code-review` — "MAY use / graceful degradation") and
-  neutralizes the cost objection: no forced per-plan round-trips on an EXPENSIVE
-  agent. Absence of ST is **normal operation**, not a degraded mode.
+  precedent (`packages/code-review`, which always pairs the ST directive with a
+  graceful-degradation clause — some entry points are MAY-use, others
+  use-by-default). It neutralizes the *per-plan* cost objection (no forced
+  round-trips), but the asymmetry vs the experiment-gated re-read must be stated
+  honestly: the re-read was a per-plan **default**, so it had to earn its place;
+  ST here is **opt-in per-diff**, so un-gated is acceptable — yet the cost of an
+  opt-in ST invocation on an EXPENSIVE/opus agent is **accepted-but-unmeasured**,
+  not "free". Absence of ST is **normal operation**, not a degraded mode.
 - **No detector, no toast.** We do **not** mirror `serena-detect.ts` — Serena's
   toast is justified because its absence is genuinely degraded (no semantic
   index); ST's is not. A guessed MCP key would only produce false-alarm toast
   spam. So no `isSequentialThinkingAvailable`, no `session.created` toast (also
   avoids breaking the "warns exactly once" test).
+- **Graceful-degradation clause (required wording).** The `veles.md` directive
+  MUST carry the verbatim fallback every `code-review` ST callsite uses — *"If
+  `sequential_thinking_sequentialthinking` is unavailable, proceed with native
+  decomposition"* — so a model that opts into ST when the server is absent skips
+  gracefully instead of hard-erroring on an unconfigured tool. Assert this clause
+  in M-1.
 - **Veles-only; the shared skill stays tool-agnostic.** The decomposition
   *guidance* lives in `veles.md` only (a Veles-only prompt pointing at the
   authoring activity). The shared `qa-plan-authoring` Step 6 keeps describing
   *what* to produce (scenarios that decompose complex changes into testable
   units), never *which tool* to reason with — so the marketplace `/create-qa-plan`
   path is unchanged and there is no tool leak into it.
-- **Real token.** Use `sequential_thinking_sequentialthinking` (the identifier
-  used by `packages/code-review`), added **only to `VELES_TOOLS`**
-  (`src/modules/plan/allowed-tools.ts`). Because the *shared skill* does not gain
-  the tool, the M-2 subset invariant (skill ⊆ VELES_TOOLS ⊆ command) is untouched:
-  `VELES_TOOLS` may hold Veles-only tools the skill/command lack (as it already
-  does for the dispatch plugin tools).
+- **Token (MUST-VERIFY open item).** The literal allow-list string is *not* settled
+  by the repo: `packages/code-review` uses `sequential_thinking_sequentialthinking`
+  only in **prose** (never an allow-list); serena uses the short form
+  `serena_find_symbol`; the live MCP id is
+  `mcp__plugin_sequentialthinking_sequential-thinking__sequentialthinking`. The
+  implementer MUST pin the exact token against a known-good config, reconciled with
+  how `allowed-tools.ts` names serena's MCP tools, and note that the token is
+  **inert unless a sequential-thinking server is enabled in `config.mcp`** (exactly
+  like serena). Add it **only to `VELES_TOOLS`** (`src/modules/plan/allowed-tools.ts`).
+- **M-2 invariant (corrected).** The tests enforce two *separate* subsets —
+  `skill ⊆ VELES_TOOLS` (`allowed-tools.test.ts`) and `skill ⊆ command`
+  (`qa-plan-authoring.test.ts`) — **not** a three-way `skill ⊆ VELES_TOOLS ⊆
+  command` chain (`VELES_TOOLS ⊄ command` already holds, via the serena tools).
+  Adding ST to `VELES_TOOLS` only leaves both tested invariants intact — exactly as
+  the **serena read tools** already sit in `VELES_TOOLS` without being in the skill
+  or command. (The dispatch plugin tools are *not* the precedent — they live in the
+  `AgentConfig.tools` map, not `VELES_TOOLS`.)
 - **Not a gate; measured indirectly.** ST leaves no artefact in the plan file, so
   it cannot be verified or made a success-criterion. It is an *aid*: its payoff
   shows up only as coverage depth, observed via C1 + the §0.2 named classes. We
@@ -417,11 +493,13 @@ nothing; CI's `verify-dist` is the gate.
 
 - **M-1 — `tests/modules/plan/veles-prompt.test.ts:13-26`:** asserts the prompt
   `toContain` a fixed set including `"(reserved)"` (line 25). B-seam must keep a
-  `(reserved)` mention; add assertions for the new gate / hard-stop language.
+  `(reserved)` mention; add assertions for the new gate / hard-stop language **and
+  for the Section D ST decomposition directive + its graceful-degradation clause**.
 - **M-2 — `tests/modules/plan/allowed-tools.test.ts:24-31` +
-  `tests/skills/qa-plan-authoring.test.ts:36-40`:** assert the skill
-  `allowed-tools` ⊆ `VELES_TOOLS` ⊆ command tools. A2 must use existing read
-  tools so the invariant holds.
+  `tests/skills/qa-plan-authoring.test.ts:36-40`:** these enforce **two separate**
+  subsets — `skill ⊆ VELES_TOOLS` and `skill ⊆ command` (not a `⊆ VELES_TOOLS ⊆
+  command` chain). A2 must use existing read tools so both hold; Section D's ST
+  token goes to `VELES_TOOLS` only (skill unchanged), so both still hold.
 - No snapshot tests exist (none use `toMatchSnapshot`).
 
 ## Downstream tag handling (decision D2)
@@ -430,10 +508,18 @@ nothing; CI's `verify-dist` is the gate.
   expected-result prose (`perun.md:72`) → **no change needed**; the inline
   citations and tags are inert to it.
 - **QA runner** (`be-testing`, `fe-testing`, `report-format`): a mismatch on an
-  expectation tagged `(unverified — confirm at run time)` is reported as a
-  **warning**, not a HIGH issue; an `(exact text — brittle)` assertion is matched
-  as **substring/contains, not equality**; visible `(file:line)` citations are
-  ignored by the runner (human/`momus`-facing only).
+  expectation tagged `(unverified — confirm at run time)` is reported as **LOW**,
+  not HIGH (the severity table is HIGH/MEDIUM/LOW — "warning" maps to LOW, with a
+  note that the expectation was author-flagged as unverified); an
+  `(exact text — brittle)` assertion is matched as **substring/contains, not
+  equality**; visible `(file:line)` citations are **ignored** by the runner
+  (human/`momus`-facing only).
+- **Zmora overlays** (`src/modules/qa/prompt-sections/overlay-be.md`,
+  `overlay-fe.md`): these carry their *own* inline expected-matching directives, so
+  add one line to each — *expected-result text may carry `(file:line)` /
+  `(unverified)` / `(exact text — brittle)` tags; defer to the `be`/`fe-testing`
+  skill's tag rules* — so the overlay does not fold a citation into the matched
+  string (round-4 finding #5).
 
 ---
 
@@ -441,11 +527,12 @@ nothing; CI's `verify-dist` is the gate.
 
 | File | Change |
 |---|---|
-| `src/skills/qa/qa-plan-authoring/SKILL.md` | A1 (amends Step 6 in place), A2 (new Step 4.6), A3 (new Step 6.6 — 6.5 already taken), B-shared self-check (new Step 6.7), A4 filename reinforcement (Step 7) |
+| `src/skills/qa/qa-plan-authoring/SKILL.md` | A0 (source-on-disk precondition + `(unverified)` fallback), A1 (amends Step 6 in place), A2 (new Step 4.6), A3 (new Step 6.6 — 6.5 already taken), B-shared self-check (new Step 6.7), A4 filename reinforcement (Step 7) |
 | `src/skills/qa/test-plan-format/SKILL.md` | A4 assertion style; visible `(file:line)` / `(unverified)` / `(exact text — brittle)` tag format; richer `## Changes Summary` guidance |
 | `src/modules/plan/veles.md` | B-cheap hard stop before JSON; B-seam (`momus`, preserve `(reserved)`); reconcile delegation rule; pre-save ordering; Section D MAY-use ST decomposition guidance |
 | `src/modules/plan/allowed-tools.ts` | Section D — add `sequential_thinking_sequentialthinking` to `VELES_TOOLS` only (NOT the shared skill / command → M-2 invariant untouched) |
-| `src/skills/qa/{be-testing,fe-testing,report-format}/SKILL.md` | D2 — `(unverified)` → warning; `(exact text — brittle)` → substring; ignore `(file:line)` |
+| `src/skills/qa/{be-testing,fe-testing,report-format}/SKILL.md` | D2 — `(unverified)` → LOW; `(exact text — brittle)` → substring; ignore `(file:line)` |
+| `src/modules/qa/prompt-sections/{overlay-be,overlay-fe}.md` | D2 — defer expected-matching to the be/fe-testing tag rules (don't match on tag text) |
 | `docs/eval/scenarios/veles/` | C1 inline trap regression scenario; C2 strengthen existing signals (C1b deferred to v2.1) |
 | `tests/modules/plan/veles-prompt.test.ts`, `allowed-tools.test.ts`, `tests/skills/qa-plan-authoring.test.ts` | M-1 / M-2 |
 | `dist/**` | regenerated via `bun run build`, committed (verify-dist gate) |
@@ -464,11 +551,13 @@ nothing; CI's `verify-dist` is the gate.
     `sequential_thinking_sequentialthinking` to `VELES_TOOLS` only.
 4. Update `veles-prompt.test.ts` (M-1 — gate/hard-stop + Section D ST directive);
    confirm tool-subset invariant (M-2 — adding ST to `VELES_TOOLS` only keeps it).
-5. D2 runner rules (`be-testing`/`fe-testing`/`report-format`).
+5. D2 runner rules (`be-testing`/`fe-testing`/`report-format`) **+ the two zmora
+   overlays** (`overlay-be.md` / `overlay-fe.md`).
 6. `bun run build` + commit regenerated `dist/`.
 7. C2 (strengthen signals) → C1 (regression scenario).
-8. **8a** run the B-expensive efficacy experiment, record pass/fail → **8b**
-   build the re-read into the hot path **iff ≥ 2/3**.
+8. **8a** run the B-expensive efficacy experiment (**requires the Open-items
+   artifacts: the failing export-PDF plan + the literal refute-prompt**), record
+   pass/fail → **8b** build the re-read into the hot path **iff ≥ 2/3**.
 9. Run C1 to check the regression criteria against the **resulting** hot path
    (cheap-only, or cheap+re-read per 8b).
 
@@ -491,6 +580,27 @@ nothing; CI's `verify-dist` is the gate.
 - **Section D (ST):** not a success criterion — MAY-use, unobservable in the plan
   file. Its only expected signature is coverage depth (C1 + §0.2 named classes);
   if it adds nothing, it simply goes unused at no structural cost.
+
+## Open items to resolve at implementation (round-4)
+
+These are not blockers to *planning*, but each is an undecided value or an
+external artefact that must be settled before the relevant step runs:
+
+1. **ST token + availability (Step 3b).** Pin the exact `VELES_TOOLS` string
+   against a known-good config, reconciled with `allowed-tools.ts`'s serena naming;
+   confirm the ST MCP server is enabled in `config.mcp` (the token is inert
+   otherwise). Until pinned, do not commit a guessed literal.
+2. **Eval / experiment artefacts (Steps §0.2, 8a).** Plan A, Plan B, and the
+   failing export-PDF plan are **not in this repo**. §0.2's named coverage classes
+   are already extracted inline (so A3 can proceed), but the **8a efficacy
+   experiment cannot run** without the actual failing plan. The user holds these
+   (they ran both plans) — supply them by path or commit, or replace 8a's input
+   with a named synthetic plan in the spec.
+3. **Refute-prompt text (Step 8a).** The literal prompt fed to the model in the
+   re-read efficacy experiment is unspecified — write it (or mark TBD-at-experiment)
+   so 8a is reproducible.
+4. **A0 source-on-disk precondition** must be encoded in `veles.md` /
+   `qa-plan-authoring` as an explicit rule, not left implicit.
 
 ## Follow-ups (v2.1+)
 
