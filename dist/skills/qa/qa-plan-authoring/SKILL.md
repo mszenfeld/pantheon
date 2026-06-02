@@ -12,6 +12,17 @@ decides what to do with the saved plan (the `/create-qa-plan` command tells the
 user to review and run `/run-qa`; the Veles planner returns a JSON summary to
 Perun). This skill covers ONLY authoring + saving.
 
+## Step 0: Grounding precondition — the target source must be on disk
+
+A `(file:line)` citation may be emitted **only** for a file actually present and
+read in the working tree. When the changed source is NOT on disk (a foreign-repo
+PR reference, a pasted diff, or an embedded-diff eval), do **not** invent a
+citation — tag the assertion `(unverified — confirm at run time)` instead. A
+well-formed citation to absent/unread source manufactures false confidence and is
+worse than the honest tag. Likewise Step 4.6's config-file detection only "reads"
+files that are in the tree; from a diff-embedded config block you may read the
+*diff text* but must not claim to have read an on-disk file.
+
 ## Step 1: Resolve the diff source
 
 Parse the caller's argument to choose the diff:
@@ -101,6 +112,12 @@ Every scenario step MUST be executable by the runner (see Step 4.5): a Playwrigh
 
 - **FE** (if FE changes): one scenario per changed component/page/feature, concrete UI element names from the code, ≥2 edge cases each.
 - **BE** (if BE changes): one scenario per changed endpoint, real paths/methods/payloads, DB checks with real table/column names, ≥2 edge cases each (error handling, auth, validation).
+- **Grounding (every scenario):** each behavioral assertion (status code,
+  rate-limit semantics, auth/authz outcome, error-envelope shape, derived
+  filename) carries a visible `(file:line)` citation to code you actually read,
+  or the `(unverified — confirm at run time)` tag (see Step 0 and the
+  `test-plan-format` "Grounding tags & assertion style" section). Citations go on
+  the single most load-bearing line per assertion.
 
 ## Step 6.5: Binding completeness check
 
