@@ -13,6 +13,7 @@ describe("VELES_TOOLS", () => {
     expect(VELES_TOOLS).toContain("Write")
     expect(VELES_TOOLS).toContain("skill")
     expect(VELES_TOOLS).toContain("question")
+    expect(VELES_TOOLS).toContain("sequential_thinking_sequentialthinking")
     // dispatch_* are plugin tools enabled via AgentConfig.tools, never here:
     expect(VELES_TOOLS).not.toContain("dispatch_parallel")
     expect(VELES_TOOLS).not.toContain("dispatch_background")
