@@ -1,9 +1,9 @@
 # Design: Raising Veles QA-plan quality
 
 **Date:** 2026-06-02
-**Status:** v3 — after two mixture-of-agents review rounds (round 1 reshaped v1→v2;
-round 2 audited v2 and found one decisive defect + polish). Ready for
-implementation planning.
+**Status:** v4 — after three mixture-of-agents review rounds (round 1 reshaped
+v1→v2; round 2 audited v2; round 3 audited a sequential-thinking proposal and
+reshaped it into Section D). Ready for implementation planning.
 **Scope:** `src/skills/qa/qa-plan-authoring`, `src/skills/qa/test-plan-format`,
 `src/modules/plan/veles.md`, the QA runner skills
 (`src/skills/qa/{be-testing,fe-testing,report-format}`),
@@ -36,6 +36,17 @@ implementation planning.
     as written, and a vague "honest measure" is worse than none.
   - Minor fact-check wording fixes (verify-dist indirection, "not yet" IPv6,
     load-asset sibling).
+- **v3 → v4** (round-3 review): a proposal to make sequential-thinking (ST)
+  *mandatory like Serena* was audited by three reviewers and **rejected as
+  scoped** — it failed on effectiveness (the audited steps were a lookup + a
+  structural scan, not ST's sweet spot), an unfalsifiable anti-theater
+  safeguard, a consistency double-standard vs the experiment-gated re-read, and
+  integration incoherence (guessed MCP key → toast spam, "MUST use" contradicting
+  Serena's advisory-only precedent, a marketplace leak via the shared skill). The
+  use we actually wanted was different — **ST as a decomposition aid during
+  scenario *generation***, not verification. v4 adds that as **Section D**:
+  MAY-use, Veles-only, real token, no detector/toast, no shared-skill placement,
+  no new gate.
 
 ## Motivation
 
@@ -339,6 +350,54 @@ visible-citation structural check.
 
 ---
 
+## Section D — sequential thinking as an optional decomposition aid (Veles-only)
+
+A third review round audited "make sequential-thinking (ST) mandatory like
+Serena" and rejected that framing (see Revision history). What survives is the
+*use we actually wanted*: **ST to decompose a complex/tangled change into smaller
+testable units during scenario generation (Step 6)** — to improve coverage depth
+(gap #2). This is a genuine multi-step reasoning task (ST's sweet spot), unlike
+the lookup/scan steps the rejected version targeted, and it is **not** the
+verification bet the re-read pass already owns — so it carries no consistency
+double-standard.
+
+**Shape (all constraints from the round-3 review):**
+
+- **MAY-use, not mandatory.** Veles *may* reach for ST when it judges a change
+  genuinely tangled; for simple diffs it does not. This matches the repo's own ST
+  precedent (`packages/code-review` — "MAY use / graceful degradation") and
+  neutralizes the cost objection: no forced per-plan round-trips on an EXPENSIVE
+  agent. Absence of ST is **normal operation**, not a degraded mode.
+- **No detector, no toast.** We do **not** mirror `serena-detect.ts` — Serena's
+  toast is justified because its absence is genuinely degraded (no semantic
+  index); ST's is not. A guessed MCP key would only produce false-alarm toast
+  spam. So no `isSequentialThinkingAvailable`, no `session.created` toast (also
+  avoids breaking the "warns exactly once" test).
+- **Veles-only; the shared skill stays tool-agnostic.** The decomposition
+  *guidance* lives in `veles.md` only (a Veles-only prompt pointing at the
+  authoring activity). The shared `qa-plan-authoring` Step 6 keeps describing
+  *what* to produce (scenarios that decompose complex changes into testable
+  units), never *which tool* to reason with — so the marketplace `/create-qa-plan`
+  path is unchanged and there is no tool leak into it.
+- **Real token.** Use `sequential_thinking_sequentialthinking` (the identifier
+  used by `packages/code-review`), added **only to `VELES_TOOLS`**
+  (`src/modules/plan/allowed-tools.ts`). Because the *shared skill* does not gain
+  the tool, the M-2 subset invariant (skill ⊆ VELES_TOOLS ⊆ command) is untouched:
+  `VELES_TOOLS` may hold Veles-only tools the skill/command lack (as it already
+  does for the dispatch plugin tools).
+- **Not a gate; measured indirectly.** ST leaves no artefact in the plan file, so
+  it cannot be verified or made a success-criterion. It is an *aid*: its payoff
+  shows up only as coverage depth, observed via C1 + the §0.2 named classes. We
+  do **not** build an ST-specific check or A/B experiment (MAY-use ⇒ low cost ⇒ a
+  hard gate is not warranted); if it proves useless it simply goes unused.
+
+**Honest residual:** whether ST beats Opus's native decomposition is unproven —
+but as MAY-use, Veles-only, zero-plumbing guidance, the downside is bounded
+(occasional wasted round-trips when the model opts in) and needs no new
+machinery. This is the minimal viable form of the idea.
+
+---
+
 ## Build & CI (mandatory)
 
 `dist/` is **git-tracked** (`.gitignore:2-4` ignores `dist/` then force-un-ignores
@@ -384,7 +443,8 @@ nothing; CI's `verify-dist` is the gate.
 |---|---|
 | `src/skills/qa/qa-plan-authoring/SKILL.md` | A1 (amends Step 6 in place), A2 (new Step 4.6), A3 (new Step 6.6 — 6.5 already taken), B-shared self-check (new Step 6.7), A4 filename reinforcement (Step 7) |
 | `src/skills/qa/test-plan-format/SKILL.md` | A4 assertion style; visible `(file:line)` / `(unverified)` / `(exact text — brittle)` tag format; richer `## Changes Summary` guidance |
-| `src/modules/plan/veles.md` | B-cheap hard stop before JSON; B-seam (`momus`, preserve `(reserved)`); reconcile delegation rule; pre-save ordering |
+| `src/modules/plan/veles.md` | B-cheap hard stop before JSON; B-seam (`momus`, preserve `(reserved)`); reconcile delegation rule; pre-save ordering; Section D MAY-use ST decomposition guidance |
+| `src/modules/plan/allowed-tools.ts` | Section D — add `sequential_thinking_sequentialthinking` to `VELES_TOOLS` only (NOT the shared skill / command → M-2 invariant untouched) |
 | `src/skills/qa/{be-testing,fe-testing,report-format}/SKILL.md` | D2 — `(unverified)` → warning; `(exact text — brittle)` → substring; ignore `(file:line)` |
 | `docs/eval/scenarios/veles/` | C1 inline trap regression scenario; C2 strengthen existing signals (C1b deferred to v2.1) |
 | `tests/modules/plan/veles-prompt.test.ts`, `allowed-tools.test.ts`, `tests/skills/qa-plan-authoring.test.ts` | M-1 / M-2 |
@@ -400,7 +460,10 @@ nothing; CI's `verify-dist` is the gate.
    6.6).
 3. B-shared self-check (Step 6.7) → B-cheap hard stop in `veles.md` → B-seam
    (preserve `(reserved)`); reconcile delegation rule + pre-save ordering.
-4. Update `veles-prompt.test.ts` (M-1); confirm tool-subset invariant (M-2).
+3b. **Section D:** add MAY-use ST decomposition guidance to `veles.md`; add
+    `sequential_thinking_sequentialthinking` to `VELES_TOOLS` only.
+4. Update `veles-prompt.test.ts` (M-1 — gate/hard-stop + Section D ST directive);
+   confirm tool-subset invariant (M-2 — adding ST to `VELES_TOOLS` only keeps it).
 5. D2 runner rules (`be-testing`/`fe-testing`/`report-format`).
 6. `bun run build` + commit regenerated `dist/`.
 7. C2 (strengthen signals) → C1 (regression scenario).
@@ -425,6 +488,9 @@ nothing; CI's `verify-dist` is the gate.
   gap.
 - **General grounding gain:** measured by **C1b — deferred to v2.1**; not claimed
   by the first cut.
+- **Section D (ST):** not a success criterion — MAY-use, unobservable in the plan
+  file. Its only expected signature is coverage depth (C1 + §0.2 named classes);
+  if it adds nothing, it simply goes unused at no structural cost.
 
 ## Follow-ups (v2.1+)
 
