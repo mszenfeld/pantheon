@@ -94,6 +94,32 @@ Consequences for the plan you write:
 - **`detected-tools` lists only harness-executable tools** (`curl`, `httpie`, `psql`, `sqlite3`, `mysql`, `playwright`). Never put `docker` / `docker-compose` / `make` there — listing them falsely signals the runner can use them.
 - If, after excluding non-observable steps, an infrastructure change has **nothing** observable over Playwright / HTTP / DB, say so honestly: emit few or zero scenarios and let `fe_count` / `be_count` reflect reality. A small honest plan beats a large un-runnable one.
 
+## Step 4.6: Detect the test environment (don't guess it)
+
+Read the repo's real test infra instead of guessing remote endpoints (using only
+`Read`/`Glob`/`Grep` — do NOT add a new Bash token):
+
+- `supabase/config.toml` — local ports (e.g. 54321/54322), JWT signing alg
+  (ES256 vs HS256).
+- `.env`, `.env.test`, `.env.local`.
+- `docker-compose*.yml` / `compose.yaml` — service ports, DSNs.
+- `conftest.py`, test settings, `pytest.ini`, DB fixtures.
+
+**Rule:** prefer the repo's declared LOCAL test infra over a guessed remote
+endpoint. A remote URL may be emitted only if it came from a config file you
+read (see Step 0).
+
+Feed detected values into the frontmatter (`base-url`, DSNs) and `**Bindings:**`,
+**while satisfying the existing Setup Rules** (`test-plan-format`):
+
+- Normalize IPv6 → `127.0.0.1` / `localhost` in any DSN/binding host (IPv6 DSNs
+  are not yet supported).
+- A binding's `Egress:` host must equal the host its recipe connects to; do not
+  mix auth/DB ports in one binding.
+- Emit env-var **names only, never values**; never inline a secret into a recipe.
+- Credential-prefixed names (`SUPABASE_`/`DATABASE_`/`POSTGRES_`…) cannot be
+  chat-pasted — prefer binding inputs with neutral names.
+
 ## Step 5: Output format + Setup section
 
 Load the format skill: `skill(name: "test-plan-format")`. Follow it for frontmatter (`source`, `branch`, `base-url`, `detected-tools`) and overall structure.
