@@ -44,7 +44,7 @@ Use Setup to declare prerequisites that QA's preflight check must pass before an
 
 ## Changes Summary
 
-<Brief description of what changed and what needs testing. List affected areas.>
+<Human-readable summary: what changed, which files/endpoints, and what needs testing. This is the legible "Source / Changes" view for a human reader — keep it specific (endpoints, files, behaviors), not a one-liner.>
 
 ## FE Test Scenarios
 
@@ -175,6 +175,33 @@ Do NOT hand-author `### SETUP-XX:` scenarios in your plan — they are generated
 - FE scenarios: `FE-01`, `FE-02`, ... `FE-NN` (zero-padded two digits)
 - BE scenarios: `BE-01`, `BE-02`, ... `BE-NN` (zero-padded two digits)
 - Numbering is sequential within each section, starting from 01
+
+---
+
+## Grounding tags & assertion style
+
+Behavioral assertions (status codes, rate-limit semantics, auth/authz outcomes,
+error-envelope shape, derived values like generated filenames) carry **inline
+evidence**:
+
+- **Visible citation:** append the source the author read, e.g.
+  `**Expected response:** status 429 after the 6th request in 60s (`api/auth/ratelimit.py:12`).`
+  One citation on the single most load-bearing line per assertion (for a DB Check
+  the column is implicit in the SQL; for a derived value cite the producer).
+- **`(unverified — confirm at run time)`** — use when the author could NOT read
+  the code that produces the behavior (source not on disk, foreign repo). Never
+  emit a `(file:line)` you cannot back; a well-formed-but-ungrounded citation is
+  worse than this tag.
+
+Assertion style:
+
+- **Primary:** assert the stable status code + structural body shape (keys/types).
+- **Secondary (opt-in only when status+shape cannot disambiguate):** exact
+  human-readable message text, tagged `(exact text — brittle)`. The runner matches
+  a `(exact text — brittle)` assertion as **substring/contains, not equality**.
+
+These tags appear in scenario bodies / `**Expected response:**` lines only; the
+plan parser ignores expected-result prose, so they are inert to it.
 
 ---
 
