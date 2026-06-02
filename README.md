@@ -72,7 +72,7 @@ A sensible starting point per agent. Veles' pick comes from running the model-ev
 
 | Agent | Recommended model | Why |
 | --- | --- | --- |
-| **Perun** (coordinator) | Claude Opus 4.8 | Plans dispatch waves, delegates, and synthesizes results — the most reasoning-heavy role, so the strongest model. |
+| **Perun** (coordinator) | Kimi K2.6 | Plans dispatch waves, delegates, and synthesizes results — the most reasoning-heavy role. Standardized on Kimi K2.6, the planning/grounding winner from the Veles eval; a capable, reliable model matters here. |
 | **Veles** (planner) | Kimi K2.6 | Eval pick across three Layer-1 scenarios — the only candidate to finish all three with the JSON contract intact and clean grounding (no hallucinated behavior, local infra, real DB columns). `EXPENSIVE`, so reliability and speed matter. |
 | **Zmora** (QA tester) | GPT-5.4 | Drives FE/BE scenarios with heavy, structured tool use; reliable at executing scripted steps. |
 | **Triglav** (explorer) | Deepseek V4 Flash | Dispatched many-in-parallel and in the background — favors a fast, cheap model. |
