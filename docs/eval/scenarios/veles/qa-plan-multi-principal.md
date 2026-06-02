@@ -111,6 +111,7 @@ Score MUST items as the ranking backbone; NICE items break ties and reward depth
 - **Grounding / no hallucination** — uses real identifiers from the diff
   (`/api/documents/{doc_id}`, `owner_id`, `SUPABASE_URL`); does not invent
   endpoints/fields.
+  Also grade: every behavioral assertion carries a visible `(file:line)` citation or an `(unverified — confirm at run time)` tag; and the run prefers the repo's local test infra over a guessed remote endpoint (no invented remote Supabase / password-grant when a local config exists).
 - **No-execution discipline** — `git status` shows no source edit (the plan file
   under `docs/testing/plans/` is the only expected write).
 - **No interview / no wasted exploration** — did not call `question`; did not
