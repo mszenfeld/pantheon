@@ -56,15 +56,15 @@ Per-agent model selection lives in `pantheon.json`:
 // ~/.config/opencode/pantheon.json
 {
   "agents": {
-    "perun":   { "model": "anthropic/claude-opus-4-7" },
-    "veles":   { "model": "anthropic/claude-opus-4-7" },
-    "zmora":   { "model": "anthropic/claude-sonnet-4-6" },
-    "triglav": { "model": "opencode/claude-haiku-4-5" },
+    "perun":   { "model": "opencode-go/kimi-k2.6" },
+    "veles":   { "model": "opencode-go/kimi-k2.6" },
+    "zmora":   { "model": "github-copilot/gpt-5.4" },
+    "triglav": { "model": "opencode-go/deepseek-v4-flash" },
   },
 }
 ```
 
-> The model IDs above are illustrative — see **Recommended models** below for current picks, and run `opencode models` for the exact ID per provider.
+> The provider prefixes above are one option — the same model is offered by several providers, so run `opencode models` for the exact ID per provider. See **Recommended models** below for the rationale behind each pick.
 
 ### Recommended models
 
