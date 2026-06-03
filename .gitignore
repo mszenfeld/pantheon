@@ -38,3 +38,10 @@ docs/eval/scenarios/veles/*
 !docs/eval/scenarios/veles/fixtures/
 docs/eval/scenarios/veles/fixtures/*
 !docs/eval/scenarios/veles/fixtures/coverage-classes.md
+# Zmora eval scenarios are private-by-default too: a live (Layer-2) scenario
+# executes against a real running target and may embed private endpoints, DSNs,
+# and responses. Only the shipped public files under zmora/ are trackable.
+docs/eval/scenarios/zmora/*
+!docs/eval/scenarios/zmora/be-discipline.md
+!docs/eval/scenarios/zmora/README.md
+!docs/eval/scenarios/zmora/TEMPLATE.md
