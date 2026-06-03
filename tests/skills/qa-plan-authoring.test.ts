@@ -37,4 +37,24 @@ describe("qa-plan-authoring skill", () => {
     const commandTools = frontmatterToolList(readFileSync(COMMAND_PATH, "utf8"))
     expect(isToolSubset(skillTools, commandTools)).toBe(true)
   })
+
+  it("Step 0 binds the converse — (unverified) is a defect on on-disk source", () => {
+    expect(md).toContain("The converse is equally binding")
+  })
+
+  it("teaches the framework-default trap (verify against the installed version)", () => {
+    expect(md).toContain("Framework defaults are the most common confident-wrong trap")
+    expect(md).toContain("HTTPBearer")
+  })
+
+  it("Step 6.6 carries the reachability litmus + in-scope-by-default classes", () => {
+    expect(md).toContain("Reachability litmus")
+    expect(md).toContain("IDOR / cross-tenant")
+  })
+
+  it("Step 6.8 adds a targeted refute pass with the momus seam", () => {
+    expect(md).toContain("Targeted refute pass")
+    expect(md).toContain("intent to *refute*")
+    expect(md).toContain("Momus seam")
+  })
 })

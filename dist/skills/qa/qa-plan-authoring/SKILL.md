@@ -23,6 +23,28 @@ worse than the honest tag. Likewise Step 4.6's config-file detection only "reads
 files that are in the tree; from a diff-embedded config block you may read the
 *diff text* but must not claim to have read an on-disk file.
 
+**The converse is equally binding — when the source IS on disk, read it.** On the
+normal `/create-qa-plan` and Veles real-repo path, `(unverified — confirm at run time)`
+is a **defect** on any assertion you could resolve by reading. Status codes, auth/authz
+outcomes, rate-limit semantics, error-envelope shapes, and derived values are almost
+always readable from the changed code and its immediate dependencies (the security
+dependency, the limiter config, the exception handler) — open them and cite
+`(file:line)`. Reserve `(unverified)` for facts that genuinely cannot be read: true
+runtime/deploy-time values (the live server's actual rate-limit reset instant; a value
+fixed only by deploy config). *"I didn't open the file" is never a reason to tag
+`(unverified)` when the file is on disk.*
+
+**Framework defaults are the most common confident-wrong trap — verify them against the
+version in the tree by reading (or briefly probing) the dependency, never from memory.**
+Even widely-repeated "facts" drift between releases: the status a FastAPI `HTTPBearer()`
+raises on a missing/non-bearer `Authorization` header **changed from 403 to 401** across
+versions — so confirm it against the installed version, not from lore. Unambiguous
+examples: a SlowAPI `Limiter()` with no `strategy=` is **fixed-window**, not sliding;
+`get_remote_address` keys on the request host (IPv4 *or* IPv6). These are illustrative,
+not a checklist — the rule is: when a change touches auth, rate-limiting, or
+error-to-status mapping, open the dependency (and probe it when a default is genuinely
+uncertain) before asserting.
+
 ## Step 1: Resolve the diff source
 
 Parse the caller's argument to choose the diff:
@@ -172,6 +194,28 @@ in general, derive them by reading the changed code — Step 0 applies.)
   (Step 6 grounding). **Scenario count is not a quality signal** — do not pad to a
   number.
 
+**Reachability litmus — earn the punt.** Before writing any behavior class under
+`## Out of harness scope`, prove it cannot be triggered over Playwright / curl / psql
+against the running app. Each out-of-scope line MUST carry a one-clause reason it is
+unreachable (e.g. "needs `docker image inspect` — no HTTP surface"). Punting without
+that reason is a defect, not honesty. The following look infrastructural but are
+reachable over the HTTP surface — **in scope by default, never punt them:**
+
+- **IDOR / cross-tenant** (user B requests user A's resource → 404/403): mint a SECOND
+  principal binding (Step 6.5) and `curl` with its token.
+- **Upstream-dependency failure → 5xx** (a bad upstream key makes the dependency return
+  401/500, which the caller maps to **502**): `curl` with the dependency misconfigured,
+  or against a stopped dependency declared in Setup.
+- **Lock / concurrency contention → 409** (two in-flight requests for one resource):
+  fire concurrent `curl`s (background the first); tag `(timing-dependent)` if the
+  window is narrow.
+- **Boundary conditions** (`valid_to == now`, one-expired-one-active): seed the
+  boundary row via `psql` / the dev tool and `curl` across it.
+
+Genuinely out of scope is the residue *after* this filter — e.g. DB-down → 503 (the
+harness cannot stop the DB), or image/UID/layer-secret checks that need `docker`. List
+those, each with its reason; cover everything else.
+
 ## Step 6.7: Self-check before finishing
 
 Scan the draft and confirm, on the in-memory draft (pre-save):
@@ -185,6 +229,33 @@ Scan the draft and confirm, on the in-memory draft (pre-save):
 Fix any gap before saving. (Veles additionally hard-stops on this check before
 emitting its result JSON — see `veles.md`. The `/create-qa-plan` command inherits
 this self-check as guidance, without a hard gate.)
+
+## Step 6.8: Targeted refute pass (high-risk assertions)
+
+After the Step 6.7 form-check, re-read the cited source for the **high-risk** assertion
+classes with the intent to *refute*, not confirm — and fix any mismatch in the draft
+before saving. Confident-wrong claims cluster in these classes:
+
+- auth / authz outcomes and **status codes** (401 vs 403 vs 404),
+- rate-limit semantics (window strategy, key function),
+- error-to-status mapping (which exception → which HTTP code / envelope shape),
+- framework defaults (Step 0 — verify against the *installed version*, not lore),
+- derived values (generated filenames, slugs).
+
+For each, re-open the cited `file:line` and ask "what does the code *actually* do?" —
+default to **WRONG** when the code disagrees at all; when a default is genuinely
+uncertain, a quick probe beats a guess. Skip low-risk assertions already nailed by a
+direct citation (a happy-path 200, an exit code read straight off a `raise
+SystemExit(n)`) — this pass is targeted, not exhaustive. Re-reading cited code to
+confirm a claim is *verification, not exploration* — the scoped exception to "do not
+redo a delegated search."
+
+**Momus seam:** when the adversarial reviewer `momus` is available *(reserved)*, this
+pass delegates per-claim refutation to it unchanged; until then the author performs it.
+A same-session self-refute is weaker than an independent reviewer — so be genuinely
+adversarial: the goal is to *break* your own assertions, not wave them through.
+(Validated by the round-2 re-read efficacy experiment: 3/3 seeded errors caught + 2
+unplanted, 0 false positives.)
 
 ## Step 7: Save
 

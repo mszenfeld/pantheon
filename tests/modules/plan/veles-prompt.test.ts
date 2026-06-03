@@ -26,6 +26,8 @@ describe("buildVelesPrompt", () => {
     // v5 gate + Section D (ST decomposition aid)
     expect(prompt).toContain("Wrong-but-confident is worse than honestly-unverified")
     expect(prompt).toContain("(unverified — confirm at run time)")
+    expect(prompt).toContain("read-then-cite beats")
+    expect(prompt).toContain("targeted refute pass")
     expect(prompt).toContain("sequential_thinking_sequentialthinking")
     expect(prompt).toContain("proceed with native decomposition")
   })

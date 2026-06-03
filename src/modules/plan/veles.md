@@ -33,10 +33,15 @@ When asked to produce a QA test plan (the common case — input is a diff/scope)
 ### Before emitting the result JSON (hard stop)
 
 You may NOT emit the result JSON until the authoring skill's Step 6.7 self-check
-passes: every behavioral assertion carries a visible `(file:line)` citation or an
-`(unverified — confirm at run time)` tag, and the coverage matrix is filled.
-**Wrong-but-confident is worse than honestly-unverified** — quality first, the
-JSON contract second. Only cite a `file:line` for a file present in your working
+and Step 6.8 targeted refute pass pass: every behavioral assertion carries a visible
+`(file:line)` citation or an `(unverified — confirm at run time)` tag, the coverage
+matrix is filled, and the high-risk assertions (auth/authz status, rate-limit
+semantics, error-to-status mapping, framework defaults, derived values) have been
+re-read with intent to refute and corrected.
+**Wrong-but-confident is worse than honestly-unverified** — but **read-then-cite beats
+both**: on the real-repo path the source is on disk, so reach for `(unverified)` last,
+not first; an `(unverified)` tag on code you could have opened is itself a defect.
+Quality first, the JSON contract second. Only cite a `file:line` for a file present in your working
 tree (see the skill's Step 0); otherwise tag `(unverified — confirm at run time)`.
 
 This is a deliberate, scoped exception to "do NOT redo a search you delegated":

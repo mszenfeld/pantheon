@@ -608,3 +608,66 @@ external artefact that must be settled before the relevant step runs:
 - **`momus`** adversarial reviewer → becomes the executor of the B-seam gate.
 - Reconsider whether richer `## Changes Summary` fully answers the legibility
   open-question after the first cut ships.
+
+---
+
+## Round 2 (v6) — escape-hatch fixes + validated re-read pass
+
+Round-1 (v5) fixed the *structure* — frontmatter, bindings, coverage matrix,
+out-of-scope section, and citations all shipped and were praised in a round-2 A/B
+comparison (our Veles plan vs a marketplace plan). It also opened **two escape hatches**
+the model over-used on a real-repo (Layer-2) run:
+
+1. **`(unverified)` instead of reading.** A0 governed only the source-*absent* case,
+   leaving `(unverified)` a frictionless default; the `veles.md` "wrong-but-confident is
+   worse than honestly-unverified" line nudged toward hedging. The round-2 plan hedged
+   facts it could have read.
+2. **`## Out of harness scope` instead of covering.** Step 4.5/6.6 let the model punt
+   with no obligation to prove unreachability; it punted curl-testable classes (IDOR,
+   502, lock contention).
+
+**Part 1 (shipped)** — `qa-plan-authoring` Step 0 gains the *converse* rule
+(`(unverified)` is a **defect** on on-disk-readable assertions) + a framework-default
+trap (verify against the *installed version*, never lore). `veles.md` gate reframed:
+*read-then-cite beats both wrong-but-confident and honestly-unverified*.
+
+**Part 2 (shipped)** — Step 6.6 gains the **reachability litmus** (earn the punt: prove
+a class is unreachable over Playwright/curl/psql before listing it out-of-scope) + an
+in-scope-by-default catalogue (IDOR, upstream-5xx→502, lock-409, boundaries).
+
+**Part 3 (shipped)** — Step 6.8 **targeted refute pass** over high-risk classes
+(auth/authz status, rate-limit semantics, error-to-status mapping, framework defaults,
+derived values), wired into the Veles hard-stop gate and framed as the **`momus` seam**.
+Built per §B-expensive only after the D1 experiment cleared ≥2/3.
+
+### Re-read efficacy experiment (Task 11 — resolved)
+
+Round-2 Plan A was ephemeral, so per open-item #2 the substrate was a **seeded synthetic
+plan grounded in the real `i-need-cv` code** (8 assertions: 4 confident-wrong + 4 correct
+controls), audited by `opencode-go/kimi-k2.6` (read-only `plan` agent) with read access
+to the real repo. Refute prompt + plan archived under `/tmp/refute-exp/` (not committed —
+private-repo hygiene). 2 iterations, both `done` (183s / 231s).
+
+**Result (deterministic across both iters):** 3/3 valid planted errors caught
+(sliding→fixed, deleted-user→401, IPv4-based), **0 false positives** on 5 controls,
+**+2 unplanted real errors** caught (no-entitlement is 402 not 403; fixed-window reset
+semantics). The pass *probed* (`TestClient`, slowapi source), not just re-read — the
+"same model re-confirms its own error" theater worry did not materialize.
+
+**Premise correction (important).** The 4th planted error — "missing bearer header → 401
+should be 403" — was **invalid**: a direct `TestClient` probe in the repo's venv shows
+**FastAPI 0.136.1 returns 401** (the classic 403 behavior changed across versions). So
+our harness's original "401" was correct; the round-2 *report's* headline critique was
+itself a verification miss. The skill's framework-trap example and the C1 scenario were
+corrected to teach the real lesson (status drifted 403→401 → verify against the installed
+version). This is the strongest single piece of evidence for the pass: it beat both a
+human report and the author's assumption by testing.
+
+**Decision.** Build a **targeted** self-refute (high-risk classes only), framed as the
+`momus` seam so it lifts out unchanged when `momus` lands. Full every-assertion refute
+was rejected on cost (~2× Veles latency); defer-to-`momus` was rejected because `momus`
+is unscheduled.
+
+**Open item (v6.1).** The experiment validated a *separate-session* refute (the `momus`
+shape); the shipped in-session self-refute extrapolates from it. Re-measure once `momus`
+exists, or if a later eval shows the in-session pass under-catching.
