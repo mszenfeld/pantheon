@@ -71,6 +71,22 @@ git diff $MAIN_BRANCH...HEAD
 
 Also collect the changed file list (`gh pr diff <n> --name-only`, or `git diff --name-only <range>`).
 
+## Step 1.5: Pin the intended contract (before observing runtime behavior)
+
+From the SPEC sources only — PR/issue text, docstrings, the changed code's *declared* error
+types and route decorators (`raise XError`, `@router`, `@limiter.limit(...)`), linked design docs —
+list the intended behaviors with the status each *should* return by design. Enumerate the success
+path AND every declared error path. Derive expectations from what the code is *trying* to express,
+NOT from what a live call currently returns.
+
+If the surface has ≥2 status/behavior classes, draft the `## Coverage Matrix` skeleton
+(`test-plan-format`) now — rows + the contract status, disposition column blank. **Commit to these
+rows.** When observed code or runtime later *contradicts* a row (e.g. a debug delay forces every
+call to 504, or a commented-out guard makes a 402 path return 200), that is a **delta to log as a
+Blocker (Step 3.5)** — never a reason to delete or rewrite the row. The contract is the spec; the
+runtime is the system under test; QA tests the system *against* the spec. (Scale to surface:
+a one-behavior change needs no matrix.)
+
 ## Step 2: Classify each changed file FE vs BE
 
 - **Frontend:** `.tsx/.jsx/.vue/.svelte/.css/.scss/.html`; paths with `app/ components/ pages/ views/ layouts/ styles/ public/ assets/ frontend/ client/ web/`.
@@ -82,6 +98,26 @@ For each file note: what changed, change kind (new/modify/delete/refactor), what
 ## Step 3: Gather context
 
 Read related files: routers/URL configs, serializers/schemas, models for changed endpoints; parent components, stores, API calls for changed components; endpoints using changed models/migrations. Look for `docs/`, OpenAPI/Swagger (`openapi.{json,yaml}`, `swagger.{json,yaml}`), READMEs, and existing tests (what is already covered vs missing).
+
+## Step 3.5: Scan for blockers and emit `## Blockers / Findings`
+
+Having read the changed code + dependencies, scan for things that make the running system unable to
+honor its own contract (Step 1.5):
+
+- **Debug / test artifacts:** unconditional delays (`asyncio.sleep`, `time.sleep`), `if True:`
+  short-circuits, hardcoded returns, `# TEMPORARY`/`# TODO`/`# DEBUG`/`# HACK`/`# FIXME`/`# XXX` markers.
+- **Disabled / commented-out guards:** a commented-out auth/entitlement/ownership check (even with NO
+  marker word) is a blocker — it makes the gated status (401/402/403) unobservable. Markerless defects
+  are the easiest to miss and the most dangerous.
+- **Contract contradictions:** any code path whose observable effect contradicts a Step-1.5 row.
+- **Shippability hazards:** a scenario/ticket ID baked into a source comment (identifier policy),
+  a leaked secret, a disabled auth check.
+
+Emit `## Blockers / Findings` (after `## Changes Summary`). **Mandatory — if none, write `None found.`**
+A reversible blocker becomes a human Setup prerequisite + a `**Blocked-by:** BLK-NN` tag on the affected
+scenarios, which stay in the plan in contract-correct form. **Never scope a contract row out merely
+because a blocker prevents observing it.** Ask: *"does any path's current behavior contradict what the
+docstring / declared errors promise?"* — that contradiction is a blocker, marker or no marker.
 
 ## Step 4: Detect available tools
 
@@ -198,7 +234,20 @@ in general, derive them by reading the changed code — Step 0 applies.)
 `## Out of harness scope`, prove it cannot be triggered over Playwright / curl / psql
 against the running app. Each out-of-scope line MUST carry a one-clause reason it is
 unreachable (e.g. "needs `docker image inspect` — no HTTP surface"). Punting without
-that reason is a defect, not honesty. The following look infrastructural but are
+that reason is a defect, not honesty.
+
+**The reason must be a property of the HARNESS, not of the code under test.** A valid out-of-scope
+reason is "no HTTP/DB/Playwright surface can observe this" or "requires stopping a process the harness
+cannot stop". A reason that is itself **a code defect, leftover test instrumentation, or a fixable
+config** is NOT a valid punt — it is a **Blocker** (Step 3.5): write the contract scenario, tag it
+`**Blocked-by:**`, record remediation as a human Setup prerequisite. *"The current build always
+returns 504 / the worker has a sleep / a guard is commented out / a debug flag is on" describes a
+defect — reclassify, do not punt.* **"The runner is sequential" is rejected for 429** — exhaust the
+limiter over the FAST path (fire 11× the cheap 402/404 request; error responses still count toward the
+slowapi bucket). (409 contention is already covered by the "background the first curl" guidance in the
+in-scope-by-default list below — a defect is never its punt reason either.)
+
+The following look infrastructural but are
 reachable over the HTTP surface — **in scope by default, never punt them:**
 
 - **IDOR / cross-tenant** (user B requests user A's resource → 404/403): mint a SECOND
@@ -214,21 +263,29 @@ reachable over the HTTP surface — **in scope by default, never punt them:**
 
 Genuinely out of scope is the residue *after* this filter — e.g. DB-down → 503 (the
 harness cannot stop the DB), or image/UID/layer-secret checks that need `docker`. List
-those, each with its reason; cover everything else.
+those, each with its reason; everything unreachable only *because of a defect* goes to
+`## Blockers / Findings`, not here; cover everything else.
 
-## Step 6.7: Self-check before finishing
+## Step 6.7: Self-check before finishing — complete the coverage matrix
 
-Scan the draft and confirm, on the in-memory draft (pre-save):
+The Coverage Matrix is the *emitted form* of the Step 6.6 reachability sweep — do the litmus once,
+record its verdict per row. When the surface has ≥2 status/behavior classes, complete the
+`## Coverage Matrix` drafted in Step 1.5: **every status named in your own `## Changes Summary` is a
+row** (this is the decidable anchor — row set == the statuses you declared), each with exactly one
+disposition:
 
-1. Every behavioral assertion carries a visible `(file:line)` citation OR an
-   `(unverified — confirm at run time)` tag.
-2. The Step 6.6 coverage matrix is filled (or omissions are listed under
-   `## Out of harness scope`).
-3. The filename will carry the `-test-plan` suffix (Step 7).
+1. `covered` → cite the scenario ID AND a `(file:line)` for the asserted status.
+2. `blocked-by: BLK-NN` → reference an existing `## Blockers / Findings` entry AND keep the
+   contract-correct scenario (tagged `**Blocked-by:**`).
+3. `out-of-scope: <reason>` → a **harness-property** reason (Step 6.6). An `out-of-scope` whose
+   reason is a code defect is INVALID — it must be `blocked-by`.
 
-Fix any gap before saving. (Veles additionally hard-stops on this check before
-emitting its result JSON — see `veles.md`. The `/create-qa-plan` command inherits
-this self-check as guidance, without a hard gate.)
+Also confirm: every behavioral assertion carries a visible `(file:line)` OR `(unverified — confirm
+at run time)` tag; no `**Expected response:**` equals a value produced only by a recorded Blocker
+(Step 5.5 Tell — see Step 6.8); the filename carries the `-test-plan` suffix (Step 7). A
+Changes-Summary status with no row, or an invalid disposition, is a defect — fix before saving.
+(Veles hard-stops on this matrix before emitting its result JSON — see `veles.md`. The
+`/create-qa-plan` command inherits this as guidance, without a hard gate.)
 
 ## Step 6.8: Targeted refute pass (high-risk assertions)
 
@@ -240,7 +297,19 @@ before saving. Confident-wrong claims cluster in these classes:
 - rate-limit semantics (window strategy, key function),
 - error-to-status mapping (which exception → which HTTP code / envelope shape),
 - framework defaults (Step 0 — verify against the *installed version*, not lore),
-- derived values (generated filenames, slugs).
+- derived values (generated filenames, slugs),
+- **contract-vs-runtime (expectations follow the spec, not incidental runtime).** For every
+  `**Expected response:**`, ask *"is this the contract, or just what the current (possibly defective)
+  build returns?"* Decision table:
+
+  | You read / observe | Contract? | Expected you write | Disposition |
+  |---|---|---|---|
+  | Code maps `TimeoutException → 504`, spec wants 504 | yes | 504 `(file:line)` | covered |
+  | A leftover `sleep(65)` / disabled guard forces a status the spec doesn't want | NO — a defect | the spec'd status | `blocked-by: BLK-NN`, not out-of-scope |
+  | Behavior genuinely unobservable over HTTP/DB/Playwright (DB-down → 503) | n/a | the spec'd result | `out-of-scope` + harness reason |
+
+  If any expectation matches a value produced only by a recorded Blocker, rewrite it to the contract
+  value and add `**Blocked-by:**`. One contradiction silently encoded as an expectation fails the plan.
 
 For each, re-open the cited `file:line` and ask "what does the code *actually* do?" —
 default to **WRONG** when the code disagrees at all; when a default is genuinely

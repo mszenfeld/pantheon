@@ -17,6 +17,14 @@ Scenarios for picking the best model for the **Veles** planning agent, run via
   `$QA_BIND_*` it never declares (the dangling-reference regression) or that
   reuses one token across two principals. A dangling `$QA_BIND_*` is a hard
   `degenerate` gate here.
+- `qa-plan-defect-grounding.md` — **Layer 1**, public. An embedded diff carrying a leftover
+  `# TEMPORARY … asyncio.sleep(65)` artifact alongside the full intended status surface.
+  Discriminates **deviance-normalization (marker shape)**: a plan encoding the bug as the
+  contract `degenerate`s on GATE 2/3; flagging it as a Blocker + keeping contract-correct
+  `Blocked-by:` coverage passes.
+- `qa-plan-defect-grounding-markerless.md` — **Layer 1**, public. Same failure *class*, but the
+  defect is a **commented-out entitlement guard with no `TEMPORARY`/`sleep` marker** — proves the
+  fix generalizes past a marker regex (the case a Phase-2 regex would miss).
 - `TEMPLATE.md` — public starting point for **Layer 2** (a private real repo).
   Copy it to a gitignored `local-*.md` and fill in your repo.
 

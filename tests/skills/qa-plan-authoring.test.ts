@@ -57,4 +57,25 @@ describe("qa-plan-authoring skill", () => {
     expect(md).toContain("intent to *refute*")
     expect(md).toContain("Momus seam")
   })
+
+  it("Step 1.5 pins the contract before observing runtime", () => {
+    expect(md).toContain("Pin the intended contract")
+  })
+
+  it("Step 3.5 forces an emitted Blockers section incl. markerless guards", () => {
+    expect(md).toContain("None found.")
+    expect(md).toContain("commented-out")
+  })
+
+  it("Step 6.6 closes the transitive-punt hole", () => {
+    expect(md).toContain("property of the HARNESS, not of the code")
+  })
+
+  it("Step 6.7 requires the completed coverage matrix", () => {
+    expect(md).toContain("complete the coverage matrix")
+  })
+
+  it("Step 6.8 carries the contract-vs-runtime refute check", () => {
+    expect(md).toContain("contract-vs-runtime")
+  })
 })

@@ -33,6 +33,8 @@ docs/eval/scenarios/veles/*
 !docs/eval/scenarios/veles/qa-plan-from-diff.md
 !docs/eval/scenarios/veles/qa-plan-multi-principal.md
 !docs/eval/scenarios/veles/qa-plan-export-pdf-regression.md
+!docs/eval/scenarios/veles/qa-plan-defect-grounding.md
+!docs/eval/scenarios/veles/qa-plan-defect-grounding-markerless.md
 !docs/eval/scenarios/veles/TEMPLATE.md
 !docs/eval/scenarios/veles/README.md
 !docs/eval/scenarios/veles/fixtures/

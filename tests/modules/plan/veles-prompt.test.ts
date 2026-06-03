@@ -30,5 +30,8 @@ describe("buildVelesPrompt", () => {
     expect(prompt).toContain("targeted refute pass")
     expect(prompt).toContain("sequential_thinking_sequentialthinking")
     expect(prompt).toContain("proceed with native decomposition")
+    // Phase-1 defect-grounding additions (preserve the three assertions above)
+    expect(prompt).toContain("Blockers / Findings")
+    expect(prompt).toContain("A discovered defect never shrinks coverage")
   })
 })

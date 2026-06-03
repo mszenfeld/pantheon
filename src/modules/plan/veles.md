@@ -33,11 +33,26 @@ When asked to produce a QA test plan (the common case — input is a diff/scope)
 ### Before emitting the result JSON (hard stop)
 
 You may NOT emit the result JSON until the authoring skill's Step 6.7 self-check
-and Step 6.8 targeted refute pass pass: every behavioral assertion carries a visible
-`(file:line)` citation or an `(unverified — confirm at run time)` tag, the coverage
-matrix is filled, and the high-risk assertions (auth/authz status, rate-limit
-semantics, error-to-status mapping, framework defaults, derived values) have been
-re-read with intent to refute and corrected.
+and Step 6.8 targeted refute pass both pass. Concretely, ALL must hold:
+
+- every behavioral assertion carries a visible `(file:line)` citation or an
+  `(unverified — confirm at run time)` tag;
+- `## Blockers / Findings` is present — `None found.` or one-or-more `BLK-NN` entries, each
+  with a `(file:line)`, an impact line, and a human-Setup remediation;
+- when your `## Changes Summary` names ≥2 statuses, the `## Coverage Matrix` has one row per
+  such status, each with exactly one disposition — `covered` (+ scenario ID + `(file:line)`),
+  `blocked-by` (matching a BLK entry, with a kept contract-correct scenario), or `out-of-scope`
+  (+ harness-property reason). A named status with no row, or an `out-of-scope` whose reason is a
+  code defect, is a hard-stop failure;
+- no `**Expected response:**` encodes a value the code produces only because of a recorded Blocker;
+- the high-risk assertions (auth/authz status, rate-limit semantics, error-to-status mapping,
+  framework defaults, derived values, **contract-vs-runtime**) have been re-read with intent to
+  refute and corrected.
+
+**A discovered defect never shrinks coverage.** If reading the code surfaces a bug that makes a
+behavior unobservable on the current build, that is a Blocker — not a reason to drop the scenario
+or anchor the expectation to the bug. Reverting the defect is a human Setup prerequisite, never a
+runner step.
 **Wrong-but-confident is worse than honestly-unverified** — but **read-then-cite beats
 both**: on the real-repo path the source is on disk, so reach for `(unverified)` last,
 not first; an `(unverified)` tag on code you could have opened is itself a defect.

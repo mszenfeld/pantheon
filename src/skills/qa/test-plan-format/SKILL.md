@@ -46,6 +46,29 @@ Use Setup to declare prerequisites that QA's preflight check must pass before an
 
 <Human-readable summary: what changed, which files/endpoints, and what needs testing. This is the legible "Source / Changes" view for a human reader — keep it specific (endpoints, files, behaviors), not a one-liner.>
 
+## Blockers / Findings
+
+<Defects in the code under test that obstruct HOW it must be tested. A Blocker is NOT
+"out of harness scope": out-of-scope = the harness physically cannot observe the behavior;
+a Blocker = the behavior IS in scope but current code is wrong/instrumented so the spec'd
+result can't be observed. This section is MANDATORY — if you found none, write `None found.`>
+
+### BLK-01: <one-line defect> — `(file:line)`
+- **Impact on testing:** <which scenarios it obstructs and the spurious result it forces>
+- **Remediation (human Setup prerequisite):** <exact human action before the run>
+- **Blocks:** <scenario IDs carrying `**Blocked-by:** BLK-01`>
+
+## Coverage Matrix   (required only when the Changes Summary names ≥2 status/behavior classes)
+
+<One row per intended behavior / status from the spec (drafted in authoring Step 1.5,
+dispositioned in Step 6.7). Omit on single-behavior diffs. Exactly one disposition per row;
+`blocked-by` (lowercase) is the disposition keyword — distinct from the `**Blocked-by:**`
+scenario tag.>
+
+| Behavior / status | Expected (per contract) | Disposition | Pointer |
+|---|---|---|---|
+| 200 happy path | 200 + `%PDF` | covered  /  blocked-by  /  out-of-scope | scenario ID, BLK ID, or harness-property reason |
+
 ## FE Test Scenarios
 
 ### FE-01: <scenario name>
@@ -275,6 +298,24 @@ This field is **opt-in**. Plans without `**Depends-on:**` dispatch fully in para
 
 ---
 
+## Blockers & the `**Blocked-by:**` tag
+
+`## Blockers / Findings` records code defects that obstruct testing. Hard rules:
+
+- **A discovered defect NEVER drops, weakens, or rescopes a scenario.** Write the scenario for
+  the *intended* behavior with the contract's expected result, and tag it `**Blocked-by:** BLK-NN`
+  beneath the heading. Do NOT move it to `## Out of harness scope`.
+- **Never encode a defect as an expected result.** If current code returns X because of a bug but
+  the contract says Y, `**Expected response:**` is Y; the scenario is `**Blocked-by:**` the BLK
+  that produces X. A plan whose expectation matches the *bug* is itself defective.
+- **Remediation is a human Setup prerequisite, not a runner step.** The runner cannot edit source;
+  reverting a defect is surfaced in `## Setup` exactly like "bring the stack up", never as a scenario.
+- **Spelling:** `**Blocked-by:** BLK-NN` is the scenario tag (capital B, inert prose — like
+  `**Depends-on:**` in placement, but NOT parsed). `blocked-by` (lowercase) is the Coverage-Matrix
+  disposition keyword. Both reference a `BLK-NN` id.
+
+---
+
 ## Plan Quality Checklist
 
 Before saving the plan, verify:
@@ -287,3 +328,5 @@ Before saving the plan, verify:
 - [ ] No placeholder text (TBD, TODO, fill in later)
 - [ ] `**Depends-on:**` fields, if present, reference existing scenario IDs without cycles
 - [ ] Binding format: every `**Bindings:**` entry uses a `QA_BIND_*` name with `(secret|plain)` type, declares `Inputs:` for every `$VAR` referenced by the recipe, sets an `Egress:` host, and the fenced ```bash``` recipe is a single statement using only allowlisted commands
+- [ ] `## Blockers / Findings` is present (`None found.` if none); any test-obstructing defect is recorded there (not buried in `## Out of harness scope`), and each blocked scenario keeps its contract-correct expectation + a `**Blocked-by:**` tag
+- [ ] If the Changes Summary names ≥2 statuses, `## Coverage Matrix` has one row per status, each with exactly one disposition (`covered` / `blocked-by` / `out-of-scope` + harness-property reason)

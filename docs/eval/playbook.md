@@ -392,6 +392,16 @@ above mostly applies, with these amendments. (Scenario: `scenarios/veles/`.)
   `degenerate` / `unreliable` / `not-tested`); for Veles, `degenerate` covers a
   broken JSON gate, 0 scenarios on either side, <2 edge cases per scenario, or
   interview-hang.
+- **Defect-grounding goldens** (`scenarios/veles/qa-plan-defect-grounding.md` and
+  `…-markerless.md`) test whether Veles flags a discovered code defect as a Blocker instead of
+  normalizing it into the contract. Run them at **≥3 iterations** (above the default 2; Lesson 9's
+  cost caveat still holds, but these are cheap self-contained Layer-1 diffs) and grade
+  **worst-of-N** — a GATE-2/GATE-3 verdict flip across iterations is itself `unreliable`, counted
+  as "still normalizing". Their gates (GATE 2 = defect flagged as a blocker; GATE 3 = no scenario
+  encodes a defect-produced status as its `Expected`) live in the scenario files. **Regression
+  tripwire:** before merging any change to `src/modules/plan/veles.md` or
+  `src/skills/qa/qa-plan-authoring/SKILL.md`, re-run both; per **Lesson 10** they must still
+  discriminate — current/unfixed Veles must FAIL them, or the golden has gone stale.
 
 Minimal Node-script extension: capture the plan and guarantee its deletion.
 After `outcome === "done"`, parse the contract from `finalText` (the text of the
