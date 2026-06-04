@@ -78,4 +78,27 @@ describe("qa-plan-authoring skill", () => {
   it("Step 6.8 carries the contract-vs-runtime refute check", () => {
     expect(md).toContain("contract-vs-runtime")
   })
+
+  it("Step 4.5 states the runner dispatches scenarios in parallel", () => {
+    expect(md).toContain("dispatches scenarios in parallel")
+  })
+
+  it("Step 6.9 sequences shared-quota scenarios via Depends-on", () => {
+    expect(md).toContain("Step 6.9")
+    expect(md).toContain("terminal wave")
+  })
+
+  it("Step 6.6 carries no-oracle IDOR equality and reflected-input injection", () => {
+    expect(md).toContain("indistinguishable from not-found")
+    expect(md).toContain("reflected into a response header")
+  })
+
+  it("Step 6.6 carries lock-release-on-error and a no-mutation invariant", () => {
+    expect(md).toContain("lock releases on the error path")
+    expect(md).toContain("mutates no persistent state")
+  })
+
+  it("Step 3.5 orders multi-step blocker remediation as Setup prerequisites", () => {
+    expect(md).toContain("ordered list of human Setup prerequisites")
+  })
 })

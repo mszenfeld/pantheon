@@ -33,5 +33,9 @@ describe("buildVelesPrompt", () => {
     // Phase-1 defect-grounding additions (preserve the three assertions above)
     expect(prompt).toContain("Blockers / Findings")
     expect(prompt).toContain("A discovered defect never shrinks coverage")
+    // Depth/logistics: sequential-thinking trigger (Lever E, demoted to MAY per RUNG-1 —
+    // ST invoked only 1/3 and the skill prose carried depth/ordering without it)
+    expect(prompt).toContain("you MAY use")
+    expect(prompt).toContain("cross-scenario interactions")
   })
 })

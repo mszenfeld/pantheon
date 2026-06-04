@@ -119,6 +119,8 @@ scenarios, which stay in the plan in contract-correct form. **Never scope a cont
 because a blocker prevents observing it.** Ask: *"does any path's current behavior contradict what the
 docstring / declared errors promise?"* — that contradiction is a blocker, marker or no marker.
 
+When fully exercising the contract needs more than one human action (e.g. remove a debug delay to observe `200`/`502`, then transiently reintroduce it to observe a genuine `504`), express it as an `ordered list of human Setup prerequisites` (revert → run path A → reintroduce → run path B → revert) — never as scenario steps; the runner cannot edit source.
+
 ## Step 4: Detect available tools
 
 ```bash
@@ -151,6 +153,7 @@ Consequences for the plan you write:
 - **Bringing the stack up is a human Setup prerequisite, not a scenario.** If the scenarios need a running stack, declare it under `## Setup → **Required services:**` AND name the command the human runs to start it (free text after the backtick), e.g. ``- `https://localhost` — prod stack; start with `make prod.up` before running QA``. Perun asks the user to run it; the runner never starts it.
 - **`detected-tools` lists only harness-executable tools** (`curl`, `httpie`, `psql`, `sqlite3`, `mysql`, `playwright`). Never put `docker` / `docker-compose` / `make` there — listing them falsely signals the runner can use them.
 - If, after excluding non-observable steps, an infrastructure change has **nothing** observable over Playwright / HTTP / DB, say so honestly: emit few or zero scenarios and let `fe_count` / `be_count` reflect reality. A small honest plan beats a large un-runnable one.
+- **The runner dispatches scenarios in parallel, not in document order.** Perun runs scenarios 4-wide (`dispatch_parallel`); with no `**Depends-on:**` every scenario lands in one parallel wave (`src/agents/perun.md`). Two consequences: (1) **scenarios must be independent** — do not rely on BE-01 running before BE-02 unless you declare it; (2) **siblings share the target's global state and the runner's source IP** — a scenario that exhausts a global per-IP quota (a rate-limit 429 sweep) or holds a global lock will affect whatever runs concurrently. Sequence such scenarios with `**Depends-on:**` (Step 6.9) — "putting it last in the document" does nothing, because document order is not execution order.
 
 ## Step 4.6: Detect the test environment (don't guess it)
 
@@ -242,24 +245,30 @@ cannot stop". A reason that is itself **a code defect, leftover test instrumenta
 config** is NOT a valid punt — it is a **Blocker** (Step 3.5): write the contract scenario, tag it
 `**Blocked-by:**`, record remediation as a human Setup prerequisite. *"The current build always
 returns 504 / the worker has a sleep / a guard is commented out / a debug flag is on" describes a
-defect — reclassify, do not punt.* **"The runner is sequential" is rejected for 429** — exhaust the
-limiter over the FAST path (fire 11× the cheap 402/404 request; error responses still count toward the
-slowapi bucket). (409 contention is already covered by the "background the first curl" guidance in the
-in-scope-by-default list below — a defect is never its punt reason either.)
+defect — reclassify, do not punt.* **A defect or "the runner can't" is rejected as a 429 punt** — exhaust
+the limiter over the FAST path (fire 11× the cheap 402/404 request; error responses still count toward the
+slowapi bucket). That is the *trigger recipe*; because the runner is 4-wide parallel, sequence the 429
+scenario per **Step 6.9** so its sweep does not contaminate siblings. (409 contention is already covered by
+the "background the first curl" guidance in the in-scope-by-default list below — a defect is never its punt
+reason either.)
 
 The following look infrastructural but are
-reachable over the HTTP surface — **in scope by default, never punt them:**
+reachable over the HTTP surface — **in scope by default, never punt them.** Each is a CLASS — apply its
+predicate to ANY matching surface, not just the export endpoint (a foreign 404 on any resource; a user
+value in any header/body; a lock on any guarded op; any read-only op):
 
-- **IDOR / cross-tenant** (user B requests user A's resource → 404/403): mint a SECOND
-  principal binding (Step 6.5) and `curl` with its token.
+- **IDOR / cross-tenant** (user B requests user A's resource): mint a SECOND principal binding (Step 6.5)
+  and `curl` with its token. Assert no-oracle equality — the foreign-resource response must be `indistinguishable from not-found` (same status AND body shape), and the ownership check must fire *before* any state-revealing gate (entitlement/payment/`402`). A bare "→ 404" without the equality assertion is shallow.
+- **Reflected-input injection** — any user-controlled value echoed into a response header or body (a filename in `Content-Disposition`, a username in a login error body, an uploaded filename in a `Location` header). For a value `reflected into a response header`, test with metacharacters (`"`, `;`, newline, `/`, `..`) and assert it is sanitized and the header stays well-formed (no header splitting); for a body, assert no quote-break / HTML injection.
 - **Upstream-dependency failure → 5xx** (a bad upstream key makes the dependency return
   401/500, which the caller maps to **502**): `curl` with the dependency misconfigured,
-  or against a stopped dependency declared in Setup.
+  or against a stopped dependency declared in Setup. Also verify the `lock releases on the error path` — after the 5xx/timeout an immediate retry of the same resource must NOT return `409` (the lock frees on exception, not only on success).
 - **Lock / concurrency contention → 409** (two in-flight requests for one resource):
   fire concurrent `curl`s (background the first); tag `(timing-dependent)` if the
-  window is narrow.
+  window is narrow. Do NOT add `**Depends-on:**` here — this scenario needs genuine overlap (Step 6.9).
 - **Boundary conditions** (`valid_to == now`, one-expired-one-active): seed the
   boundary row via `psql` / the dev tool and `curl` across it.
+- **No-mutation invariant** — a read-only / export / idempotent operation `mutates no persistent state`: assert `psql` row counts (or a checksum) of the affected tables are unchanged before vs after, INCLUDING on the error path (a failed export/upload must consume/write nothing).
 
 Genuinely out of scope is the residue *after* this filter — e.g. DB-down → 503 (the
 harness cannot stop the DB), or image/UID/layer-secret checks that need `docker`. List
@@ -298,6 +307,9 @@ before saving. Confident-wrong claims cluster in these classes:
 - error-to-status mapping (which exception → which HTTP code / envelope shape),
 - framework defaults (Step 0 — verify against the *installed version*, not lore),
 - derived values (generated filenames, slugs),
+- **reflected-input safety and no-oracle responses** — a user-derived value that lands in a header/body must
+  be sanitized; a not-found-vs-forbidden pair must not leak existence. Re-read the producing code and the
+  ownership-check ordering with intent to refute.
 - **contract-vs-runtime (expectations follow the spec, not incidental runtime).** For every
   `**Expected response:**`, ask *"is this the contract, or just what the current (possibly defective)
   build returns?"* Decision table:
@@ -325,6 +337,27 @@ A same-session self-refute is weaker than an independent reviewer — so be genu
 adversarial: the goal is to *break* your own assertions, not wave them through.
 (Validated by the round-2 re-read efficacy experiment: 3/3 seeded errors caught + 2
 unplanted, 0 false positives.)
+
+## Step 6.9: Sequence scenarios that share global state (parallel-runner safety)
+
+The runner is 4-wide parallel (Step 4.5). A scenario is **contaminating** when its effect is visible to
+concurrent siblings: it exhausts a **global per-IP quota** (a `429` rate-limit sweep), **holds a global
+lock**, or **depends on ordered state** a sibling sets. For each contaminating scenario:
+
+- **Isolate it into a terminal wave** by adding `**Depends-on:** <comma-separated peer IDs>` beneath its
+  heading, so it runs after — with no concurrent siblings to poison. This is the ONLY ordering control;
+  document position is irrelevant (Step 4.5).
+- **Add a one-line note** when the shared resource is a per-IP limiter: under parallel dispatch the bucket
+  is shared across workers, so even isolated the operator should expect possible `429` cross-contamination
+  from earlier waves. (An honest harness limitation, not something the plan can fully remove.)
+- **Do NOT serialize contention scenarios.** A `409` concurrency test *wants* genuine overlap — parallel
+  dispatch helps it; leave it dependency-free (or `(timing-dependent)`-tagged).
+- **"Ordered state" is narrow.** It means **one scenario WRITES a row a sibling READS in the same run** —
+  NOT "these read logically sequential." If each scenario provisions its own data via its own binding, the
+  scenarios are independent: do NOT add `**Depends-on:**`. Over-serializing kills the 4-wide speedup.
+
+Litmus: *"if this scenario and another run at the same second, does one corrupt the other's result?"* — yes ⇒
+`**Depends-on:**`; per-IP-limiter ⇒ also the contamination note.
 
 ## Step 7: Save
 

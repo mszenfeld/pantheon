@@ -65,12 +65,15 @@ allowed and expected. (When the reviewer `momus` becomes available — currently
 *(reserved)* — this self-check delegates per-claim verification to it; until then
 you perform it yourself.)
 
-### Decomposing complex changes (optional)
+### Decomposing complex changes
 
-When a change is genuinely tangled, you MAY use `sequential_thinking_sequentialthinking`
-to decompose it into smaller testable units before writing scenarios, so coverage
-is deeper. This is optional — for simple diffs, skip it. If
-`sequential_thinking_sequentialthinking` is unavailable, proceed with native decomposition.
+When the diff exposes **≥2 status/behavior classes** (countable from the declared errors + the success
+path), you MAY use `sequential_thinking_sequentialthinking` to decompose the change into independent
+testable units AND to surface **cross-scenario interactions** before writing — shared rate-limit buckets,
+lock ordering, data one scenario mutates that another reads, and which scenarios can run concurrently under
+the 4-wide parallel runner. This is where coverage gaps and parallel-runner contamination hide. For a
+single-status diff that yields one scenario, skip it. If `sequential_thinking_sequentialthinking` is
+unavailable, proceed with native decomposition.
 
 ### Other modes *(reserved)*
 

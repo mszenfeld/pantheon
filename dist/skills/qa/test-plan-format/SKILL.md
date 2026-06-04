@@ -242,18 +242,22 @@ For EVERY scenario, consider and include relevant edge cases from:
 - Unauthenticated request (no token)
 - Expired token
 - Valid token but insufficient permissions
-- Another user's resource (IDOR)
+- Another user's resource (IDOR) — assert the response is `indistinguishable from not-found` and ownership is checked before any payment gate; see `qa-plan-authoring` Step 6.6 for the no-oracle rule
 
 ### State
 - Resource does not exist (404)
 - Duplicate creation attempt (409)
-- Concurrent modifications (race conditions)
+- Concurrent modifications (race conditions) — for a lock, also verify the `lock releases on the error path` (see `qa-plan-authoring` Step 6.6)
 - Resource in unexpected state (e.g., already deleted, already processed)
 
 ### Data integrity
 - Required fields missing (422)
 - Invalid data types (string where number expected)
 - Referential integrity (foreign key does not exist)
+
+### Side effects (see `qa-plan-authoring` Step 6.6 for full rules)
+- A read-only / export / idempotent op `mutates no persistent state` (counts/checksum unchanged, incl. error path)
+- A user value `reflected into a response header` stays well-formed under metacharacters (no header splitting)
 
 ### FE-specific
 - Slow/no network connection
@@ -287,6 +291,16 @@ Example:
 ...
 ~~~
 
+**Serializing a contaminating scenario.** Use `**Depends-on:**` to force a scenario that exhausts a global per-IP quota into a terminal wave so it does not poison siblings under the 4-wide parallel runner (authoring rationale: `qa-plan-authoring` Step 6.9). To serialize a rate-limit (`429`) scenario after every other BE scenario:
+
+~~~markdown
+### BE-09: rate limit returns 429 after the quota is exhausted
+
+**Depends-on:** BE-01, BE-02, BE-03, BE-04, BE-05, BE-06, BE-07, BE-08
+~~~
+
+The bucket is still shared across workers within a wave, so add a one-line note that earlier waves may have consumed quota — `**Depends-on:**` removes *concurrent* contamination, not the shared bucket itself.
+
 Rules:
 
 - Reference scenarios by their full ID (`FE-01`, `BE-02`). Multiple IDs are comma-separated.
@@ -310,6 +324,8 @@ This field is **opt-in**. Plans without `**Depends-on:**` dispatch fully in para
   that produces X. A plan whose expectation matches the *bug* is itself defective.
 - **Remediation is a human Setup prerequisite, not a runner step.** The runner cannot edit source;
   reverting a defect is surfaced in `## Setup` exactly like "bring the stack up", never as a scenario.
+- **Multi-step remediation** (revert → observe → reintroduce → observe → revert) is an ordered list under
+  `## Setup`, never scenario steps — see `qa-plan-authoring` Step 3.5.
 - **Spelling:** `**Blocked-by:** BLK-NN` is the scenario tag (capital B, inert prose — like
   `**Depends-on:**` in placement, but NOT parsed). `blocked-by` (lowercase) is the Coverage-Matrix
   disposition keyword. Both reference a `BLK-NN` id.

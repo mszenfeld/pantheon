@@ -577,9 +577,24 @@ expectation to the bug. Reverting the defect is a human Setup prerequisite, neve
 
 ---
 
-## Phase 2 — Deterministic plan-linter (CONDITIONAL — only if RUNG 1 did not pass both N/N)
+## RESULT — RUNG 1 + Layer 2 (2026-06-03): Phase 1 is the fix; Phase 2 NOT built
 
-> Build ONLY if Task 1.5 routed here. Check A (regex defect-detection) is the **likely floor** for the *marker* shape; it cannot catch the *markerless* shape (golden #2) — so if golden #2 is the failure, fix prose/flow, not the hook. Enforcement is split by decidability: decidable structural checks may near-hard-block; heuristic checks are warning-surface only.
+**RUNG 1 (synthetic goldens, fixed Veles, 3 iters each):** golden #1 (marker) **3/3 PASS**, golden #2 (markerless) **3/3 PASS** on GATE 1+2+3. The decisive result is golden #2 passing: a regex hook (Phase-2 Check A) *cannot* detect a commented-out guard with no marker word, so the markerless PASS proves the **prose generalized** beyond what the deterministic tier could ever catch → Task 1.5 STOP condition met.
+
+**Layer 2 (real i-need-cv export-PDF branch, fixed Veles, throwaway worktree):** one clean plan graded against the two saved reference plans (v1 old-Veles, v2 marketplace):
+- **GATE 1/2/3 all PASS.** `BLK-01` flags the real `await asyncio.sleep(65)` at the exact `(pdf-worker/src/pdf_worker/api/routes.py:64)`, quotes the `TEMPORARY` comment, prescribes revert as a **human Setup prerequisite** (not a runner step). Happy path (BE-07) + 502 (BE-08) kept as scenarios tagged `**Blocked-by:** BLK-01` — coverage not shrunk; 504 expected only on its own scenario.
+- **Read-grounding verified against source:** auth 401 + `Invalid or expired token` message verbatim (`auth.py`), `Ł→l` transliteration (`filename.py`), and the real `503 SERVICE_UNAVAILABLE` handler (`error_handler.py:143`) — all confirmed by direct read. No fabricated citations.
+- **Closed the exact loss:** v1 had normalized (504-as-contract, happy path dropped to out-of-scope) **and** transitive-punted 429/409 ("each request takes ~60s" / "no backgrounding primitive" — reasons that *are* the defect). Fixed Veles independently found the 429 fast-path (404 route, no worker call) and the 409 backgrounded-curl recipe, and added an explicit **Coverage Matrix** (status→disposition). It **out-covers marketplace v2** on the Coverage Matrix and on catching the real 503 path (v2 omitted 503). Marketplace still leads only on **DB-Check depth** (richer per-scenario SQL) — a coverage-richness gap, not a judgment failure, tracked as a separate, smaller follow-up.
+
+**Decision:** **Phase 2 is YAGNI and was NOT built.** The failure class (normalization + transitive punt) is fixed by Phase 1 prose/flow on the current model, validated on both a markerless synthetic golden and the real repo. The committed golden tripwire (`docs/eval/scenarios/veles/qa-plan-defect-grounding*.md`) guards regressions more cheaply than a deterministic hook, and the generalization a regex could never achieve (markerless + real-repo read-grounding) is exactly what passed. Revisit Phase 2 only on a model-drift regression of the *marker* shape that prose+golden cannot hold.
+
+---
+
+## Phase 2 — Deterministic plan-linter (CONDITIONAL — NOT BUILT; see RESULT above)
+
+> **STATUS: NOT BUILT (2026-06-03).** Task 1.5 routed to STOP — both goldens passed N/N and Layer-2 confirmed on the real repo. This section is retained as the design of record should a future marker-shape model-drift regression demand the deterministic tier. Build ONLY if a future RUNG re-routes here.
+>
+> Check A (regex defect-detection) is the **likely floor** for the *marker* shape; it cannot catch the *markerless* shape (golden #2) — so if golden #2 is the failure, fix prose/flow, not the hook. Enforcement is split by decidability: decidable structural checks may near-hard-block; heuristic checks are warning-surface only.
 
 ### Task 2.1: `plan-linter.ts`
 

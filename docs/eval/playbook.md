@@ -402,6 +402,17 @@ above mostly applies, with these amendments. (Scenario: `scenarios/veles/`.)
   tripwire:** before merging any change to `src/modules/plan/veles.md` or
   `src/skills/qa/qa-plan-authoring/SKILL.md`, re-run both; per **Lesson 10** they must still
   discriminate — current/unfixed Veles must FAIL them, or the golden has gone stale.
+- **Depth & logistics dimensions** (`qa-plan-defect-grounding.md`, "Depth & logistics signals"
+  section) layer GATE-ORDER + GATE-DEPTH (scored by adversarial *substance*, not the grounding tag)
+  + a record-only ST-INVOKED signal on golden #1, ≥3 iters, worst-of-N. **Parallel-dispatch fact
+  (don't repeat the marketplace's sequential framing):** the runner dispatches scenarios 4-wide in
+  parallel (single wave unless `**Depends-on:**`); "run it last" is not a valid fix here —
+  `**Depends-on:**` is. **Lever-E (sequential-thinking) is record-only:** no ablation arm; read the
+  ST-INVOKED rate + absolute GATE-DEPTH from the single full-Phase-1 arm and apply the pre-committed
+  keep/demote/escalate threshold (see the depth-and-logistics plan, RUNG 1). **Generalization is a
+  Layer-2 check:** point a RUNG-1 Layer-2 run at a NON-export real endpoint (a login/account route)
+  and grade GATE-DEPTH by the same per-edge substance predicates against that surface — no dedicated
+  golden to maintain.
 
 Minimal Node-script extension: capture the plan and guarantee its deletion.
 After `outcome === "done"`, parse the contract from `finalText` (the text of the

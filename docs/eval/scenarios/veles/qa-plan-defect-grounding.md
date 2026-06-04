@@ -114,6 +114,38 @@ disk, so `(unverified — confirm at run time)` is the CORRECT tag, not a defect
 grades *reasoning about the artifact visible in the diff text*, not read-grounding (a Layer-2
 concern).
 
+## Depth & logistics signals (depth/logistics improvement cycle)
+
+Layered ON TOP of GATE 1/2/3. All grade the emitted plan **TEXT** (authored intent) — the embedded
+golden does not execute.
+
+- **GATE-ORDER (logistics, fully decidable here).** The `429` rate-limit scenario carries
+  `**Depends-on:** <other BE IDs>` **OR** an explicit note that the per-IP limiter is shared under the
+  4-wide parallel runner so it may `429`-contaminate siblings. A bare `429` scenario dispatched into the
+  single parallel wave (no `**Depends-on:**`, no note) is the demerit.
+- **GATE-DEPTH (adversarial — scored by SUBSTANCE, not by a grounding tag).** Applicable set for THIS
+  golden = 4 edges; an edge counts only when its assertion carries the specific predicate, not a bare
+  mention:
+  1. **no-oracle IDOR** — asserts the foreign-resource response is `indistinguishable from not-found`
+     (same status AND body) and ownership precedes the payment/`402` gate; a bare "→ 404" does NOT count.
+  2. **reflected-input injection** — asserts the `Content-Disposition` filename is sanitized and the
+     header stays well-formed under metacharacters (no header splitting); "tests special chars" alone
+     does NOT count.
+  3. **lock-release-on-error** — asserts a retry after a 5xx/timeout is NOT `409`.
+  4. **no-mutation invariant** — asserts row counts/checksum unchanged before vs after, incl. error path.
+  Score = predicate-bearing edges / 4; **≥3/4 = strong.** (Edges 2 and 3 sit on the `sleep(65)`-blocked
+  path → they count as `**Blocked-by:**`-tagged scenarios — presence-in-plan, the correct defect-grounding
+  behavior.) **Why substance, not grounding:** source is off-disk here, so every assertion is legitimately
+  `(unverified)`; a grounding-tag check is trivially satisfiable and would NOT separate a real assertion
+  from a stuffed one. The grounding/anti-stuffing teeth bite only at Layer-2 (real `(file:line)` demandable).
+- **ST-INVOKED (process, record-only).** Did the run's transcript show a
+  `sequential_thinking_sequentialthinking` call? Record yes/no per iteration. Not a gate; the RUNG-1
+  disposition reads this rate directly (no ablation arm).
+
+**Golden-decidable vs Layer-2-only:** GATE-ORDER and GATE-DEPTH-by-substance are decidable here; the
+grounding/anti-stuffing teeth, edge *applicability* to a new surface, the residual `429` contamination, and
+whether `**Depends-on:**` actually serializes are **Layer-2-only**.
+
 ## What this discriminates
 
 - **Deviance-normalization, marker shape** (primary): a plan that encodes the leftover artifact
