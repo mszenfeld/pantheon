@@ -290,7 +290,13 @@ those, each with its reason; everything unreachable only *because of a defect* g
 The Coverage Matrix is the *emitted form* of the Step 6.6 reachability sweep — do the litmus once,
 record its verdict per row. When the surface has ≥2 status/behavior classes, complete the
 `## Coverage Matrix` drafted in Step 1.5: **every status named in your own `## Changes Summary` is a
-row** (this is the decidable anchor — row set == the statuses you declared), each with exactly one
+row** (this is the decidable anchor — row set == the statuses you declared).
+**And every external surface named in your own `## Changes Summary` is also a row** —
+same self-referential closure: row set == the surfaces you declared. The Step 6.6 behavior-class sweep
+finds the classes; this anchor only checks each named surface owns a disposition — a new/changed HTTP
+route, CLI/dev script, worker-or-public API contract, or DB-observable schema (an internal collaborator
+such as an error mapper, use-case, port, lock, or adapter is exercised *through* a surface, not its own
+row). Each row has exactly one
 disposition:
 
 1. `covered` → cite the scenario ID AND a `(file:line)` for the asserted status.
@@ -302,7 +308,8 @@ disposition:
 Also confirm: every behavioral assertion carries a visible `(file:line)` OR `(unverified — confirm
 at run time)` tag; no `**Expected response:**` equals a value produced only by a recorded Blocker
 (recorded in Step 3.5 — see Step 6.8); the filename carries the `-test-plan` suffix (Step 7). A
-Changes-Summary status with no row, or an invalid disposition, is a defect — fix before saving.
+Changes-Summary status OR named surface with no row, or an invalid disposition, is a defect — fix
+before saving.
 (Veles hard-stops on this matrix before emitting its result JSON — see `veles.md`. The
 `/create-qa-plan` command inherits this as guidance, without a hard gate.)
 

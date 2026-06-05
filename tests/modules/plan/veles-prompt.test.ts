@@ -43,5 +43,10 @@ describe("buildVelesPrompt", () => {
     expect(prompt).toContain("cross-scenario interactions")
     // R1 echo (2026-06-05): tests corroborate, never the oracle
     expect(prompt).toContain("never the oracle")
+    // R-A (2026-06-05): surface-coverage anchor, scoped to the ≥2-status matrix condition.
+    // Two contiguous substrings (the wrapped bullet can't be matched as one span):
+    // the surface phrase proves the edit; the opener proves it lives in the ≥2-status bullet.
+    expect(prompt).toContain("per changed external surface named in the Changes Summary")
+    expect(prompt).toContain('names ≥2 statuses, the `## Coverage Matrix` has one row per such')
   })
 })

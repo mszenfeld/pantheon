@@ -28,4 +28,9 @@ describe("test-plan-format skill", () => {
   it("requires DB-checks to assert the active predicate, not bare existence", () => {
     expect(md).toContain("asserts the active predicate")
   })
+
+  it("Coverage Matrix and checklist require a row per changed external surface (R-A)", () => {
+    expect(md).toContain("per changed external surface named in the Changes Summary")
+    expect(md).toContain("one row per status and per changed external surface")
+  })
 })

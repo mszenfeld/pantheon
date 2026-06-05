@@ -39,11 +39,11 @@ and Step 6.8 targeted refute pass both pass. Concretely, ALL must hold:
   `(unverified — confirm at run time)` tag;
 - `## Blockers / Findings` is present — `None found.` or one-or-more `BLK-NN` entries, each
   with a `(file:line)`, an impact line, and a human-Setup remediation;
-- when your `## Changes Summary` names ≥2 statuses, the `## Coverage Matrix` has one row per
-  such status, each with exactly one disposition — `covered` (+ scenario ID + `(file:line)`),
-  `blocked-by` (matching a BLK entry, with a kept contract-correct scenario), or `out-of-scope`
-  (+ harness-property reason). A named status with no row, or an `out-of-scope` whose reason is a
-  code defect, is a hard-stop failure;
+- when your `## Changes Summary` names ≥2 statuses, the `## Coverage Matrix` has one row per such
+  status and per changed external surface named in the Changes Summary, each with exactly one
+  disposition — `covered` (+ scenario ID + `(file:line)`), `blocked-by` (matching a BLK entry, with
+  a kept contract-correct scenario), or `out-of-scope` (+ harness-property reason). A named status
+  or surface with no row, or an `out-of-scope` whose reason is a code defect, is a hard-stop failure;
 - no `**Expected response:**` encodes a value the code produces only because of a recorded Blocker;
 - the high-risk assertions (auth/authz status, rate-limit semantics, error-to-status mapping,
   framework defaults, derived values, **contract-vs-runtime**) have been re-read with intent to

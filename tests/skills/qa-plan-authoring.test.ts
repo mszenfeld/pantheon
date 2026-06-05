@@ -111,4 +111,9 @@ describe("qa-plan-authoring skill", () => {
   it("Step 6.8 requires a claim-specific, branch-governing citation", () => {
     expect(md).toContain("branch-governing citation")
   })
+
+  it("Step 6.7 carries the surface-coverage anchor (R-A, self-referential)", () => {
+    expect(md).toContain("every external surface named in your own")
+    expect(md).toContain("row set == the surfaces you declared")
+  })
 })
