@@ -126,4 +126,9 @@ describe("qa-plan-authoring skill", () => {
     expect(md).toContain("never assert a hand-computed encoding/hash/slug literal")
     expect(md).toContain("assert the producing rule")
   })
+
+  it("Step 6.7 carries the findings re-scan loop-back (R-C)", () => {
+    expect(md).toContain("re-scan the changed files for the Step 3.5 hazard classes")
+    expect(md).toContain("not folded into another blocker")
+  })
 })

@@ -309,7 +309,10 @@ Also confirm: every behavioral assertion carries a visible `(file:line)` OR `(un
 at run time)` tag; no `**Expected response:**` equals a value produced only by a recorded Blocker
 (recorded in Step 3.5 — see Step 6.8); the filename carries the `-test-plan` suffix (Step 7). A
 Changes-Summary status OR named surface with no row, or an invalid disposition, is a defect — fix
-before saving.
+before saving. Finally, re-scan the changed files for the Step 3.5 hazard classes (debug/test
+artifacts, disabled guards, an identifier-policy QA/ticket ID in a comment, a leaked secret) and
+confirm each distinct hazard is its own `## Blockers / Findings` entry,
+not folded into another blocker.
 (Veles hard-stops on this matrix before emitting its result JSON — see `veles.md`. The
 `/create-qa-plan` command inherits this as guidance, without a hard gate.)
 
