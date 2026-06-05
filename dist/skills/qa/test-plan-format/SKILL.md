@@ -225,6 +225,13 @@ evidence**:
   the code that produces the behavior (source not on disk, foreign repo). Never
   emit a `(file:line)` you cannot back; a well-formed-but-ungrounded citation is
   worse than this tag.
+- **Function-derived values** (percent-encoding, hashing, slugging, formatting, signing):
+  assert the **generating rule + producer `(file:line)`** — e.g. *"RFC 5987 percent-encoded UTF-8
+  of `<name>.pdf` via `quote(…, safe='')` (`filename.py:38`)"* — **not a hand-computed literal**.
+  Show an exact derived literal only when a fixture/test pins it (cite that test); without a pin, that
+  exact literal is unverifiable by reading — assert the rule + `(file:line)` (full confidence) and tag the
+  literal `(unverified — confirm at run time)`. A function output is
+  grounded by its *rule*, distinct from the human-message `(exact text — brittle)` rule below.
 
 Assertion style:
 

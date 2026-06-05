@@ -323,7 +323,8 @@ before saving. Confident-wrong claims cluster in these classes:
 - rate-limit semantics (window strategy, key function),
 - error-to-status mapping (which exception → which HTTP code / envelope shape),
 - framework defaults (Step 0 — verify against the *installed version*, not lore),
-- derived values (generated filenames, slugs),
+- derived values (generated filenames, slugs) — never assert a hand-computed encoding/hash/slug literal;
+  assert the producing rule + `(file:line)`, or cite the fixture/test that pins the exact bytes,
 - **reflected-input safety and no-oracle responses** — a user-derived value that lands in a header/body must
   be sanitized; a not-found-vs-forbidden pair must not leak existence. Re-read the producing code and the
   ownership-check ordering with intent to refute.

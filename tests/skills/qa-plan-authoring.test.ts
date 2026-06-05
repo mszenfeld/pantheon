@@ -121,4 +121,9 @@ describe("qa-plan-authoring skill", () => {
     expect(md).toContain("out-of-scope surface dispositions")
     expect(md).toContain("Only a true harness limit survives")
   })
+
+  it("Step 6.8 forbids hand-computed derived literals (R-B)", () => {
+    expect(md).toContain("never assert a hand-computed encoding/hash/slug literal")
+    expect(md).toContain("assert the producing rule")
+  })
 })

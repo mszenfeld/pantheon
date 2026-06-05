@@ -33,4 +33,10 @@ describe("test-plan-format skill", () => {
     expect(md).toContain("per changed external surface named in the Changes Summary")
     expect(md).toContain("one row per status and per changed external surface")
   })
+
+  it("grounding tags carry the function-derived-value rule (R-B)", () => {
+    expect(md).toContain("Function-derived values")
+    expect(md).toContain("not a hand-computed literal")
+    expect(md).toContain("generating rule + producer")
+  })
 })
