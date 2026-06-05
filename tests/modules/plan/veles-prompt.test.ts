@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest"
 import { buildVelesPrompt } from "../../../src/modules/plan/prompt.js"
-import { VELES_TOOLS } from "../../../src/modules/plan/allowed-tools.js"
 
 describe("buildVelesPrompt", () => {
   const prompt = buildVelesPrompt()
@@ -8,7 +7,12 @@ describe("buildVelesPrompt", () => {
   it("assembles frontmatter with name, mode all, and the exact allow-list", () => {
     expect(prompt).toContain("name: Veles - Planner")
     expect(prompt).toContain("mode: all")
-    expect(prompt).toContain(`allowed-tools: ${VELES_TOOLS.join(", ")}`)
+    // Pin the rendered allow-list against a LITERAL (not reconstructed from
+    // VELES_TOOLS) so an unintended reorder or membership change fails HERE.
+    // Concrete membership/absence/subset invariants live in allowed-tools.test.ts.
+    expect(prompt).toContain(
+      "allowed-tools: serena_find_symbol, serena_find_referencing_symbols, serena_get_symbols_overview, serena_search_for_pattern, serena_find_file, serena_list_dir, serena_read_file, Read, Glob, Grep, Write, Bash(gh:*), Bash(git:*), Bash(command:*), Bash(date:*), Bash(mkdir:*), skill, question, sequential_thinking_sequentialthinking",
+    )
   })
   it("pins the load-bearing planner directives", () => {
     expect(prompt).toContain("You are **Veles**")

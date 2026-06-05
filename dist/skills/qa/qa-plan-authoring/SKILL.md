@@ -301,7 +301,7 @@ disposition:
 
 Also confirm: every behavioral assertion carries a visible `(file:line)` OR `(unverified — confirm
 at run time)` tag; no `**Expected response:**` equals a value produced only by a recorded Blocker
-(Step 5.5 Tell — see Step 6.8); the filename carries the `-test-plan` suffix (Step 7). A
+(recorded in Step 3.5 — see Step 6.8); the filename carries the `-test-plan` suffix (Step 7). A
 Changes-Summary status with no row, or an invalid disposition, is a defect — fix before saving.
 (Veles hard-stops on this matrix before emitting its result JSON — see `veles.md`. The
 `/create-qa-plan` command inherits this as guidance, without a hard gate.)
