@@ -419,3 +419,45 @@ AV_COMMIT_SKILL=1 git commit -m "docs(plan): record RUNG result for grounding-gr
 **2. Placeholder scan:** every code/prose step shows the literal content to insert and the exact anchor line; commands have expected output. No TBD/TODO. ✔
 
 **3. Consistency:** asserted phrases match between the test steps and the inserted prose verbatim ("they are not the oracle", "keeps an assertion at full confidence", "suspected defective test", "branch-governing citation", "never the oracle", "carry the credentials the local service requires", "cite any repo-sanctioned seeding script", "asserts the active predicate"). dist greps in Task 5 reuse the same phrases. ✔
+
+---
+
+## RESULT — (2026-06-05): grader acceptance PASS; riders shipped; model-eval deferred
+
+**Shipped on `feature/veles-plan-quality`:** the disciplined grader
+(`docs/eval/grading-protocol.md` + playbook pointer) and the three author riders
+R1/R2/R3.
+
+### Task 2 — grader acceptance (the measurable win): PASS (3/3)
+
+A fresh, answer-blind grader subagent followed `grading-protocol.md` against the two
+i-need-cv export-PDF plans:
+
+| Criterion | Verdict |
+|---|---|
+| Must NOT fault Plan A's BE-02 401 | ✅ verified installed `fastapi/security/http.py:87-92` → 401; refuted Plan B's stale "or 403" hedge |
+| Must flag Plan A's BE-02 body `{"error":{"code":"UNAUTHORIZED"}}` | ✅ caught via the symmetry rule (real: `{"detail":...}`; that envelope is the domain `UnauthorizedError`, not this path) |
+| Must flag the DSN recipe as not runnable | ✅ confirmed (userless DSN vs `.env.example:31` `postgres:postgres@`) |
+
+The original ad-hoc grader's false-positive (403 from memory) is eliminated, and the
+false-negative it missed (the body envelope) is now caught. The grader still rates
+Plan B stronger, but on verified grounds, not a hallucination. Grading output was
+captured to `/tmp` and deleted (output hygiene) — never committed.
+
+### Author riders: shipped, low-risk, correctness UNMEASURED
+
+- R1 (test-source tier + Y2 floor) + R2 (claim-specific, branch-governing citation):
+  `qa-plan-authoring` Step 0 / Step 6.8 + `veles.md` echo (commit `e57b042`).
+- R3 (runnable DSN credentials, reversed sanctioned-tool note, DB-check
+  active-predicate): `test-plan-format` (commit `1e0b4fb`).
+- Tests TDD red→green; `bun run check` EXIT=0; dist synced (`873a5ed`).
+- Per the spec, R1–R3's grounding-correctness gain is **not measured** at n=3. The
+  shipped framework-default prose (Step 0) was NOT restated; no new prose tag minted.
+
+### Deferred (user decision, 2026-06-05)
+
+The worst-of-N (≥3) Veles **model-eval** RUNG check is deferred — a no-overclaim
+form/no-regression sanity check on ~48 lines of low-risk prose, and the measurable
+win above already validates the payload. The residual BE-02 body-envelope class is a
+refute-*efficacy* gap (Step 6.8 already names "error-envelope shape"); fixing it
+reliably is the independent-reviewer (momus) seam, deferred as in prior phases.
