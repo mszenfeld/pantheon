@@ -37,5 +37,7 @@ describe("buildVelesPrompt", () => {
     // ST invoked only 1/3 and the skill prose carried depth/ordering without it)
     expect(prompt).toContain("you MAY use")
     expect(prompt).toContain("cross-scenario interactions")
+    // R1 echo (2026-06-05): tests corroborate, never the oracle
+    expect(prompt).toContain("never the oracle")
   })
 })

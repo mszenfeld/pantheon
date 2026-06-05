@@ -101,4 +101,14 @@ describe("qa-plan-authoring skill", () => {
   it("Step 3.5 orders multi-step blocker remediation as Setup prerequisites", () => {
     expect(md).toContain("ordered list of human Setup prerequisites")
   })
+
+  it("Step 0 tiers tests as corroboration, not oracle, with a confidence floor", () => {
+    expect(md).toContain("they are not the oracle")
+    expect(md).toContain("keeps an assertion at full confidence")
+    expect(md).toContain("suspected defective test")
+  })
+
+  it("Step 6.8 requires a claim-specific, branch-governing citation", () => {
+    expect(md).toContain("branch-governing citation")
+  })
 })
