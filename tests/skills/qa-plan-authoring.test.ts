@@ -116,4 +116,9 @@ describe("qa-plan-authoring skill", () => {
     expect(md).toContain("every external surface named in your own")
     expect(md).toContain("row set == the surfaces you declared")
   })
+
+  it("Step 6.8 treats an out-of-scope surface reason as a refute class (R-A)", () => {
+    expect(md).toContain("out-of-scope surface dispositions")
+    expect(md).toContain("Only a true harness limit survives")
+  })
 })

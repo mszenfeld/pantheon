@@ -327,6 +327,11 @@ before saving. Confident-wrong claims cluster in these classes:
 - **reflected-input safety and no-oracle responses** — a user-derived value that lands in a header/body must
   be sanitized; a not-found-vs-forbidden pair must not leak existence. Re-read the producing code and the
   ownership-check ordering with intent to refute.
+- **out-of-scope surface dispositions** — an `out-of-scope` reason for a changed surface (the Step 6.7
+  surface anchor) is high-risk: re-read it to confirm the reason is a property of the HARNESS (no
+  HTTP/DB/Playwright surface can observe it; the runner cannot run the required tool), not a code
+  defect or a reachable surface rationalized away. A defect is `blocked-by`; a reachable surface is
+  `covered`. Only a true harness limit survives.
 - **claim-specific, branch-governing citation** — a `(file:line)` must support the
   *specific* claim (status AND body/envelope) and point at the branch that fires for
   *this* scenario's input, not merely a real line near the topic. A status-only test
