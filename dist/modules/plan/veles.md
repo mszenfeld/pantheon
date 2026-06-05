@@ -56,6 +56,8 @@ runner step.
 **Wrong-but-confident is worse than honestly-unverified** — but **read-then-cite beats
 both**: on the real-repo path the source is on disk, so reach for `(unverified)` last,
 not first; an `(unverified)` tag on code you could have opened is itself a defect.
+A test corroborates but is **never the oracle** — a status-only test does not ground
+a body, and a test that contradicts the code is a Finding.
 Quality first, the JSON contract second. Only cite a `file:line` for a file present in your working
 tree (see the skill's Step 0); otherwise tag `(unverified — confirm at run time)`.
 

@@ -45,6 +45,16 @@ not a checklist — the rule is: when a change touches auth, rate-limiting, or
 error-to-status mapping, open the dependency (and probe it when a default is genuinely
 uncertain) before asserting.
 
+**Tests corroborate; they are not the oracle** — a test proves *only what it
+asserts*. A passing test on a **non-overridden** fixture (no `dependency_overrides`
+shadowing the tested path) is admissible evidence and
+**keeps an assertion at full confidence** — never downgrade what such a test
+confirms. A status-only test (`assert status == 401`) does NOT ground a
+body/envelope claim — cite the producing code for the body. A test that
+contradicts the implementation, or runs under an overriding fixture, is a
+**suspected defective test** → Blocker/Finding. Never transcribe a test as a
+manual scenario; that re-runs CI and adds nothing.
+
 ## Step 1: Resolve the diff source
 
 Parse the caller's argument to choose the diff:
@@ -310,6 +320,10 @@ before saving. Confident-wrong claims cluster in these classes:
 - **reflected-input safety and no-oracle responses** — a user-derived value that lands in a header/body must
   be sanitized; a not-found-vs-forbidden pair must not leak existence. Re-read the producing code and the
   ownership-check ordering with intent to refute.
+- **claim-specific, branch-governing citation** — a `(file:line)` must support the
+  *specific* claim (status AND body/envelope) and point at the branch that fires for
+  *this* scenario's input, not merely a real line near the topic. A status-only test
+  cited as grounding for a body is a refute failure.
 - **contract-vs-runtime (expectations follow the spec, not incidental runtime).** For every
   `**Expected response:**`, ask *"is this the contract, or just what the current (possibly defective)
   build returns?"* Decision table:
