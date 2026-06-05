@@ -19,4 +19,13 @@ describe("test-plan-format skill", () => {
     expect(md).toContain("mutates no persistent state")
     expect(md).toContain("reflected into a response header")
   })
+
+  it("requires runnable DSN credentials and the sanctioned-tool note", () => {
+    expect(md).toContain("carry the credentials the local service requires")
+    expect(md).toContain("cite any repo-sanctioned seeding script")
+  })
+
+  it("requires DB-checks to assert the active predicate, not bare existence", () => {
+    expect(md).toContain("asserts the active predicate")
+  })
 })

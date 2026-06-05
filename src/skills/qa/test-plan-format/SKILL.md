@@ -178,6 +178,13 @@ The recipe is validated by `validateRecipe()` before it runs. Cross-check `src/m
 - **No shell metaprogramming.** Forbidden: command substitution `$(...)`, backticks, heredocs/herestrings, process substitution `<(...) / >(...)`, `eval`, `source`, `export`, `unset`, `declare`/`local`/`readonly`/`set`, `function`, redirects to anywhere other than `/dev/null`, and trailing `&` backgrounding.
 - **Egress host match.** Every `curl` URL host and every `psql`/`sqlite3` DSN host must equal the binding's `Egress:` host.
 - **File-reader path confinement.** `grep`, `cut`, `head`, `tail`, `tr` may only read `./` relative paths, `-` (stdin), `/dev/null`, `/dev/stdin`, or `/dev/zero`. Absolute paths anywhere else (e.g. `/etc/passwd`) are rejected.
+- **Runnable as written.** A DB DSN in a recipe must
+  **carry the credentials the local service requires** — reference the documented
+  `$DATABASE_URL` rather than a credential-less literal; a recipe that cannot
+  authenticate is a defect. The recipe sandbox forbids `python`, so seed via `psql`
+  and **cite any repo-sanctioned seeding script** (e.g. one named in `CLAUDE.md`)
+  as the semantic reference in a comment — preferring the script itself applies only
+  to human Setup prerequisites, where `uv run python` is available.
 - **sqlite3 dot-command restrictions.** `.read`, `.shell`, `.system`, `.import`, `.save`, `.output`, `.log` are forbidden — they escape SQL into shell or read arbitrary files.
 - **16 KiB cap.** The recipe body (after line-continuation collapse) must be ≤16 384 bytes.
 
@@ -210,7 +217,10 @@ evidence**:
 - **Visible citation:** append the source the author read, e.g.
   `**Expected response:** status 429 after the 6th request in 60s (`api/auth/ratelimit.py:12`).`
   One citation on the single most load-bearing line per assertion (for a DB Check
-  the column is implicit in the SQL; for a derived value cite the producer).
+  the column is implicit in the SQL; for a derived value cite the producer). A
+  DB-check on a time-bounded entity **asserts the active predicate** (`valid_to >
+  now()`), not bare existence — a `COUNT(*)` that ignores the validity window is
+  incomplete.
 - **`(unverified — confirm at run time)`** — use when the author could NOT read
   the code that produces the behavior (source not on disk, foreign repo). Never
   emit a `(file:line)` you cannot back; a well-formed-but-ungrounded citation is
