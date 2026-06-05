@@ -334,6 +334,15 @@ location and precedence rules.
 - **Never commit a report that references a private codebase.** The default
   report path is `/tmp/`, so this is the obvious default.
 
+## Grading discipline (applies to every scoring pass)
+
+When grading a QA plan (Step 4, or any plan-vs-plan comparison), follow
+**`docs/eval/grading-protocol.md`**: to fault an expected value as WRONG, cite
+contradicting on-disk/installed source or a bounded read-only probe — a from-memory
+framework claim is inadmissible (→ `needs-runtime-check`, and that is not allowed
+when the source is on disk). Verify PASS verdicts too (status AND body), and treat
+any external/marketplace report as hypotheses to verify, never a verdict.
+
 ## Evaluating side-effecting agents (Veles)
 
 Veles is not read-only: it **writes a QA plan** to `docs/testing/plans/`, may
