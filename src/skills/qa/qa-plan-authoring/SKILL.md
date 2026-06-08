@@ -281,6 +281,7 @@ value in any header/body; a lock on any guarded op; any read-only op):
 - **Boundary conditions** (`valid_to == now`, one-expired-one-active): seed the
   boundary row via `psql` / the dev tool and `curl` across it.
 - **No-mutation invariant** — a read-only / export / idempotent operation `mutates no persistent state`: assert `psql` row counts (or a checksum) of the affected tables are unchanged before vs after, INCLUDING on the error path (a failed export/upload must consume/write nothing).
+- **Schema validation → 422** (any surface with a typed request body or typed params): send a payload that violates the declared schema (missing required field, wrong type) and assert the framework validation status (`422` for FastAPI/Pydantic) AND the envelope the framework's validation handler actually produces — a `RequestValidationError` envelope differs from a domain handler (re-read per Step 6.8).
 
 Genuinely out of scope is the residue *after* this filter — e.g. DB-down → 503 (the
 harness cannot stop the DB), or image/UID/layer-secret checks that need `docker`. List

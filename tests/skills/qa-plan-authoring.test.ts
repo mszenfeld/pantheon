@@ -151,4 +151,8 @@ describe("qa-plan-authoring skill", () => {
   it("Step 6.8 out-of-scope-surface bullet carries the reachable-interface test (L2)", () => {
     expect(md).toContain("if the changed surface has a curl/psql/Playwright interface or effect")
   })
+
+  it("Step 6.6 carries the 422 schema-validation class (L3)", () => {
+    expect(md).toContain("**Schema validation → 422** (any surface with a typed request body or typed params)")
+  })
 })
