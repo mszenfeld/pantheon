@@ -57,7 +57,7 @@ Expected: The most recently modified file in the chosen directory.
 If no files found, display an error and stop. The message is prefix-specific:
 
 - `QA` prefix:
-  > Error: No saved QA reports found in `docs/testing/reports/`. Run `/run-qa` first, then use `/fix QA-001`.
+  > Error: No saved QA reports found in `docs/testing/reports/`. Run `/qa:run` first, then use `/fix QA-001`.
 
 - Other prefixes:
   > Error: No saved review reports found in `docs/reviews/`. Run `/review` and save a report first, then use `/fix <ID>`.

@@ -37,7 +37,7 @@ Perun will dispatch the Veles planner, show a consent gate, and run the generate
 
 If the user-supplied path does not exist, surface the error and stop:
 
-> Test plan not found: `<path>`. Use `/create-qa-plan` to generate one or pass a valid path.
+> Test plan not found: `<path>`. Use `/qa:create-plan` to generate one or pass a valid path.
 
 ---
 
@@ -102,7 +102,7 @@ Perun will then:
 - **Do NOT** call `dispatch_parallel`, `task`, or any agent yourself. Dispatching is Perun's responsibility — your `allowed-tools` deliberately omit `task` and `dispatch_parallel` to enforce this boundary.
 - **Do NOT** read or parse `### FE-XX:` / `### BE-XX:` scenario blocks. Perun's sanitization rules (see `src/agents/perun.md` Workflow 1, Step 3) must run before any scenario content reaches a specialist.
 - **Do NOT** write to `.tmp-fe-findings.md` / `.tmp-be-findings.md` or any intermediate findings file. Perun accumulates results in-memory across waves and writes a single report at the end.
-- **Do NOT** invoke `zmora-fe` / `zmora-be` directly. Direct variant invocation is an escape hatch for ad-hoc checks (see `docs/plugins/qa.md`), not the `/run-qa` path.
+- **Do NOT** invoke `zmora-fe` / `zmora-be` directly. Direct variant invocation is an escape hatch for ad-hoc checks (see `docs/plugins/qa.md`), not the `/qa:run` path.
 - **Do NOT** synthesize, format, or post-process Perun's output. Perun displays the summary directly to the user.
 
 ---

@@ -10,7 +10,7 @@ skill(name: "be-testing")
 
 Run the tool-detection block from the be-testing skill. Record which HTTP client and DB client are available.
 
-If no HTTP client is available, return `NEED_INFO` with `kind: "tool"`, `missing: ["curl"]`, `hint: "Install curl or another HTTP client; re-run /run-qa"`.
+If no HTTP client is available, return `NEED_INFO` with `kind: "tool"`, `missing: ["curl"]`, `hint: "Install curl or another HTTP client; re-run /qa:run"`.
 
 If the scenario's DB Check is specified but the DB client is unavailable, perform the API portion and mark only the DB Check as SKIP.
 

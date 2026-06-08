@@ -32,7 +32,7 @@ describe("qa-plan-authoring skill", () => {
     expect(md).toContain("docs/testing/plans/")
   })
 
-  it("its allowed-tools are an exact subset of the /create-qa-plan command's", () => {
+  it("its allowed-tools are an exact subset of the /qa:create-plan command's", () => {
     const skillTools = parseSkillFrontmatter(md, SKILL_PATH)!.allowedTools!
     const commandTools = frontmatterToolList(readFileSync(COMMAND_PATH, "utf8"))
     expect(isToolSubset(skillTools, commandTools)).toBe(true)

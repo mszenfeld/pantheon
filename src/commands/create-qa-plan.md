@@ -43,10 +43,10 @@ After the skill saves the plan, display:
 >
 > Review the plan, then run the tests with:
 >
-> `/run-qa`
+> `/qa:run`
 >
 > or specify the plan path:
 >
-> `/run-qa docs/testing/plans/<filename>`
+> `/qa:run docs/testing/plans/<filename>`
 
 Mark task 2 `completed`.

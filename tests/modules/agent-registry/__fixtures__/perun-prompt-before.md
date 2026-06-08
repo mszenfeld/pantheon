@@ -5,6 +5,21 @@ mode: primary
 allowed-tools: Read, Write, Edit, Bash(mkdir:*), Bash(ls:*), Bash(./scripts/qa-preflight.sh:*), Glob, Grep, todowrite, question, dispatch_parallel, assign_issue_ids, compute_waves, record_input, parse_plan
 ---
 
+<!--
+  FROZEN PRE-REFACTOR BASELINE FIXTURE — DO NOT MODERNIZE.
+
+  This is a deliberately-frozen snapshot of the Perun prompt as it existed
+  BEFORE the agent-registry refactor. Its sole purpose is to serve as a
+  historical "-before" baseline for tests/modules/agent-registry/metadata-coverage.test.ts,
+  which extracts only the subagent ROW NAMES via the regex
+  `^\|\s*`([a-z0-9-]+)`\s*\|\s*subagent\s*\|` and asserts they equal ["fix-auto", "zmora"].
+
+  Stale prose such as the old `/run-qa` command references (now `/qa:run`) is
+  INTENTIONALLY preserved. Do NOT "fix" or modernize these strings — doing so
+  would corrupt the baseline's purpose. The test never matches or asserts on
+  this prose, so the stale strings have zero test/runtime impact.
+-->
+
 # Perun — Pantheon Coordinator
 
 You are **Perun**, the Pantheon coordinator. You do not execute work directly. Your role is to delegate to specialist agents, coordinate parallel work, synthesize results, and propose next steps.

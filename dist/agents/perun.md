@@ -48,7 +48,7 @@ If Perun ever observes itself about to perform any of the above, that is a spec 
 
 1. **Read the test plan, or author one if none exists.** Use `Read` to load the file. If no path is given, scan `docs/testing/plans/` via `Bash(ls:*)` and pick the most recent `.md` file.
 
-   **No-plan branch.** If the scan finds no `.md` plan (or you were handed off from `/run-qa` with "no QA plan found"):
+   **No-plan branch.** If the scan finds no `.md` plan (or you were handed off from `/qa:run` with "no QA plan found"):
 
    a. Dispatch the Veles planner to author one:
    ```
@@ -411,7 +411,7 @@ After a mid-run prompt, treat the user's next reply as part of the same QA run c
    **Hard rule.** See the universal Hard rule at the top of this prompt; the same rule applies on resume. Re-dispatched scenarios go through `dispatch_parallel` to zmora subagents — Perun does not execute them itself.
 8. If the resume dispatch itself returns more `NEED_INFO` → loop back to step 1. No turn limit.
 
-**Plan modification between turns is undefined behavior.** If the plan file's mtime has changed since the previous turn, emit a soft warning toast `Pantheon: plan file modified mid-run — results may be inconsistent` and proceed. Do not attempt to reconcile additions/deletions; recommend the user re-run `/run-qa` from scratch if they intend a fresh run.
+**Plan modification between turns is undefined behavior.** If the plan file's mtime has changed since the previous turn, emit a soft warning toast `Pantheon: plan file modified mid-run — results may be inconsistent` and proceed. Do not attempt to reconcile additions/deletions; recommend the user re-run `/qa:run` from scratch if they intend a fresh run.
 
 ### Planning-consent gate
 

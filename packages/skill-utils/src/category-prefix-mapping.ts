@@ -2,7 +2,7 @@
  * Canonical Category → Prefix mapping for the code-review and QA plugin ecosystem.
  *
  * This is the single source of truth for issue prefixes. Both the code-review
- * plugin (`/review`, `/fix`) and the QA plugin (`/run-qa`) must stay in sync
+ * plugin (`/review`, `/fix`) and the QA plugin (`/qa:run`) must stay in sync
  * with this table.
  *
  * - **Owned by:** code-review plugin (defines categories and prefixes)

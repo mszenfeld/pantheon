@@ -7,9 +7,9 @@ const md = readFileSync(
   "utf8",
 )
 
-describe("/run-qa no-plan handoff", () => {
-  it("no longer tells the user to run /create-qa-plan first", () => {
-    expect(md).not.toContain("Run `/create-qa-plan` first")
+describe("/qa:run no-plan handoff", () => {
+  it("no longer tells the user to run /qa:create-plan first", () => {
+    expect(md).not.toContain("Run `/qa:create-plan` first")
   })
   it("hands off the no-plan case to @perun", () => {
     expect(md).toContain("@perun")

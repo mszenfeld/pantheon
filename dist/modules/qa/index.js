@@ -23,13 +23,28 @@ const TTL_MS = 60 * 60 * 1e3;
 const SWEEP_INTERVAL_MS = 5 * 60 * 1e3;
 const COMMANDS = [
   {
-    name: "create-qa-plan",
+    name: "qa:create-plan",
     description: "Analyze code changes and generate a detailed QA test plan with FE and BE scenarios.",
     file: "create-qa-plan.md"
   },
   {
-    name: "run-qa",
+    name: "qa:run",
     description: "Execute a QA test plan \u2014 Perun dispatches one zmora variant per scenario through dispatch_parallel.",
+    file: "run-qa.md"
+  },
+  // Deprecated aliases for the pre-namespace command names. These resolve to the
+  // SAME asset files as the canonical `qa:*` commands above, so old muscle-memory
+  // / saved snippets / scripts (`/create-qa-plan`, `/run-qa`) keep working with a
+  // clear "renamed → /qa:*" pointer in the description. Remove in a future minor
+  // once the new names have propagated.
+  {
+    name: "create-qa-plan",
+    description: "Deprecated \u2014 renamed to /qa:create-plan. Please use that instead.",
+    file: "create-qa-plan.md"
+  },
+  {
+    name: "run-qa",
+    description: "Deprecated \u2014 renamed to /qa:run. Please use that instead.",
     file: "run-qa.md"
   }
 ];
