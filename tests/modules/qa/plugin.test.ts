@@ -21,7 +21,11 @@ describe("AppVerkQAPlugin", () => {
 
   const EXPECTED_VARIANTS = ["zmora-fe", "zmora-be"]
   const REMOVED_AGENTS = ["qa-tester-fe", "qa-tester-be", "qa-tester", "qa-fe-tester", "qa-be-tester"]
-  const EXPECTED_COMMANDS = ["create-qa-plan", "run-qa"]
+  const EXPECTED_COMMANDS = ["qa:create-plan", "qa:run"]
+  // Deprecated aliases for the pre-namespace names must still register (back-compat
+  // shim — see MAINT-001). They resolve to the same templates as the canonical
+  // qa:* commands and carry a "renamed → /qa:*" description.
+  const DEPRECATED_ALIAS_COMMANDS = ["create-qa-plan", "run-qa"]
 
   it.each(EXPECTED_VARIANTS)("registers %s variant", async (name) => {
     const config: Config = { agent: {} }
@@ -42,6 +46,27 @@ describe("AppVerkQAPlugin", () => {
     await pluginResult.config?.(config)
     expect(config.command![name]).toBeDefined()
     expect(typeof config.command![name]!.template).toBe("string")
+  })
+
+  it.each(DEPRECATED_ALIAS_COMMANDS)(
+    "registers deprecated alias %s pointing at the renamed command",
+    async (name) => {
+      const config: Config = { command: {} }
+      await pluginResult.config?.(config)
+      expect(config.command![name]).toBeDefined()
+      expect(typeof config.command![name]!.template).toBe("string")
+      expect(config.command![name]!.description).toMatch(/deprecated/i)
+      expect(config.command![name]!.description).toMatch(/qa:/i)
+    },
+  )
+
+  it("alias templates match their canonical qa:* counterparts", async () => {
+    const config: Config = { command: {} }
+    await pluginResult.config?.(config)
+    expect(config.command!["create-qa-plan"]!.template).toBe(
+      config.command!["qa:create-plan"]!.template,
+    )
+    expect(config.command!["run-qa"]!.template).toBe(config.command!["qa:run"]!.template)
   })
 })
 

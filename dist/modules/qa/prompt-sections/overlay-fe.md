@@ -10,7 +10,7 @@ This provides Playwright patterns for navigation, interaction, assertion, and sc
 
 ### Step 2: Verify Playwright availability
 
-Try `playwright_browser_navigate` to `about:blank`. If unavailable, try `Bash(playwright:*)` CLI. If neither is available, return `NEED_INFO` with `kind: "tool"`, `missing: ["playwright"]`, `hint: "Install Playwright (npx playwright install), then re-run /run-qa"`.
+Try `playwright_browser_navigate` to `about:blank`. If unavailable, try `Bash(playwright:*)` CLI. If neither is available, return `NEED_INFO` with `kind: "tool"`, `missing: ["playwright"]`, `hint: "Install Playwright (npx playwright install), then re-run /qa:run"`.
 
 ### Step 2.5: Pre-flight required env vars
 

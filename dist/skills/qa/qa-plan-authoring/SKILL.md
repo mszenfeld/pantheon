@@ -1,15 +1,15 @@
 ---
 name: qa-plan-authoring
 description: Author a QA test plan from a code diff — resolve diff source, classify FE/BE, gather context, detect tools, infer Setup, generate scenarios, save the plan.
-activation: Load when generating a QA test plan from code changes (used by /create-qa-plan and by the Veles planner).
+activation: Load when generating a QA test plan from code changes (used by /qa:create-plan and by the Veles planner).
 allowed-tools: Bash(gh:*), Bash(git:*), Bash(command:*), Bash(date:*), Bash(mkdir:*), Read, Write, Glob, Grep
 ---
 
 # QA Plan Authoring
 
 Produce a comprehensive QA test plan from a set of code changes. The caller
-decides what to do with the saved plan (the `/create-qa-plan` command tells the
-user to review and run `/run-qa`; the Veles planner returns a JSON summary to
+decides what to do with the saved plan (the `/qa:create-plan` command tells the
+user to review and run `/qa:run`; the Veles planner returns a JSON summary to
 Perun). This skill covers ONLY authoring + saving.
 
 ## Step 0: Grounding precondition — the target source must be on disk
@@ -24,7 +24,7 @@ files that are in the tree; from a diff-embedded config block you may read the
 *diff text* but must not claim to have read an on-disk file.
 
 **The converse is equally binding — when the source IS on disk, read it.** On the
-normal `/create-qa-plan` and Veles real-repo path, `(unverified — confirm at run time)`
+normal `/qa:create-plan` and Veles real-repo path, `(unverified — confirm at run time)`
 is a **defect** on any assertion you could resolve by reading. Status codes, auth/authz
 outcomes, rate-limit semantics, error-envelope shapes, and derived values are almost
 always readable from the changed code and its immediate dependencies (the security
@@ -320,7 +320,7 @@ artifacts, disabled guards, an identifier-policy QA/ticket ID in a comment, a le
 confirm each distinct hazard is its own `## Blockers / Findings` entry,
 not folded into another blocker.
 (Veles hard-stops on this matrix before emitting its result JSON — see `veles.md`. The
-`/create-qa-plan` command inherits this as guidance, without a hard gate.)
+`/qa:create-plan` command inherits this as guidance, without a hard gate.)
 
 ## Step 6.8: Targeted refute pass (high-risk assertions)
 

@@ -16,7 +16,7 @@ misleading `FAIL`.
 
 > `**Agent:**` is the real registered variant name `zmora-be` (one of the three
 > physical variants in `src/modules/qa/index.ts`). The eval dispatches this variant
-> directly — `/run-qa`'s prefix routing through Perun is not exercised here.
+> directly — `/qa:run`'s prefix routing through Perun is not exercised here.
 
 ## Query
 

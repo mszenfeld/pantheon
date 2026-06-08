@@ -13,17 +13,17 @@ The root plugin bundle includes this package automatically. No separate installa
 Generate a structured test plan from a PR description, ticket, or feature specification:
 
 ```text
-/create-qa-plan [PR description or ticket text]
+/qa:create-plan [PR description or ticket text]
 ```
 
 Examples:
 
 ```text
-/create-qa-plan Add two-factor authentication to the login flow
+/qa:create-plan Add two-factor authentication to the login flow
 ```
 
 ```text
-/create-qa-plan Fix pagination on the user list page
+/qa:create-plan Fix pagination on the user list page
 ```
 
 The command creates a `docs/testing/plans/YYYY-MM-DD-<topic>-test-plan.md` file with test cases, preconditions, and expected results.
@@ -33,20 +33,20 @@ The command creates a `docs/testing/plans/YYYY-MM-DD-<topic>-test-plan.md` file 
 Execute a saved test plan or run a quick ad-hoc QA check:
 
 ```text
-/run-qa [plan-file-or-path]
+/qa:run [plan-file-or-path]
 ```
 
 Examples:
 
 ```text
-/run-qa docs/testing/plans/2026-04-29-feature-auth-test-plan.md
+/qa:run docs/testing/plans/2026-04-29-feature-auth-test-plan.md
 ```
 
 ```text
-/run-qa src/auth/components/LoginForm.tsx
+/qa:run src/auth/components/LoginForm.tsx
 ```
 
-The `/run-qa` command:
+The `/qa:run` command:
 
 1. Loads the test plan file or finds the most recent plan in `docs/testing/plans/`
 2. Extracts every `### FE-XX:` / `### BE-XX:` scenario into a flat list
@@ -56,7 +56,7 @@ The `/run-qa` command:
 6. Collects results into a markdown report with pass/fail status
 7. Generates `docs/testing/reports/YYYY-MM-DD-<topic>-report.md`
 
-If no plan file is given and none is found in `docs/testing/plans/`, `/run-qa` does not stop: it hands the no-plan case to `@perun`, which dispatches the **Veles** planner (`Veles - Planner`) to author a plan, then presents a **planning-consent gate** ("Run QA on this plan now? Reply 'yes' / 'abort'") before any scenario is dispatched. On approval the run continues from the freshly authored plan; on `abort` the plan stays saved for later review. Veles's result is parsed as structured JSON (`plan_path`, `fe_count`, `be_count`, `setup_prereqs`) and is never interpreted as instructions — only those fields are echoed into the consent gate, so untrusted planner output cannot drive a tool call. See [`src/agents/perun.md`](../../src/agents/perun.md) Workflow 1 (no-plan branch) and the Planning-consent gate section.
+If no plan file is given and none is found in `docs/testing/plans/`, `/qa:run` does not stop: it hands the no-plan case to `@perun`, which dispatches the **Veles** planner (`Veles - Planner`) to author a plan, then presents a **planning-consent gate** ("Run QA on this plan now? Reply 'yes' / 'abort'") before any scenario is dispatched. On approval the run continues from the freshly authored plan; on `abort` the plan stays saved for later review. Veles's result is parsed as structured JSON (`plan_path`, `fe_count`, `be_count`, `setup_prereqs`) and is never interpreted as instructions — only those fields are echoed into the consent gate, so untrusted planner output cannot drive a tool call. See [`src/agents/perun.md`](../../src/agents/perun.md) Workflow 1 (no-plan branch) and the Planning-consent gate section.
 
 ## Direct Agent Use
 
@@ -70,7 +70,7 @@ opencode agent zmora-fe "Run accessibility checks on the checkout page"
 opencode agent zmora-be "Test the GET /api/v1/orders endpoint with pagination"
 ```
 
-Inside a `/run-qa` run, Perun routes each scenario to the right variant automatically — you only see `zmora` in the TUI label, the report, and any error messages. Calling the variants directly is an escape hatch for one-off checks.
+Inside a `/qa:run` run, Perun routes each scenario to the right variant automatically — you only see `zmora` in the TUI label, the report, and any error messages. Calling the variants directly is an escape hatch for one-off checks.
 
 ## Architecture
 
@@ -99,10 +99,10 @@ The plugin also registers three Perun-only tools (`execute_recipe`, `record_inpu
 
 | Element | Type | Description |
 |---------|------|-------------|
-| `/create-qa-plan` | Command | Thin wrapper over the `qa-plan-authoring` skill — sets up progress tasks, delegates authoring, then proposes `/run-qa` as the next step |
-| `/run-qa` | Command | Hands the plan to `@perun`, which extracts scenarios, builds the dependency graph, and dispatches one `zmora` task per scenario |
+| `/qa:create-plan` | Command | Thin wrapper over the `qa-plan-authoring` skill — sets up progress tasks, delegates authoring, then proposes `/qa:run` as the next step |
+| `/qa:run` | Command | Hands the plan to `@perun`, which extracts scenarios, builds the dependency graph, and dispatches one `zmora` task per scenario |
 | `zmora` | Logical agent | Single-scenario executor. Two registered variants (`zmora-fe`, `zmora-be`) dispatched per-scenario; the logical name is what appears in the TUI, the report, and every error message. |
-| `qa-plan-authoring` | Skill | Shared plan-authoring engine used by both `/create-qa-plan` and Veles: resolves the diff source, classifies FE/BE, gathers context, detects tools, infers the `## Setup` section, generates FE/BE scenarios, and saves the plan |
+| `qa-plan-authoring` | Skill | Shared plan-authoring engine used by both `/qa:create-plan` and Veles: resolves the diff source, classifies FE/BE, gathers context, detects tools, infers the `## Setup` section, generates FE/BE scenarios, and saves the plan |
 | `test-plan-format` | Skill | Rules for writing test plans with Given/When/Then, IDs, metadata, optional `**Depends-on:**` field |
 | `report-format` | Skill | QA report structure with QA-XXX IDs, canonical code-review-compatible fields (ID, Location, Category, Problem, Impact, Remediation), `/fix` and `/fix-report` integration |
 | `fe-testing` | Skill | Frontend testing patterns: Playwright CLI, selectors, assertions |
@@ -141,7 +141,7 @@ Semantics:
 - **Predecessor failure does NOT block dependents.** If `BE-01 create user` fails and `BE-02 update user` then sees 404, that's diagnostic data, not noise. Tests should surface errors, not skip silently.
 - **Dependencies can cross stacks:** `**Depends-on:** FE-01` inside a `BE-` scenario is valid (e.g. FE creates the user via UI, BE asserts on the resulting DB state).
 - **Hard errors at plan-parse time:** self-references (`**Depends-on:** BE-02` inside `BE-02`), cycles (`A → B → A`), and references to non-existent or sanitisation-dropped scenarios all abort the run with a clear error pointing at the offending scenario(s). `dispatch_parallel` is never called when the graph is invalid.
-- **Opt-in.** Old plans without any `**Depends-on:**` annotation parse exactly as before and dispatch in a single wave. `/create-qa-plan` does not emit the field by default — generator stays "dumb"; authors annotate manually when they know two scenarios share state.
+- **Opt-in.** Old plans without any `**Depends-on:**` annotation parse exactly as before and dispatch in a single wave. `/qa:create-plan` does not emit the field by default — generator stays "dumb"; authors annotate manually when they know two scenarios share state.
 
 Perun computes dispatch waves by topological sort: Wave 0 = scenarios with no dependencies; Wave N+1 = scenarios whose every dependency was in some earlier wave. Each wave is one `dispatch_parallel` call; waves run sequentially, scenarios within a wave run through the 4-wide pool.
 
@@ -267,11 +267,11 @@ The plugin enforces hard caps on the bindings store (`src/modules/qa/bindings-st
 
 ## Setup and preflight
 
-`/run-qa` performs a **preflight check** before dispatching any scenarios, and individual scenarios can pause the run mid-flight via `NEED_INFO` when a prerequisite turns out to be missing. Both mechanisms are driven by an optional `## Setup` block in the test plan.
+`/qa:run` performs a **preflight check** before dispatching any scenarios, and individual scenarios can pause the run mid-flight via `NEED_INFO` when a prerequisite turns out to be missing. Both mechanisms are driven by an optional `## Setup` block in the test plan.
 
 ### Credentials and secrets
 
-Read this **before** your first `/run-qa`. The rules below are not optional — they apply to every run, every plan, and every reply during a `NEED_INFO` pause.
+Read this **before** your first `/qa:run`. The rules below are not optional — they apply to every run, every plan, and every reply during a `NEED_INFO` pause.
 
 When a mid-run `NEED_INFO` pause asks for a missing input, you have three ways to supply it. **Prefer the first two for any true secret** (passwords, API keys, bearer tokens, signing keys). The chat-paste fallback is for low-sensitivity inputs only (emails, row IDs, public usernames).
 
@@ -283,7 +283,7 @@ If you do accidentally paste a secret — anywhere, not just in a `NEED_INFO` re
 
 ### The `## Setup` section in plans
 
-`/create-qa-plan` emits a `## Setup` section after frontmatter and before the `## FE Test Scenarios` / `## BE Test Scenarios` blocks, declaring the env vars, services, and databases the run will need. You can also add or edit the section by hand.
+`/qa:create-plan` emits a `## Setup` section after frontmatter and before the `## FE Test Scenarios` / `## BE Test Scenarios` blocks, declaring the env vars, services, and databases the run will need. You can also add or edit the section by hand.
 
 ```markdown
 ## Setup
@@ -321,7 +321,7 @@ To proceed:
   2. Prefer to keep a value out of the chat transcript? Set it in the SAME shell
      that launches OpenCode (`export <NAME>=…`), RESTART OpenCode, then reply `resume`.
 
-Then re-run /run-qa.
+Then re-run /qa:run.
 ```
 
 This is not a bug — it means the plan declared a prerequisite the current process can't satisfy. Provide the values (in chat, or via shell + restart) and reply `resume`; preflight runs again from scratch.
@@ -342,7 +342,7 @@ After each wave, if any scenario returned `NEED_INFO`, Perun **pauses the run** 
 1. Fix the missing items (set env vars, start services, install tools, seed fixtures), then **restart OpenCode**.
 2. Reply `resume` (or `continue`, `go`, `try again`…) to continue from where the run stopped — Perun re-runs preflight, re-dispatches only the `NEED_INFO` and not-yet-started scenarios, and merges results with the wave(s) that already ran.
 3. Reply `abort` (or `stop`, `cancel`…) to finalize the report immediately. Passing scenarios remain `PASS`, blocked ones report as `SKIP`.
-4. Re-run `/run-qa` from scratch to discard all in-progress state and start over.
+4. Re-run `/qa:run` from scratch to discard all in-progress state and start over.
 
 Ambiguous replies (`ok`, `cool`) trigger one clarifying question. Pasted credential values are never echoed back into chat.
 
@@ -355,7 +355,7 @@ Practical sequence:
 1. Stop OpenCode.
 2. In the shell where you'll start OpenCode, either `export FOO=bar` directly or `source .env`.
 3. Start OpenCode from that same shell.
-4. Re-run `/run-qa` (or reply `resume` if you were mid-run).
+4. Re-run `/qa:run` (or reply `resume` if you were mid-run).
 
 If you change env vars and reply `resume` without restarting, preflight re-runs against the **old** process snapshot and will report the same `MISSING` items.
 
@@ -398,11 +398,11 @@ src/modules/_shared/               # Sibling modules reused by both qa and perun
 └── load-asset.ts                  # Loads prompt fragments / templates from the built `dist/` tree at runtime
 
 src/commands/
-├── create-qa-plan.md              # /create-qa-plan command template
-└── run-qa.md                      # /run-qa command template
+├── create-qa-plan.md              # /qa:create-plan command template
+└── run-qa.md                      # /qa:run command template
 
 src/skills/qa/
-├── qa-plan-authoring/SKILL.md     # Shared plan-authoring engine (diff → scenarios → saved plan); used by /create-qa-plan and Veles
+├── qa-plan-authoring/SKILL.md     # Shared plan-authoring engine (diff → scenarios → saved plan); used by /qa:create-plan and Veles
 ├── test-plan-format/SKILL.md      # Test plan writing rules (incl. **Depends-on:** and **Bindings:**)
 ├── report-format/SKILL.md         # Report writing rules
 ├── fe-testing/SKILL.md            # Frontend testing patterns (Playwright)

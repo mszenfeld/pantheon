@@ -39,7 +39,7 @@ The command:
 /fix SEC-001
 ```
 
-`/fix` also resolves QA issues from test reports. Use `/fix QA-001` to fix an issue found by `/run-qa`.
+`/fix` also resolves QA issues from test reports. Use `/fix QA-001` to fix an issue found by `/qa:run`.
 
 Or paste the full issue block:
 
