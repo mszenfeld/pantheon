@@ -39,4 +39,12 @@ describe("test-plan-format skill", () => {
     expect(md).toContain("not a hand-computed literal")
     expect(md).toContain("generating rule + producer")
   })
+
+  it("Coverage Matrix desc locks reachable surfaces out of out-of-scope (L2)", () => {
+    expect(md).toContain("A changed surface with a harness-observable interface (route / DB-effect / Playwright)")
+  })
+
+  it("Plan Quality Checklist forbids out-of-scoping a reachable changed surface (L2)", () => {
+    expect(md).toContain("No changed surface with a curl/psql/Playwright interface is dispositioned")
+  })
 })

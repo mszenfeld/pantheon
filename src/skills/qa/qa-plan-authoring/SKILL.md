@@ -306,6 +306,7 @@ disposition:
    contract-correct scenario (tagged `**Blocked-by:**`).
 3. `out-of-scope: <reason>` → a **harness-property** reason (Step 6.6). An `out-of-scope` whose
    reason is a code defect is INVALID — it must be `blocked-by`.
+   A changed surface with a harness-observable interface (a curl-able route, a `psql`-observable DB effect, or a Playwright surface) cannot be `out-of-scope` — only `covered` or `blocked-by`; `out-of-scope` survives only for a changed surface with no such interface at all.
 
 Also confirm: every behavioral assertion carries a visible `(file:line)` OR `(unverified — confirm
 at run time)` tag; no `**Expected response:**` equals a value produced only by a recorded Blocker
@@ -338,6 +339,7 @@ before saving. Confident-wrong claims cluster in these classes:
   HTTP/DB/Playwright surface can observe it; the runner cannot run the required tool), not a code
   defect or a reachable surface rationalized away. A defect is `blocked-by`; a reachable surface is
   `covered`. Only a true harness limit survives.
+  Decidable test: if the changed surface has a curl/psql/Playwright interface or effect, `out-of-scope` is invalid — reclassify to `covered` (reachable) or `blocked-by` (a defect obstructs it).
 - **claim-specific, branch-governing citation** — a `(file:line)` must support the
   *specific* claim (status AND body/envelope) and point at the branch that fires for
   *this* scenario's input, not merely a real line near the topic. A status-only test

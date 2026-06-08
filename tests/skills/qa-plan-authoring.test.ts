@@ -143,4 +143,12 @@ describe("qa-plan-authoring skill", () => {
   it("Step 6.6 rejects pre-auth-rejected requests as a 429 recipe (L1)", () => {
     expect(md).toContain("never increments the bucket and is a coverage defect")
   })
+
+  it("Step 6.7 locks reachable changed surfaces out of out-of-scope (L2)", () => {
+    expect(md).toContain("A changed surface with a harness-observable interface")
+  })
+
+  it("Step 6.8 out-of-scope-surface bullet carries the reachable-interface test (L2)", () => {
+    expect(md).toContain("if the changed surface has a curl/psql/Playwright interface or effect")
+  })
 })

@@ -44,6 +44,7 @@ and Step 6.8 targeted refute pass both pass. Concretely, ALL must hold:
   disposition — `covered` (+ scenario ID + `(file:line)`), `blocked-by` (matching a BLK entry, with
   a kept contract-correct scenario), or `out-of-scope` (+ harness-property reason). A named status
   or surface with no row, or an `out-of-scope` whose reason is a code defect, is a hard-stop failure;
+  a reachable changed surface (curl/psql/Playwright interface or effect) dispositioned `out-of-scope` is likewise a hard-stop failure;
 - no `**Expected response:**` encodes a value the code produces only because of a recorded Blocker;
 - the high-risk assertions (auth/authz status, rate-limit semantics, error-to-status mapping,
   framework defaults, derived values, **contract-vs-runtime**) have been re-read with intent to

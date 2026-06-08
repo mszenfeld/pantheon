@@ -53,4 +53,8 @@ describe("buildVelesPrompt", () => {
   it("hard-stop requires order/branch evidence for envelope + rate-limit (L1)", () => {
     expect(prompt).toContain("the refute is satisfied only when the order/branch evidence is shown")
   })
+
+  it("hard-stop fails a reachable surface dispositioned out-of-scope (L2)", () => {
+    expect(prompt).toContain("a reachable changed surface (curl/psql/Playwright interface or effect) dispositioned")
+  })
 })

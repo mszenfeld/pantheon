@@ -63,7 +63,8 @@ result can't be observed. This section is MANDATORY — if you found none, write
 <One row per intended behavior / status from the spec, and per changed external surface named in the Changes Summary (drafted in authoring Step 1.5,
 dispositioned in Step 6.7). Omit on single-behavior diffs. Exactly one disposition per row;
 `blocked-by` (lowercase) is the disposition keyword — distinct from the `**Blocked-by:**`
-scenario tag.>
+scenario tag.
+A changed surface with a harness-observable interface (route / DB-effect / Playwright) takes `covered` or `blocked-by`, never `out-of-scope`.>
 
 | Behavior / status | Expected (per contract) | Disposition | Pointer |
 |---|---|---|---|
@@ -363,3 +364,4 @@ Before saving the plan, verify:
 - [ ] Binding format: every `**Bindings:**` entry uses a `QA_BIND_*` name with `(secret|plain)` type, declares `Inputs:` for every `$VAR` referenced by the recipe, sets an `Egress:` host, and the fenced ```bash``` recipe is a single statement using only allowlisted commands
 - [ ] `## Blockers / Findings` is present (`None found.` if none); any test-obstructing defect is recorded there (not buried in `## Out of harness scope`), and each blocked scenario keeps its contract-correct expectation + a `**Blocked-by:**` tag
 - [ ] If the Changes Summary names ≥2 statuses, `## Coverage Matrix` has one row per status and per changed external surface, each with exactly one disposition (`covered` / `blocked-by` / `out-of-scope` + harness-property reason)
+- [ ] No changed surface with a curl/psql/Playwright interface is dispositioned `out-of-scope` (reachable ⇒ `covered`/`blocked-by`)
