@@ -45,7 +45,7 @@ describe("test-plan-format skill", () => {
   })
 
   it("Plan Quality Checklist forbids out-of-scoping a reachable changed surface (L2)", () => {
-    expect(md).toContain("No changed surface with a curl/psql/Playwright interface is dispositioned")
+    expect(md).toContain("No changed surface with a curl/psql/Playwright interface or effect is dispositioned")
   })
 
   it("Blocker template carries the optional hermetic-observation pointer (L4)", () => {
