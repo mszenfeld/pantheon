@@ -267,11 +267,11 @@ describe("AppVerkPlugins", () => {
     await hooks.config?.(config)
 
     const agent = (config as { agent: Record<string, { mode?: string; hidden?: boolean }> }).agent
-    expect(agent.build.hidden).toBe(true)
-    expect(agent.plan.hidden).toBe(true)
-    expect(agent["user-agent"].hidden).toBe(true)
-    expect(agent["Perun - Coordinator"].hidden).toBeUndefined()
-    expect(agent["Perun - Coordinator"].mode).toBe("primary")
+    expect(agent.build!.hidden).toBe(true)
+    expect(agent.plan!.hidden).toBe(true)
+    expect(agent["user-agent"]!.hidden).toBe(true)
+    expect(agent["Perun - Coordinator"]!.hidden).toBeUndefined()
+    expect(agent["Perun - Coordinator"]!.mode).toBe("primary")
     expect((config as { default_agent?: string }).default_agent).toBe("Perun - Coordinator")
   })
 
@@ -292,8 +292,8 @@ describe("AppVerkPlugins", () => {
     await hooks.config?.(config) // second pass on the SAME object
 
     const agent = (config as { agent: Record<string, { hidden?: boolean }> }).agent
-    expect(agent["Perun - Coordinator"].hidden).toBeUndefined()
-    expect(agent.build.hidden).toBe(true)
+    expect(agent["Perun - Coordinator"]!.hidden).toBeUndefined()
+    expect(agent.build!.hidden).toBe(true)
   })
 
   it("sets default_agent to Perun when the user has not set one", async () => {
