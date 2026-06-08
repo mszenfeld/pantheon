@@ -296,6 +296,26 @@ describe("AppVerkPlugins", () => {
     expect(agent.build.hidden).toBe(true)
   })
 
+  it("sets default_agent to Perun when the user has not set one", async () => {
+    const { AppVerkPlugins } = await loadRootModule()
+    const plugin = await AppVerkPlugins({} as never)
+    const config = {} as never
+
+    await plugin.config?.(config)
+
+    expect((config as { default_agent?: string }).default_agent).toBe("Perun - Coordinator")
+  })
+
+  it("respects a user-provided default_agent that resolves to a visible primary", async () => {
+    const { AppVerkPlugins } = await loadRootModule()
+    const plugin = await AppVerkPlugins({} as never)
+    const config = { default_agent: "frontend-developer" } as never
+
+    await plugin.config?.(config)
+
+    expect((config as { default_agent?: string }).default_agent).toBe("frontend-developer")
+  })
+
   it("composes non-tool hook keys generically", async () => {
     const { createAppVerkPlugins } = await loadRootModule()
     const plugin = createAppVerkPlugins([

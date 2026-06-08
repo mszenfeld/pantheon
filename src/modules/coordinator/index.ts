@@ -25,6 +25,7 @@ import {
 } from "../agent-registry/index.js"
 import { fixAutoSpecialistInfo } from "../agent-registry/fix-auto.metadata.js"
 import { getDispatchExtensions } from "../_shared/dispatch-extensions.js"
+import { COORDINATOR_AGENT, getDefaultAgent, setDefaultAgent } from "../agent-roster/index.js"
 import { BackgroundTaskStore } from "./background-store.js"
 import { collectBackground, startBackgroundTask } from "./background.js"
 
@@ -374,6 +375,14 @@ export const AppVerkCoordinatorPlugin: Plugin = async (input) => {
       const perunModel = loadPantheonConfig().agents.perun?.model
       if (perunModel !== undefined) {
         config.agent["Perun - Coordinator"]!.model = perunModel
+      }
+      // Make Perun the session-open default. The roster policy hides the native
+      // `build` (opencode's default primary), so default_agent must point to a
+      // visible primary or the runtime throws at startup. Only set when unset so
+      // a user's explicit default_agent wins. `setDefaultAgent` localizes the cast
+      // for a field the runtime honors but the v1 SDK Config type omits.
+      if (getDefaultAgent(config) === undefined) {
+        setDefaultAgent(config, COORDINATOR_AGENT)
       }
     },
     // IMPORTANT: Tool names here must exactly match the `allowed-tools` frontmatter in
