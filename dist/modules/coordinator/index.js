@@ -25,6 +25,7 @@ import {
 } from "../agent-registry/index.js";
 import { fixAutoSpecialistInfo } from "../agent-registry/fix-auto.metadata.js";
 import { getDispatchExtensions } from "../_shared/dispatch-extensions.js";
+import { COORDINATOR_AGENT, getDefaultAgent, setDefaultAgent } from "../agent-roster/index.js";
 import { BackgroundTaskStore } from "./background-store.js";
 import { collectBackground, startBackgroundTask } from "./background.js";
 function loadAgentPrompt(name) {
@@ -289,6 +290,9 @@ const AppVerkCoordinatorPlugin = async (input) => {
       const perunModel = loadPantheonConfig().agents.perun?.model;
       if (perunModel !== void 0) {
         config.agent["Perun - Coordinator"].model = perunModel;
+      }
+      if (getDefaultAgent(config) === void 0) {
+        setDefaultAgent(config, COORDINATOR_AGENT);
       }
     },
     // IMPORTANT: Tool names here must exactly match the `allowed-tools` frontmatter in

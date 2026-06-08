@@ -10,6 +10,7 @@ import { AppVerkSwiftDeveloperPlugin } from "../packages/swift-developer/dist/in
 import { AppVerkCoordinatorPlugin } from "./modules/coordinator/index.js";
 import { AppVerkCoordinatorPolicyPlugin } from "./modules/coordinator-policy/index.js";
 import { AppVerkPantheonPlugin } from "./hooks/session-notification/plugin.js";
+import { applyRosterPolicy } from "./modules/agent-roster/index.js";
 const defaultPluginFactories = [
   AppVerkCommitPlugin,
   AppVerkPythonDeveloperPlugin,
@@ -98,9 +99,16 @@ function createAppVerkPlugins(pluginFactories = defaultPluginFactories) {
       }
     }
     if (plugins.some((plugin) => plugin.config)) {
+      const processedConfigs = /* @__PURE__ */ new WeakSet();
       merged.config = async (config) => {
+        const firstPass = !processedConfigs.has(config);
+        const preExisting = firstPass ? new Set(Object.keys(config.agent ?? {})) : /* @__PURE__ */ new Set();
         for (const plugin of plugins) {
           await plugin.config?.(config);
+        }
+        if (firstPass) {
+          processedConfigs.add(config);
+          applyRosterPolicy(config, preExisting);
         }
       };
     }
