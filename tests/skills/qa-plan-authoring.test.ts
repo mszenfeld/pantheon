@@ -159,4 +159,8 @@ describe("qa-plan-authoring skill", () => {
   it("Step 0 carves the hermetic-observation pointer exception (L4)", () => {
     expect(md).toContain("**EXCEPTION (verification pointer, not a scenario):**")
   })
+
+  it("Step 0 escalates a failed probe instead of guessing (L5)", () => {
+    expect(md).toContain("**A failed or inconclusive probe is not a license to guess:**")
+  })
 })

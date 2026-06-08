@@ -44,6 +44,7 @@ examples: a SlowAPI `Limiter()` with no `strategy=` is **fixed-window**, not sli
 not a checklist — the rule is: when a change touches auth, rate-limiting, or
 error-to-status mapping, open the dependency (and probe it when a default is genuinely
 uncertain) before asserting.
+**A failed or inconclusive probe is not a license to guess:** if a runtime probe errors, returns nothing, or cannot run in the environment, ground the assertion by reading the installed dependency's source in the tree, or tag it `(unverified — confirm at run time)` — never fall back to memory.
 
 **Tests corroborate; they are not the oracle** — a test proves *only what it
 asserts*. A passing test on a **non-overridden** fixture (no `dependency_overrides`
