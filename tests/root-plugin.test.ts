@@ -309,6 +309,9 @@ describe("AppVerkPlugins", () => {
   it("respects a user-provided default_agent that resolves to a visible primary", async () => {
     const { AppVerkPlugins } = await loadRootModule()
     const plugin = await AppVerkPlugins({} as never)
+    // frontend-developer is registered as mode:"primary" by AppVerkFrontendDeveloperPlugin,
+    // so it stays a visible primary through the full stack and the coordinator's "don't
+    // overwrite" guard preserves it. If that agent is renamed/removed, update this value.
     const config = { default_agent: "frontend-developer" } as never
 
     await plugin.config?.(config)
