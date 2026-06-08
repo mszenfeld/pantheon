@@ -54,6 +54,7 @@ body/envelope claim — cite the producing code for the body. A test that
 contradicts the implementation, or runs under an overriding fixture, is a
 **suspected defective test** → Blocker/Finding. Never transcribe a test as a
 manual scenario; that re-runs CI and adds nothing.
+**EXCEPTION (verification pointer, not a scenario):** when a recorded Blocker makes a contract row unobservable on the *live* path and a hermetic test in the repo (surfaced via Step 4.6's test-infra detection) observes it, record a `**Hermetic observation:** <path>::<test>` note on the Blocker and a `hermetic: <path>::<test>` note in that row's matrix Pointer cell — a pointer the runner never executes, not a transcribed scenario.
 
 ## Step 1: Resolve the diff source
 

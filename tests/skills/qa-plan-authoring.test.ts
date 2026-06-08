@@ -155,4 +155,8 @@ describe("qa-plan-authoring skill", () => {
   it("Step 6.6 carries the 422 schema-validation class (L3)", () => {
     expect(md).toContain("**Schema validation → 422** (any surface with a typed request body or typed params)")
   })
+
+  it("Step 0 carves the hermetic-observation pointer exception (L4)", () => {
+    expect(md).toContain("**EXCEPTION (verification pointer, not a scenario):**")
+  })
 })

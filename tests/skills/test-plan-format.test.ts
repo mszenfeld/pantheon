@@ -47,4 +47,12 @@ describe("test-plan-format skill", () => {
   it("Plan Quality Checklist forbids out-of-scoping a reachable changed surface (L2)", () => {
     expect(md).toContain("No changed surface with a curl/psql/Playwright interface is dispositioned")
   })
+
+  it("Blocker template carries the optional hermetic-observation pointer (L4)", () => {
+    expect(md).toContain("**Hermetic observation (optional):**")
+  })
+
+  it("Coverage Matrix Pointer cell allows a hermetic pointer on blocked rows (L4)", () => {
+    expect(md).toContain("whose contract is unobservable live may add a")
+  })
 })

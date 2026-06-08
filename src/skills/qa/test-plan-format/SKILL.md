@@ -57,6 +57,7 @@ result can't be observed. This section is MANDATORY — if you found none, write
 - **Impact on testing:** <which scenarios it obstructs and the spurious result it forces>
 - **Remediation (human Setup prerequisite):** <exact human action before the run>
 - **Blocks:** <scenario IDs carrying `**Blocked-by:** BLK-01`>
+- **Hermetic observation (optional):** `<path>::<test>` — an existing repo test that observes the blocked-unobservable contract when the live path cannot (see `qa-plan-authoring` Step 0)
 
 ## Coverage Matrix   (required only when the Changes Summary names ≥2 status/behavior classes)
 
@@ -64,7 +65,8 @@ result can't be observed. This section is MANDATORY — if you found none, write
 dispositioned in Step 6.7). Omit on single-behavior diffs. Exactly one disposition per row;
 `blocked-by` (lowercase) is the disposition keyword — distinct from the `**Blocked-by:**`
 scenario tag.
-A changed surface with a harness-observable interface (route / DB-effect / Playwright) takes `covered` or `blocked-by`, never `out-of-scope`.>
+A changed surface with a harness-observable interface (route / DB-effect / Playwright) takes `covered` or `blocked-by`, never `out-of-scope`.
+A `blocked-by` row whose contract is unobservable live may add a `hermetic: <path>::<test>` pointer in its Pointer cell.>
 
 | Behavior / status | Expected (per contract) | Disposition | Pointer |
 |---|---|---|---|
