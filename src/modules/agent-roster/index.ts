@@ -26,7 +26,7 @@ export function setDefaultAgent(config: Config, name: string): void {
 }
 
 const HIDE = { hidden: true } as const
-const COORDINATOR_AGENT = "Perun - Coordinator"
+export const COORDINATOR_AGENT = "Perun - Coordinator"
 
 type AgentMap = NonNullable<Config["agent"]>
 type AgentEntry = AgentMap[string]
@@ -40,7 +40,7 @@ function isVisiblePrimary(entry: AgentEntry | undefined): boolean {
 /**
  * Make the harness own the agent roster: hide every `config.agent` key we did
  * not register. `preExisting` = keys present BEFORE the harness's per-module
- * config hooks ran (user/project agents). Pure — mutates `config` in place.
+ * config hooks ran (user/project agents). Deterministic — mutates `config` in place.
  *
  * Two complementary mechanisms (a union, not redundant):
  *  - snapshot-diff hides user/project agents (they appear in config.agent);

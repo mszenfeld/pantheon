@@ -4,8 +4,8 @@ import {
   NATIVE_BUILTINS,
   getDefaultAgent,
   setDefaultAgent,
+  applyRosterPolicy,
 } from "../../../src/modules/agent-roster/index.js"
-import { applyRosterPolicy } from "../../../src/modules/agent-roster/index.js"
 
 type Entry = { mode?: string; hidden?: boolean; model?: string; description?: string }
 
@@ -87,6 +87,12 @@ describe("agent-roster: applyRosterPolicy", () => {
       { default_agent: "old" },
     )
     applyRosterPolicy(config, new Set(["old"]))
+    expect(getDefaultAgent(config)).toBe("Perun - Coordinator")
+  })
+
+  it("repoints a default_agent pointing to a non-existent key", () => {
+    const config = cfg({ "Perun - Coordinator": { mode: "primary" } }, { default_agent: "ghost" })
+    applyRosterPolicy(config, new Set())
     expect(getDefaultAgent(config)).toBe("Perun - Coordinator")
   })
 
