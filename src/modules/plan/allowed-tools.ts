@@ -28,9 +28,14 @@ const BASH_TOOLS = [
 
 const HARNESS_TOOLS = ["skill", "question"]
 
+// MCP reasoning aid — Veles-only (Section D). Optional MAY-use decomposition tool;
+// the token is inert unless a sequential-thinking server is enabled in config.mcp.
+const MCP_REASONING_TOOLS = ["sequential_thinking_sequentialthinking"]
+
 export const VELES_TOOLS: string[] = [
   ...SERENA_READ_TOOLS,
   ...STRUCTURED_TOOLS,
   ...BASH_TOOLS,
   ...HARNESS_TOOLS,
+  ...MCP_REASONING_TOOLS,
 ]

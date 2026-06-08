@@ -36,6 +36,8 @@ For your assigned `BE-XX:` block:
 2. Construct and send the HTTP request.
 3. Verify response status code + body (via `jq` when available, `grep` fallback).
 
+   Expected-result text may carry `(file:line)` / `(unverified — confirm at run time)` / `(exact text — brittle)` tags — defer to the be-testing skill's "Tag handling" rules; do not fold a tag into the matched string.
+
    **If the response is 401 or 403** AND the request used an auth-related env var (e.g. Authorization header sourced from `$API_KEY`), the credential is likely wrong even though it was non-empty. Return `NEED_INFO` with `kind: "credentials"`, `missing: [<the env var name>]`, `hint: "Verify <name> value (got HTTP <code>); re-set in shell that launches OpenCode and reply 'resume'."`. This is a best-effort hint — the missing name may be wrong; the user judges.
 
 4. If DB Check is specified: run the query, compare against expected.

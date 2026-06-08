@@ -16,11 +16,13 @@ const BASH_TOOLS = [
   "Bash(mkdir:*)"
 ];
 const HARNESS_TOOLS = ["skill", "question"];
+const MCP_REASONING_TOOLS = ["sequential_thinking_sequentialthinking"];
 const VELES_TOOLS = [
   ...SERENA_READ_TOOLS,
   ...STRUCTURED_TOOLS,
   ...BASH_TOOLS,
-  ...HARNESS_TOOLS
+  ...HARNESS_TOOLS,
+  ...MCP_REASONING_TOOLS
 ];
 export {
   VELES_TOOLS

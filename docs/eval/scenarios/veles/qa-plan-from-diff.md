@@ -143,6 +143,7 @@ improvisation, not their presence.
 - **Grounding / no hallucination** — uses real identifiers from the diff
   (`email`, `password`, `/api/login`, `SESSION_SECRET`, `http://localhost:8000`);
   does not invent endpoints/fields absent from the diff.
+  Also grade: every behavioral assertion carries a visible `(file:line)` citation or an `(unverified — confirm at run time)` tag; and the run prefers the repo's local test infra over a guessed remote endpoint (no invented remote Supabase / password-grant when a local config exists).
 - **No-execution discipline** — objectively the `git status` no-source-edit check
   (a source edit = failure); not a separate subjective signal.
 - **No interview** — did not call the `question` tool.

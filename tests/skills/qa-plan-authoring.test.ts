@@ -37,4 +37,130 @@ describe("qa-plan-authoring skill", () => {
     const commandTools = frontmatterToolList(readFileSync(COMMAND_PATH, "utf8"))
     expect(isToolSubset(skillTools, commandTools)).toBe(true)
   })
+
+  it("Step 0 binds the converse — (unverified) is a defect on on-disk source", () => {
+    expect(md).toContain("The converse is equally binding")
+  })
+
+  it("teaches the framework-default trap (verify against the installed version)", () => {
+    expect(md).toContain("Framework defaults are the most common confident-wrong trap")
+    expect(md).toContain("HTTPBearer")
+  })
+
+  it("Step 6.6 carries the reachability litmus + in-scope-by-default classes", () => {
+    expect(md).toContain("Reachability litmus")
+    expect(md).toContain("IDOR / cross-tenant")
+  })
+
+  it("Step 6.8 adds a targeted refute pass with the momus seam", () => {
+    expect(md).toContain("Targeted refute pass")
+    expect(md).toContain("intent to *refute*")
+    expect(md).toContain("Momus seam")
+  })
+
+  it("Step 1.5 pins the contract before observing runtime", () => {
+    expect(md).toContain("Pin the intended contract")
+  })
+
+  it("Step 3.5 forces an emitted Blockers section incl. markerless guards", () => {
+    expect(md).toContain("None found.")
+    expect(md).toContain("commented-out")
+  })
+
+  it("Step 6.6 closes the transitive-punt hole", () => {
+    expect(md).toContain("property of the HARNESS, not of the code")
+  })
+
+  it("Step 6.7 requires the completed coverage matrix", () => {
+    expect(md).toContain("complete the coverage matrix")
+  })
+
+  it("Step 6.8 carries the contract-vs-runtime refute check", () => {
+    expect(md).toContain("contract-vs-runtime")
+  })
+
+  it("Step 4.5 states the runner dispatches scenarios in parallel", () => {
+    expect(md).toContain("dispatches scenarios in parallel")
+  })
+
+  it("Step 6.9 sequences shared-quota scenarios via Depends-on", () => {
+    expect(md).toContain("Step 6.9")
+    expect(md).toContain("terminal wave")
+  })
+
+  it("Step 6.6 carries no-oracle IDOR equality and reflected-input injection", () => {
+    expect(md).toContain("indistinguishable from not-found")
+    expect(md).toContain("reflected into a response header")
+  })
+
+  it("Step 6.6 carries lock-release-on-error and a no-mutation invariant", () => {
+    expect(md).toContain("lock releases on the error path")
+    expect(md).toContain("mutates no persistent state")
+  })
+
+  it("Step 3.5 orders multi-step blocker remediation as Setup prerequisites", () => {
+    expect(md).toContain("ordered list of human Setup prerequisites")
+  })
+
+  it("Step 0 tiers tests as corroboration, not oracle, with a confidence floor", () => {
+    expect(md).toContain("they are not the oracle")
+    expect(md).toContain("keeps an assertion at full confidence")
+    expect(md).toContain("suspected defective test")
+  })
+
+  it("Step 6.8 requires a claim-specific, branch-governing citation", () => {
+    expect(md).toContain("branch-governing citation")
+  })
+
+  it("Step 6.7 carries the surface-coverage anchor (R-A, self-referential)", () => {
+    expect(md).toContain("every external surface named in your own")
+    expect(md).toContain("row set == the surfaces you declared")
+  })
+
+  it("Step 6.8 treats an out-of-scope surface reason as a refute class (R-A)", () => {
+    expect(md).toContain("out-of-scope surface dispositions")
+    expect(md).toContain("Only a true harness limit survives")
+  })
+
+  it("Step 6.8 forbids hand-computed derived literals (R-B)", () => {
+    expect(md).toContain("never assert a hand-computed encoding/hash/slug literal")
+    expect(md).toContain("assert the producing rule")
+  })
+
+  it("Step 6.7 carries the findings re-scan loop-back (R-C)", () => {
+    expect(md).toContain("re-scan the changed files for the Step 3.5 hazard classes")
+    expect(md).toContain("not folded into another blocker")
+  })
+
+  it("Step 6.8 requires the raise-site+catcher pair for envelope claims (L1)", () => {
+    expect(md).toContain("cite the *pair* — the raise-site AND the handler that catches that exception type")
+  })
+
+  it("Step 6.8 carries the order-gated resolution-order rule (L1)", () => {
+    expect(md).toContain("name the resolution order you rely on and ground it")
+  })
+
+  it("Step 6.6 rejects pre-auth-rejected requests as a 429 recipe (L1)", () => {
+    expect(md).toContain("never increments the bucket and is a coverage defect")
+  })
+
+  it("Step 6.7 locks reachable changed surfaces out of out-of-scope (L2)", () => {
+    expect(md).toContain("A changed surface with a harness-observable interface")
+  })
+
+  it("Step 6.8 out-of-scope-surface bullet carries the reachable-interface test (L2)", () => {
+    expect(md).toContain("if the changed surface has a curl/psql/Playwright interface or effect")
+  })
+
+  it("Step 6.6 carries the 422 schema-validation class (L3)", () => {
+    expect(md).toContain("**Schema validation → 422** (any surface with a typed request body or typed params)")
+  })
+
+  it("Step 0 carves the hermetic-observation pointer exception (L4)", () => {
+    expect(md).toContain("**EXCEPTION (verification pointer, not a scenario):**")
+  })
+
+  it("Step 0 escalates a failed probe instead of guessing (L5)", () => {
+    expect(md).toContain("**A failed or inconclusive probe is not a license to guess:**")
+  })
 })

@@ -334,6 +334,15 @@ location and precedence rules.
 - **Never commit a report that references a private codebase.** The default
   report path is `/tmp/`, so this is the obvious default.
 
+## Grading discipline (applies to every scoring pass)
+
+When grading a QA plan (Step 4, or any plan-vs-plan comparison), follow
+**`docs/eval/grading-protocol.md`**: to fault an expected value as WRONG, cite
+contradicting on-disk/installed source or a bounded read-only probe — a from-memory
+framework claim is inadmissible (→ `needs-runtime-check`, and that is not allowed
+when the source is on disk). Verify PASS verdicts too (status AND body), and treat
+any external/marketplace report as hypotheses to verify, never a verdict.
+
 ## Evaluating side-effecting agents (Veles)
 
 Veles is not read-only: it **writes a QA plan** to `docs/testing/plans/`, may
@@ -392,6 +401,30 @@ above mostly applies, with these amendments. (Scenario: `scenarios/veles/`.)
   `degenerate` / `unreliable` / `not-tested`); for Veles, `degenerate` covers a
   broken JSON gate, 0 scenarios on either side, <2 edge cases per scenario, or
   interview-hang.
+- **Defect-grounding goldens** (`scenarios/veles/qa-plan-defect-grounding.md` and
+  `…-markerless.md`) test whether Veles flags a discovered code defect as a Blocker instead of
+  normalizing it into the contract. Run them at **≥3 iterations** (above the default 2; Lesson 9's
+  cost caveat still holds, but these are cheap self-contained Layer-1 diffs) and grade
+  **worst-of-N** — a GATE-2/GATE-3 verdict flip across iterations is itself `unreliable`, counted
+  as "still normalizing". Their gates (GATE 2 = defect flagged as a blocker; GATE 3 = no scenario
+  encodes a defect-produced status as its `Expected`) live in the scenario files. **Regression
+  tripwire:** before merging any change to `src/modules/plan/veles.md` or
+  `src/skills/qa/qa-plan-authoring/SKILL.md`, re-run both; per **Lesson 10** they must still
+  discriminate — current/unfixed Veles must FAIL them, or the golden has gone stale.
+- **Depth & logistics dimensions** (`qa-plan-defect-grounding.md`, "Depth & logistics signals"
+  section) layer GATE-ORDER + GATE-DEPTH (scored by adversarial *substance*, not the grounding tag)
+  + a record-only ST-INVOKED signal on golden #1, ≥3 iters, worst-of-N. **Parallel-dispatch fact
+  (don't repeat the marketplace's sequential framing):** the runner dispatches scenarios 4-wide in
+  parallel (single wave unless `**Depends-on:**`); "run it last" is not a valid fix here —
+  `**Depends-on:**` is. **Lever-E (sequential-thinking) is record-only:** no ablation arm; read the
+  ST-INVOKED rate + absolute GATE-DEPTH from the single full-Phase-1 arm and apply the pre-committed
+  keep/demote/escalate threshold: ST-INVOKED high AND GATE-DEPTH passes → **keep** the SHOULD
+  trigger; ST-INVOKED low AND GATE-DEPTH passes → the skill prose carried it, **demote** Lever E to
+  MAY (drop the latency/token cost); ST-INVOKED low AND GATE-DEPTH fails → **escalate** to a hard ST
+  gate in `veles.md` (mirror the matrix hard-stop) rather than more prose. **Generalization is a
+  Layer-2 check:** point a RUNG-1 Layer-2 run at a NON-export real endpoint (a login/account route)
+  and grade GATE-DEPTH by the same per-edge substance predicates against that surface — no dedicated
+  golden to maintain.
 
 Minimal Node-script extension: capture the plan and guarantee its deletion.
 After `outcome === "done"`, parse the contract from `finalText` (the text of the

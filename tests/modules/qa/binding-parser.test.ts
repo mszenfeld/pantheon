@@ -53,6 +53,52 @@ describe("parseBindings", () => {
     expect(cv.inputs).toEqual(["QA_BIND_TOKEN", "BASE_URL"])
   })
 
+  it("ignores ## Blockers / Findings + ## Coverage Matrix + Blocked-by (parser-inert)", () => {
+    const planWithBlockers = `
+# Test Plan
+
+## Setup
+
+**Bindings:**
+- \`QA_BIND_TOKEN\` (secret) — token
+  - Inputs: \`$EMAIL\`, \`$PASS\`, \`$AUTH_URL\`
+  - Egress: \`$AUTH_URL\`
+  - Recipe:
+    \`\`\`bash
+    curl -sf "$AUTH_URL/login" --data-urlencode "email=$EMAIL" --data-urlencode "password=$PASS" | jq -er .token
+    \`\`\`
+
+## Changes Summary
+
+New endpoint with statuses 200 and 504.
+
+## Blockers / Findings
+
+### BLK-01: leftover asyncio.sleep(65) — \`worker/routes.py:4\`
+- **Impact on testing:** every render times out to 504.
+- **Remediation (human Setup prerequisite):** revert the delay before BE-01.
+- **Blocks:** BE-01
+
+## Coverage Matrix
+
+| Behavior / status | Expected | Disposition | Pointer |
+|---|---|---|---|
+| 200 happy path | 200 | blocked-by | BLK-01 |
+| 504 timeout | 504 | covered | BE-02 |
+
+## BE Test Scenarios
+
+### BE-01: happy path
+**Blocked-by:** BLK-01
+**Expected response:** status 200.
+`
+    const result = parseBindings(planWithBlockers)
+    expect(result.status).toBe("ok")
+    if (result.status !== "ok") return
+    expect(result.bindings).toHaveLength(1)
+    expect(result.bindings[0]!.name).toBe("QA_BIND_TOKEN")
+  })
+
   it("returns ok with empty bindings when no **Bindings:** subsection", () => {
     const result = parseBindings("# Plan\n\n## Setup\n\n**Required environment variables:**\n- \`X\`\n")
     expect(result.status).toBe("ok")

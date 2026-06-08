@@ -32,5 +32,18 @@ docs/eval/scenarios/**/private/
 docs/eval/scenarios/veles/*
 !docs/eval/scenarios/veles/qa-plan-from-diff.md
 !docs/eval/scenarios/veles/qa-plan-multi-principal.md
+!docs/eval/scenarios/veles/qa-plan-export-pdf-regression.md
+!docs/eval/scenarios/veles/qa-plan-defect-grounding.md
+!docs/eval/scenarios/veles/qa-plan-defect-grounding-markerless.md
 !docs/eval/scenarios/veles/TEMPLATE.md
 !docs/eval/scenarios/veles/README.md
+!docs/eval/scenarios/veles/fixtures/
+docs/eval/scenarios/veles/fixtures/*
+!docs/eval/scenarios/veles/fixtures/coverage-classes.md
+# Zmora eval scenarios are private-by-default too: a live (Layer-2) scenario
+# executes against a real running target and may embed private endpoints, DSNs,
+# and responses. Only the shipped public files under zmora/ are trackable.
+docs/eval/scenarios/zmora/*
+!docs/eval/scenarios/zmora/be-discipline.md
+!docs/eval/scenarios/zmora/README.md
+!docs/eval/scenarios/zmora/TEMPLATE.md

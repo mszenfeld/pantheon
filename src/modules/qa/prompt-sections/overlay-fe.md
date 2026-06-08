@@ -39,6 +39,9 @@ For your assigned `FE-XX:` block:
    **If a step depends on a login-walled page** and the resulting snapshot shows an authentication error UI ("Invalid credentials", a 401 response in the network log, or the login form re-rendering after submission), return `NEED_INFO` with `kind: "credentials"`, `missing: [<the env var name used to fill the form>]`, `hint: "Verify <name> value (login failed); re-set in shell and reply 'resume'."`. Signals to trust: visible text "Invalid credentials", "Wrong password", "Login failed"; HTTP 401/403 in the network log for the form submission; the URL did NOT change to a post-login route after submit. Signals NOT to trust as credential failure: a generic toast saying "Something went wrong" (could be a backend error unrelated to creds), a 5xx on submit (network/service issue, not creds), or any 401 from a request OTHER than the form submission (could be unrelated auth). This is a best-effort hint.
 
 4. If expected result is met → PASS.
+
+   Expected-result text may carry `(file:line)` / `(unverified — confirm at run time)` / `(exact text — brittle)` tags — defer to the fe-testing skill's "Tag handling" rules.
+
 5. If not met → take screenshot to `docs/testing/reports/screenshots/<ID>-fail.png`, return FAIL.
 6. Execute each edge case as a sub-test.
 
