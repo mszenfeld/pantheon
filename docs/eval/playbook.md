@@ -418,7 +418,10 @@ above mostly applies, with these amendments. (Scenario: `scenarios/veles/`.)
   parallel (single wave unless `**Depends-on:**`); "run it last" is not a valid fix here —
   `**Depends-on:**` is. **Lever-E (sequential-thinking) is record-only:** no ablation arm; read the
   ST-INVOKED rate + absolute GATE-DEPTH from the single full-Phase-1 arm and apply the pre-committed
-  keep/demote/escalate threshold (see the depth-and-logistics plan, RUNG 1). **Generalization is a
+  keep/demote/escalate threshold: ST-INVOKED high AND GATE-DEPTH passes → **keep** the SHOULD
+  trigger; ST-INVOKED low AND GATE-DEPTH passes → the skill prose carried it, **demote** Lever E to
+  MAY (drop the latency/token cost); ST-INVOKED low AND GATE-DEPTH fails → **escalate** to a hard ST
+  gate in `veles.md` (mirror the matrix hard-stop) rather than more prose. **Generalization is a
   Layer-2 check:** point a RUNG-1 Layer-2 run at a NON-export real endpoint (a login/account route)
   and grade GATE-DEPTH by the same per-edge substance predicates against that surface — no dedicated
   golden to maintain.
