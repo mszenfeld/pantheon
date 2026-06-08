@@ -49,4 +49,8 @@ describe("buildVelesPrompt", () => {
     expect(prompt).toContain("per changed external surface named in the Changes Summary")
     expect(prompt).toContain('names ≥2 statuses, the `## Coverage Matrix` has one row per such')
   })
+
+  it("hard-stop requires order/branch evidence for envelope + rate-limit (L1)", () => {
+    expect(prompt).toContain("the refute is satisfied only when the order/branch evidence is shown")
+  })
 })

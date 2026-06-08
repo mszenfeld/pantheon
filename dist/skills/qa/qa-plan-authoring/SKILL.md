@@ -257,7 +257,9 @@ config** is NOT a valid punt — it is a **Blocker** (Step 3.5): write the contr
 returns 504 / the worker has a sleep / a guard is commented out / a debug flag is on" describes a
 defect — reclassify, do not punt.* **A defect or "the runner can't" is rejected as a 429 punt** — exhaust
 the limiter over the FAST path (fire 11× the cheap 402/404 request; error responses still count toward the
-slowapi bucket). That is the *trigger recipe*; because the runner is 4-wide parallel, sequence the 429
+slowapi bucket).
+Firing a request class rejected *before* the limiter — unauthenticated requests at a post-auth limiter whose auth `Depends` resolves before the limiter decorator — never increments the bucket and is a coverage defect, not a 429 recipe.
+That is the *trigger recipe*; because the runner is 4-wide parallel, sequence the 429
 scenario per **Step 6.9** so its sweep does not contaminate siblings. (409 contention is already covered by
 the "background the first curl" guidance in the in-scope-by-default list below — a defect is never its punt
 reason either.)
@@ -340,6 +342,8 @@ before saving. Confident-wrong claims cluster in these classes:
   *specific* claim (status AND body/envelope) and point at the branch that fires for
   *this* scenario's input, not merely a real line near the topic. A status-only test
   cited as grounding for a body is a refute failure.
+  For an error **body/envelope** claim, cite the *pair* — the raise-site AND the handler that catches that exception type — or state the path raises a framework `HTTPException` with no domain handler so the body is the framework default; a handler that does not catch the path's exception type is a refute failure.
+- **order-gated assertions** — when an outcome depends on which layer fires first (auth `Depends` vs rate-limit decorator vs middleware vs exception handler), name the resolution order you rely on and ground it; a `429` scenario must fire the request class that passes every gate preceding the limiter, never one rejected before it.
 - **contract-vs-runtime (expectations follow the spec, not incidental runtime).** For every
   `**Expected response:**`, ask *"is this the contract, or just what the current (possibly defective)
   build returns?"* Decision table:

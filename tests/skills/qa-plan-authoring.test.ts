@@ -131,4 +131,16 @@ describe("qa-plan-authoring skill", () => {
     expect(md).toContain("re-scan the changed files for the Step 3.5 hazard classes")
     expect(md).toContain("not folded into another blocker")
   })
+
+  it("Step 6.8 requires the raise-site+catcher pair for envelope claims (L1)", () => {
+    expect(md).toContain("cite the *pair* — the raise-site AND the handler that catches that exception type")
+  })
+
+  it("Step 6.8 carries the order-gated resolution-order rule (L1)", () => {
+    expect(md).toContain("name the resolution order you rely on and ground it")
+  })
+
+  it("Step 6.6 rejects pre-auth-rejected requests as a 429 recipe (L1)", () => {
+    expect(md).toContain("never increments the bucket and is a coverage defect")
+  })
 })

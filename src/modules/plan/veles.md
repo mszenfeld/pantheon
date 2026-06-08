@@ -48,6 +48,7 @@ and Step 6.8 targeted refute pass both pass. Concretely, ALL must hold:
 - the high-risk assertions (auth/authz status, rate-limit semantics, error-to-status mapping,
   framework defaults, derived values, **contract-vs-runtime**) have been re-read with intent to
   refute and corrected.
+  For the error-to-status/envelope and rate-limit classes the refute is satisfied only when the order/branch evidence is shown — the raise-site+catcher pair for an envelope, and the gate order for a `429`.
 
 **A discovered defect never shrinks coverage.** If reading the code surfaces a bug that makes a
 behavior unobservable on the current build, that is a Blocker — not a reason to drop the scenario
