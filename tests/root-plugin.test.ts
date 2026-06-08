@@ -245,6 +245,57 @@ describe("AppVerkPlugins", () => {
     ).rejects.toThrow(/use \/commit/i)
   })
 
+  it("hides native build/plan and pre-existing user agents, keeps registered agents", async () => {
+    const { createAppVerkPlugins } = await loadRootModule()
+    const plugin = createAppVerkPlugins([
+      async () => ({
+        config: async (config: { agent?: Record<string, unknown> }) => {
+          config.agent ??= {}
+          config.agent["Perun - Coordinator"] = { mode: "primary" }
+        },
+      }),
+    ])
+    const hooks = await plugin({} as never)
+    const config = {
+      agent: {
+        build: { mode: "primary" },
+        plan: { mode: "primary" },
+        "user-agent": { mode: "primary" },
+      },
+    } as never
+
+    await hooks.config?.(config)
+
+    const agent = (config as { agent: Record<string, { mode?: string; hidden?: boolean }> }).agent
+    expect(agent.build.hidden).toBe(true)
+    expect(agent.plan.hidden).toBe(true)
+    expect(agent["user-agent"].hidden).toBe(true)
+    expect(agent["Perun - Coordinator"].hidden).toBeUndefined()
+    expect(agent["Perun - Coordinator"].mode).toBe("primary")
+    expect((config as { default_agent?: string }).default_agent).toBe("Perun - Coordinator")
+  })
+
+  it("survives a second invocation on the same config (does not hide its own agents)", async () => {
+    const { createAppVerkPlugins } = await loadRootModule()
+    const plugin = createAppVerkPlugins([
+      async () => ({
+        config: async (config: { agent?: Record<string, unknown> }) => {
+          config.agent ??= {}
+          config.agent["Perun - Coordinator"] = { mode: "primary" }
+        },
+      }),
+    ])
+    const hooks = await plugin({} as never)
+    const config = { agent: { build: { mode: "primary" } } } as never
+
+    await hooks.config?.(config)
+    await hooks.config?.(config) // second pass on the SAME object
+
+    const agent = (config as { agent: Record<string, { hidden?: boolean }> }).agent
+    expect(agent["Perun - Coordinator"].hidden).toBeUndefined()
+    expect(agent.build.hidden).toBe(true)
+  })
+
   it("composes non-tool hook keys generically", async () => {
     const { createAppVerkPlugins } = await loadRootModule()
     const plugin = createAppVerkPlugins([

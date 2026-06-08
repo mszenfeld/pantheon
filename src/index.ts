@@ -11,6 +11,7 @@ import { AppVerkSwiftDeveloperPlugin } from "../packages/swift-developer/dist/in
 import { AppVerkCoordinatorPlugin } from "./modules/coordinator/index.js"
 import { AppVerkCoordinatorPolicyPlugin } from "./modules/coordinator-policy/index.js"
 import { AppVerkPantheonPlugin } from "./hooks/session-notification/plugin.js"
+import { applyRosterPolicy } from "./modules/agent-roster/index.js"
 type PluginHooks = Awaited<ReturnType<Plugin>>
 type HookKey = Exclude<keyof PluginHooks, "config" | "tool">
 type MergedHook = (...args: unknown[]) => Promise<void>
@@ -155,9 +156,27 @@ export function createAppVerkPlugins(pluginFactories: Plugin[] = defaultPluginFa
     }
 
     if (plugins.some((plugin) => plugin.config)) {
+      // One-shot guard: the merged config hook is invoked once per process on
+      // opencode 1.15.10, but correctness must not depend on that binary-internal
+      // contract. If the SAME config object is passed twice, skip the snapshot +
+      // roster policy on the second pass — otherwise the recomputed `preExisting`
+      // would contain our own (now-persisted) agents and hide them.
+      const processedConfigs = new WeakSet<object>()
       merged.config = async (config) => {
+        const firstPass = !processedConfigs.has(config)
+        // Snapshot agent keys BEFORE our module hooks run: these are the
+        // user/project agents (natives live in the runtime's internal map, not
+        // here). Anything our modules add during the loop is, by construction,
+        // absent from this set and therefore kept visible by the policy.
+        const preExisting = firstPass
+          ? new Set(Object.keys(config.agent ?? {}))
+          : new Set<string>()
         for (const plugin of plugins) {
           await plugin.config?.(config)
+        }
+        if (firstPass) {
+          processedConfigs.add(config)
+          applyRosterPolicy(config, preExisting)
         }
       }
     }
