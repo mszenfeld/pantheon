@@ -11,7 +11,7 @@ export const STRIBOG_AGENT_KEY = "stribog" as const
 export const DEFAULT_STRIBOG_MODEL = "anthropic/claude-sonnet-4-6"
 
 export const STRIBOG_DESCRIPTION =
-  "Light execution specialist: performs ONE small, mechanical task with real side effects — bring up/fix a service, restart, read logs, or a 1–2 file config/value change — then verifies and returns a structured result. NOT for secrets (use zmora-setup) or feature work (main executor)."
+  "Light execution specialist: performs ONE small, mechanical task with real side effects — bring up/fix a service, restart, read logs, or a 1–2 file config/value change — then verifies and returns a structured result. NOT for secrets (use zmora-setup) or feature work (main executor). EXPERIMENTAL (Phase 1): no automatic edit-recovery yet — a botched edit cannot be auto-restored."
 
 export const stribogSpecialistInfo: SpecialistInfo = {
   name: STRIBOG_AGENT_KEY,

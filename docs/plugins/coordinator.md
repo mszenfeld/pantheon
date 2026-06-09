@@ -182,7 +182,7 @@ Perun normalises `zmora-fe` / `zmora-be` / `zmora-setup` → `zmora` in every us
 - `{DELEGATION_TABLE}` — the Domain / Agent / Trigger table.
 - `{USE_AVOID:<name>}` — the per-agent "use when / avoid when" block for the named agent.
 
-At init, `getPerunPrompt()` (`src/modules/coordinator/index.ts`) loads the template and calls `buildPerunPrompt(template, getAgentMetadataRegistry())` (`src/modules/agent-registry/perun-prompt-builder.ts`), which replaces each placeholder with content rendered from the agent **metadata registry**. The registry is populated by each agent's `*.metadata.ts` entry — e.g. `triglav.metadata.ts` (`src/modules/explore/`), `zmora.metadata.ts` (`src/modules/qa/`), and `fix-auto.metadata.ts` (`src/modules/agent-registry/`, registered explicitly in `index.ts` because `packages/code-review` cannot import this bridge).
+At init, `getPerunPrompt()` (`src/modules/coordinator/index.ts`) loads the template and calls `buildPerunPrompt(template, getAgentMetadataRegistry())` (`src/modules/agent-registry/perun-prompt-builder.ts`), which replaces each placeholder with content rendered from the agent **metadata registry**. The registry is populated by each agent's `*.metadata.ts` entry — e.g. `triglav.metadata.ts` (`src/modules/explore/`), `zmora.metadata.ts` (`src/modules/qa/`), `stribog.metadata.ts` (`src/modules/stribog/`, the light-execution actuator), and `fix-auto.metadata.ts` (`src/modules/agent-registry/`, registered explicitly in `index.ts` because `packages/code-review` cannot import this bridge).
 
 **To change Perun's specialist roster or delegation triggers, edit the agent's `*.metadata.ts` entry — never the placeholder regions of `perun.md`.** Those regions are overwritten by `buildPerunPrompt` on every load, so direct edits there are silently lost. The hand-authored prose around the placeholders (workflows, safety rules) is yours to edit; the placeholder-filled tables and trigger blocks are not.
 
@@ -370,7 +370,7 @@ src/modules/agent-registry/
 tests/modules/coordinator/  # Vitest unit + integration tests
 ```
 
-Agent metadata entries also live alongside their owning module — e.g. `src/modules/qa/zmora.metadata.ts` and `src/modules/explore/triglav.metadata.ts` — and are registered into the metadata registry at init. The `@perun` prompt template is copied into `dist/agents/perun.md` by the root build (`scripts/copy-root-assets.mjs`) and rendered at runtime; the TypeScript modules build into `dist/modules/coordinator/` via `tsup.root.config.ts`.
+Agent metadata entries also live alongside their owning module — e.g. `src/modules/qa/zmora.metadata.ts`, `src/modules/explore/triglav.metadata.ts`, and `src/modules/stribog/stribog.metadata.ts` (the light-execution actuator) — and are registered into the metadata registry at init. The `@perun` prompt template is copied into `dist/agents/perun.md` by the root build (`scripts/copy-root-assets.mjs`) and rendered at runtime; the TypeScript modules build into `dist/modules/coordinator/` via `tsup.root.config.ts`.
 
 ## Related documentation
 

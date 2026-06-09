@@ -134,11 +134,12 @@ Stribog returns a **structured JSON result with a `status` enum**, matching how
 Perun already parses child results (it keys on an inner `status`, e.g.
 `NEED_INFO`, per `src/agents/perun.md:190-191`) — **not** free prose:
 
-```
-{ "status": "READY" | "FAIL" | "ESCALATE",
-  "reason": "<short>",            // FAIL/ESCALATE
-  "baseUrl": "<scheme://host:port>" // READY, when a service was brought up
-  "started": ["<what was started>"] // for orphan visibility
+```json
+{
+  "status": "READY",
+  "reason": "<one line; required for FAIL and ESCALATE>",
+  "baseUrl": "<scheme://host:port; only on READY when you brought a service up>",
+  "started": ["<service or process you started and left running>"]
 }
 ```
 
