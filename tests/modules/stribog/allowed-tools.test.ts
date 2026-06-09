@@ -38,4 +38,8 @@ describe("STRIBOG_TOOLS", () => {
       expect(STRIBOG_TOOLS).not.toContain(t)
     }
   })
+
+  it("has exactly the expected number of entries (guards against silent additions)", () => {
+    expect(STRIBOG_TOOLS).toHaveLength(17)
+  })
 })

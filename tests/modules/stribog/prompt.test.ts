@@ -9,6 +9,7 @@ describe("buildStribogPrompt", () => {
     expect(prompt).toContain(`allowed-tools: ${STRIBOG_TOOLS.join(", ")}`)
     expect(prompt).toContain("mode: subagent")
     expect(prompt).toContain("name: stribog")
+    expect(prompt).toContain("description: ")
   })
 
   it("documents the JSON result contract (status enum + baseUrl)", () => {
