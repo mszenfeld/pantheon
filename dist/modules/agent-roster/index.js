@@ -8,29 +8,30 @@ function setDefaultAgent(config, name) {
 }
 const HIDE = { hidden: true };
 const COORDINATOR_AGENT = "Perun - Coordinator";
-function isVisiblePrimary(entry) {
+function isVisibleSessionTarget(entry) {
   if (entry === void 0) return false;
   const e = entry;
-  return e.mode === "primary" && e.hidden !== true;
+  return e.mode !== "subagent" && e.mode !== void 0 && e.hidden !== true;
 }
 function applyRosterPolicy(config, preExisting) {
   config.agent ??= {};
   const agents = config.agent;
+  const hidden = (entry) => ({ ...entry ?? {}, ...HIDE });
   for (const key of Object.keys(agents)) {
     if (!preExisting.has(key)) continue;
     if (agents[key].hidden === true) continue;
-    agents[key] = { ...agents[key], ...HIDE };
+    agents[key] = hidden(agents[key]);
   }
   for (const name of NATIVE_BUILTINS) {
-    agents[name] = { ...agents[name] ?? {}, ...HIDE };
+    agents[name] = hidden(agents[name]);
   }
   const current = getDefaultAgent(config);
-  if (current !== void 0 && isVisiblePrimary(agents[current])) return;
-  if (isVisiblePrimary(agents[COORDINATOR_AGENT])) {
+  if (current !== void 0 && isVisibleSessionTarget(agents[current])) return;
+  if (isVisibleSessionTarget(agents[COORDINATOR_AGENT])) {
     setDefaultAgent(config, COORDINATOR_AGENT);
     return;
   }
-  const fallback = Object.keys(agents).sort().find((k) => isVisiblePrimary(agents[k]));
+  const fallback = Object.keys(agents).sort().find((k) => isVisibleSessionTarget(agents[k]));
   if (fallback !== void 0) setDefaultAgent(config, fallback);
 }
 export {

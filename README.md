@@ -12,6 +12,8 @@
 
 Pantheon provides a coordinator agent that delegates work to specialists, a QA agent for executing test plans, and per-agent model configuration.
 
+The harness curates the agent picker — only registered agents are shown and new sessions start on `Perun - Coordinator`. See [`docs/configuring-agents.md`](docs/configuring-agents.md) for details.
+
 ## Primary agents
 
 | Agent     | Description                                                                                                                 |

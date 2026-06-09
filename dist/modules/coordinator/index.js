@@ -269,7 +269,7 @@ const AppVerkCoordinatorPlugin = async (input) => {
   return {
     config: async (config) => {
       config.agent = config.agent ?? {};
-      config.agent["Perun - Coordinator"] = {
+      config.agent[COORDINATOR_AGENT] = {
         description: "Delegates work to specialists, synthesizes results, proposes next steps",
         mode: "primary",
         get prompt() {
@@ -289,7 +289,7 @@ const AppVerkCoordinatorPlugin = async (input) => {
       };
       const perunModel = loadPantheonConfig().agents.perun?.model;
       if (perunModel !== void 0) {
-        config.agent["Perun - Coordinator"].model = perunModel;
+        config.agent[COORDINATOR_AGENT].model = perunModel;
       }
       if (getDefaultAgent(config) === void 0) {
         setDefaultAgent(config, COORDINATOR_AGENT);

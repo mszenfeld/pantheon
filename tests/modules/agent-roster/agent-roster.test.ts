@@ -17,7 +17,9 @@ function cfg(
 }
 
 function entry(config: Config, key: string): Entry {
-  return (config.agent as Record<string, Entry>)[key]!
+  const map = config.agent as Record<string, Entry>
+  expect(map[key], `expected agent "${key}" to exist`).toBeDefined()
+  return map[key] as Entry
 }
 
 describe("agent-roster: applyRosterPolicy", () => {
@@ -100,6 +102,29 @@ describe("agent-roster: applyRosterPolicy", () => {
     const config = cfg({ zeta: { mode: "primary" }, alpha: { mode: "primary" } })
     applyRosterPolicy(config, new Set())
     expect(getDefaultAgent(config)).toBe("alpha")
+  })
+
+  it("falls back to a visible mode:'all' agent when no primary exists (no Perun)", () => {
+    // Mirrors the picker filter (mode!=="subagent" && !hidden): a mode:"all"
+    // agent like Veles is a visible session target the fallback MUST accept.
+    const config = cfg({ "Veles - Planner": { mode: "all" } })
+    applyRosterPolicy(config, new Set())
+    expect(getDefaultAgent(config)).toBe("Veles - Planner")
+  })
+
+  it("repoints away from a hidden default_agent to a visible mode:'all' agent", () => {
+    const config = cfg(
+      { "Veles - Planner": { mode: "all" }, old: { mode: "primary" } },
+      { default_agent: "old" },
+    )
+    applyRosterPolicy(config, new Set(["old"]))
+    expect(getDefaultAgent(config)).toBe("Veles - Planner")
+  })
+
+  it("never picks a subagent agent as the default", () => {
+    const config = cfg({ helper: { mode: "subagent" } })
+    applyRosterPolicy(config, new Set())
+    expect(getDefaultAgent(config)).toBeUndefined()
   })
 
   it("never picks a mode:undefined agent as the default", () => {

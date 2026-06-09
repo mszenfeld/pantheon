@@ -31,10 +31,19 @@ export const COORDINATOR_AGENT = "Perun - Coordinator"
 type AgentMap = NonNullable<Config["agent"]>
 type AgentEntry = AgentMap[string]
 
-function isVisiblePrimary(entry: AgentEntry | undefined): boolean {
+/**
+ * A visible session target = anything the picker would show: `mode!=="subagent"
+ * && !hidden`. This MUST mirror the picker's own filter, so it accepts both
+ * `mode:"primary"` AND `mode:"all"` agents (e.g. `Veles - Planner`), which are
+ * user-switchable and therefore valid `default_agent` targets. `mode:undefined`
+ * is rejected — the runtime treats an unspecified mode as non-primary and the
+ * fallback must never point there. Re-verify against the actual picker filter
+ * (NOT the SDK type enum) on opencode bumps.
+ */
+function isVisibleSessionTarget(entry: AgentEntry | undefined): boolean {
   if (entry === undefined) return false
   const e = entry as { mode?: string; hidden?: boolean }
-  return e.mode === "primary" && e.hidden !== true
+  return e.mode !== "subagent" && e.mode !== undefined && e.hidden !== true
 }
 
 /**
@@ -51,29 +60,36 @@ export function applyRosterPolicy(config: Config, preExisting: Set<string>): voi
   config.agent ??= {}
   const agents = config.agent as AgentMap
 
+  // Mark an entry hidden, tolerating an undefined source. Shared by the two
+  // mechanisms below — which remain a union, not redundant (see doc comment):
+  // snapshot-diff hides agents present in config.agent; the backstop reaches
+  // natives that are never in config.agent. Same merge, different reach.
+  const hidden = (entry: AgentEntry | undefined): AgentEntry => ({ ...(entry ?? {}), ...HIDE })
+
   // 1. snapshot-diff: hide user/project agents that pre-existed our hooks.
   for (const key of Object.keys(agents)) {
     if (!preExisting.has(key)) continue
     if ((agents[key] as { hidden?: boolean }).hidden === true) continue
-    agents[key] = { ...agents[key], ...HIDE }
+    agents[key] = hidden(agents[key])
   }
 
   // 2. backstop: hide native visible-primary built-ins via override-by-key.
   for (const name of NATIVE_BUILTINS) {
-    agents[name] = { ...(agents[name] ?? {}), ...HIDE }
+    agents[name] = hidden(agents[name])
   }
 
   // 3. default_agent guard: after hiding, the runtime throws if default_agent
-  //    points to a hidden/subagent agent. Repoint to a visible primary,
-  //    preferring Perun (named), else the first by sorted key order.
+  //    points to a hidden/subagent agent. Repoint to a visible session target
+  //    (any non-subagent, non-hidden agent the picker would show — primary OR
+  //    all), preferring Perun (named), else the first by sorted key order.
   const current = getDefaultAgent(config)
-  if (current !== undefined && isVisiblePrimary(agents[current])) return
-  if (isVisiblePrimary(agents[COORDINATOR_AGENT])) {
+  if (current !== undefined && isVisibleSessionTarget(agents[current])) return
+  if (isVisibleSessionTarget(agents[COORDINATOR_AGENT])) {
     setDefaultAgent(config, COORDINATOR_AGENT)
     return
   }
   const fallback = Object.keys(agents)
     .sort()
-    .find((k) => isVisiblePrimary(agents[k]))
+    .find((k) => isVisibleSessionTarget(agents[k]))
   if (fallback !== undefined) setDefaultAgent(config, fallback)
 }

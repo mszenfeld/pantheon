@@ -71,6 +71,26 @@ Effective configuration when running inside `/my-project`:
 
 > **Triglav model defaults.** When `agents.triglav.model` is not set, Triglav inherits OpenCode's session default model (same pattern as `perun`/`zmora`). Because Triglav is dispatched many-in-parallel and in the background, a fast/cheap model is the natural choice — for example `opencode/claude-haiku-4-5` (subscription) or `opencode/deepseek-v4-flash-free` (zero marginal cost). The OpenCode-subscription provider prefix `opencode/<modelID>` lets you route through the subscription rather than per-token Anthropic billing.
 
+### The picker only shows harness agents
+
+By design, the agent picker lists **only the agents the harness registers** (the user-selectable agents above — currently `Perun - Coordinator` and `Veles - Planner`). The harness owns the roster and hides everything else:
+
+- **OpenCode's native primaries `build` and `plan`** are hidden — they will not appear in the picker.
+- **Your own user/project agents** (defined in `opencode.json` or `~/.config/opencode/agent/…`) are hidden too.
+
+This is intentional, not a bug: if a familiar agent "disappeared" from the picker after enabling Pantheon, this is why. Your agent definitions are not deleted — they are only hidden from the picker so the harness can present a curated coordinator-first roster.
+
+### Default agent on session open
+
+New sessions open on **`Perun - Coordinator`** by default. This is set only when you have **not** specified a `default_agent` — an explicit `default_agent` is respected.
+
+There is one exception. Because the harness hides `build`/`plan` and your user/project agents, OpenCode would throw at startup if `default_agent` pointed at a now-hidden agent. To avoid that, the harness **repoints** `default_agent` to a visible primary, in this order:
+
+1. `Perun - Coordinator`, if it is a visible primary;
+2. otherwise the first visible primary by sorted key order.
+
+So if you set `default_agent` to an agent that is not a **visible primary** (a hidden agent, or one registered as mode `all`/`subagent` such as `Veles - Planner`), the session will silently open on Perun (or the first visible primary) instead. A `default_agent` that already points at a visible primary agent (`mode: "primary"` and not hidden — currently just `Perun - Coordinator`) is left untouched.
+
 ## Schema
 
 ```typescript
@@ -96,6 +116,19 @@ OpenCode resolves an agent's effective model from several layers:
 3. User-supplied `agent.<name>.model` in `opencode.json` ← **highest**
 
 If you set the same agent's model in both `pantheon.json` and `opencode.json`, `opencode.json` wins. This is by design — `pantheon.json` is an opinionated layer, not a hard override.
+
+### `default_agent` precedence
+
+The roster policy described in [Default agent on session open](#default-agent-on-session-open) interacts with your `opencode.json` as follows:
+
+| Your `default_agent` in `opencode.json` | Effective default agent |
+|---|---|
+| Unset | `Perun - Coordinator` (set by the harness) |
+| A **visible primary** agent (currently only `Perun - Coordinator`) | Respected as-is |
+| A **hidden** agent (your own agent, or native `build`/`plan`) | Repointed to `Perun - Coordinator`, else the first visible primary by sorted key order |
+| `Veles - Planner` | Repointed to `Perun - Coordinator` — Veles is selectable in the picker but registered as mode `all`, not `primary`, so it does not satisfy the "visible primary" guard |
+
+In short: an explicit `default_agent` is honored only when it points at a **visible primary** agent (`mode: "primary"` and not hidden — currently just Perun); otherwise it is repointed so OpenCode does not fail at startup.
 
 ## When no config exists
 

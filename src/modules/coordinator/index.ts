@@ -350,7 +350,7 @@ export const AppVerkCoordinatorPlugin: Plugin = async (input) => {
       // space-dash-space — never parentheses, which break the x-opencode-agent-name
       // HTTP header). The display name is what OpenCode's TUI shows in the status
       // bar, /agents picker, and session label.
-      config.agent["Perun - Coordinator"] = {
+      config.agent[COORDINATOR_AGENT] = {
         description: "Delegates work to specialists, synthesizes results, proposes next steps",
         mode: "primary",
         get prompt() {
@@ -374,7 +374,7 @@ export const AppVerkCoordinatorPlugin: Plugin = async (input) => {
       // — see src/modules/pantheon-config/schema.ts for the CWE-117 rationale.
       const perunModel = loadPantheonConfig().agents.perun?.model
       if (perunModel !== undefined) {
-        config.agent["Perun - Coordinator"]!.model = perunModel
+        config.agent[COORDINATOR_AGENT]!.model = perunModel
       }
       // Make Perun the session-open default. The roster policy hides the native
       // `build` (opencode's default primary), so default_agent must point to a

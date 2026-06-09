@@ -18,6 +18,7 @@ This is an **OpenCode plugin monorepo** that bundles multiple workspace plugins 
 | `src/modules/plan/` | Absorbed planning module — TS source only. Registers the planning agent under the display/dispatch name `Veles - Planner` (`mode: "all"`, user-switchable AND Perun-dispatchable via `DISPATCHABLE_ALL_AGENTS`; the pantheon-config slug stays `agents.veles`) and calls `registerAgentMetadata()` so Perun can route to it. Asset: `veles.md`. Opt-in dispatch tools via `config.agent.tools` (`dispatch_parallel`/`dispatch_background`/`poll_background`/`wait_background`). Serena-gated: if serena MCP is absent the agent still registers but runs in degraded mode (Grep/Glob) and emits a one-time warning toast on `session.created`. Tests: `tests/modules/plan/`. Built into `dist/modules/plan/`. |
 | `packages/swift-developer` | Swift-developer plugin source, tests, skills, build scripts. Output shipped at `packages/swift-developer/dist/`. |
 | `src/modules/agent-registry/` | Harness-resident **library** (no plugin export) — process-wide `SpecialistInfo` registry. Exposes `registerAgentMetadata()` (fail-fast on a conflicting duplicate logical name; idempotent on identical re-registration) / `getAgentMetadataRegistry()` (returns a name-sorted copy), and the `buildPerunPrompt` placeholder renderer that fills Perun's prompt template from the registered specialists. Agent-registering modules call `registerAgentMetadata()` in their factory bodies; `coordinator/` consumes the registry via `buildPerunPrompt` when it builds Perun's prompt. Tests: `tests/modules/agent-registry/`. Built into `dist/modules/agent-registry/`. |
+| `src/modules/agent-roster/` | Harness-resident **library** (no plugin export) — owns the visible agent roster. Exposes `applyRosterPolicy()` (mutates `config.agent` in place: snapshot-diff hides pre-existing user/project agents, the `NATIVE_BUILTINS` backstop hides native visible-primary built-ins via override-by-key, then a `default_agent` guard repoints any hidden/subagent default to a visible session target — preferring `Perun - Coordinator`), the `NATIVE_BUILTINS` constant (`build`, `plan` — re-verify against the actual picker on opencode bumps), and the `getDefaultAgent()` / `setDefaultAgent()` accessors that localize the cast for the v1-SDK-absent `default_agent` field. Consumed by `src/index.ts` (calls `applyRosterPolicy` in its `config` hook) and `coordinator/` (imports `COORDINATOR_AGENT` + the `default_agent` accessors). Tests: `tests/modules/agent-roster/`. Built into `dist/modules/agent-roster/`. |
 | `src/modules/coordinator/` | Absorbed coordinator plugin — TS source only. Asset: `src/agents/perun.md`. Registers `dispatch_parallel` (worker pool, concurrency 4, cap 4 — chunk larger workloads), `assign_issue_ids`, and `compute_waves` tools alongside the `@perun` primary agent. Also registers the **background-dispatch** tools `dispatch_background` / `poll_background` / `wait_background` (non-blocking, within-turn overlap; `session.promptAsync` fire-and-forget + a factory-scoped in-memory `BackgroundTaskStore`, per-session cap 4, `session.deleted` cleanup). The exported `PERUN_TOOLS` constant lists every coordinator tool and `tests/modules/coordinator/perun-tools-sync.test.ts` enforces it matches perun.md's `allowed-tools` frontmatter. Tests: `tests/modules/coordinator/`. Built into `dist/modules/coordinator/` and `dist/agents/`. |
 | `src/modules/coordinator-policy/` | Absorbed coordinator-policy plugin — TS source only (no `.md` asset). Registers a `tool.execute.before` **bash gate** (`makeBashGate`) that enforces an allowlist on `bash` calls — but **only** when the session is positively identified as the coordinator (`getSessionAgent(...) === COORDINATOR_AGENT_NAME`). **Fail-OPEN on identity uncertainty:** if the agent can't be resolved the gate does nothing, so non-coordinator sessions are never blocked. The allowlist is read at plugin-init from `src/agents/perun.md` frontmatter (`Bash(<prog>:*)` entries — single source of truth) by `read-allowlist.ts`, with a hardcoded `FALLBACK_ALLOWLIST` (`mkdir`, `ls`) used when the frontmatter can't be read/parsed (the `qa-preflight.sh` grant was intentionally dropped in favor of the `preflight` plugin tool — the coordinator must not get a shell script; guarded against drift by `read-allowlist.test.ts`). Classification logic (`classifyCoordinatorBash` + compound-shell rejection) and the rejection error (`buildViolationError`) live in the `skill-utils` `coordinator-bash-policy.ts` primitive. Tests: `tests/modules/coordinator-policy/`. Built into `dist/modules/coordinator-policy/`. |
 | `src/modules/pantheon-config/` | Harness-resident **library** (no plugin export) — reads `pantheon.json` (user-global + per-project walk-up, closest-wins merge) and exposes `loadPantheonConfig()` / `getLoadErrors()` / `pantheonConfigEmpty()`. Consumed by `coordinator/` and `qa/` in their `config` hooks. Tests: `tests/modules/pantheon-config/`. Built into `dist/modules/pantheon-config/`. |
@@ -146,9 +147,11 @@ import { AppVerkPantheonPlugin } from "./hooks/session-notification/plugin.js"
 
 All three patterns import a built `.js` file at runtime (Node ESM resolution). For workspace plugins, the built file lives in `packages/<name>/dist/`. For absorbed modules and hooks, the build emits to `dist/modules/<name>/` and `dist/hooks/<name>/` — referenced via the source-side `.js` extension which Node resolves at runtime.
 
-## Agent Visibility (`mode`)
+## Agent Visibility (`mode` + roster policy)
 
-OpenCode agents support a `mode` property that controls tab-completion visibility:
+Picker visibility is governed by two layers: the per-agent `mode` property and
+the harness-owned roster policy (see [Roster policy](#roster-policy--the-harness-owns-the-picker)
+below). Start with `mode`:
 
 - **`mode: "primary"`** — User-facing agent. Appears in tab-completion and is
   intended for direct user interaction. Use this for agents that users invoke
@@ -161,6 +164,47 @@ OpenCode agents support a `mode` property that controls tab-completion visibilit
 If `mode` is omitted, OpenCode defaults to `"all"` (visible everywhere). Always
 set an explicit `mode` when registering an agent to avoid unnecessary
 tab-completion noise or accidentally hiding user-facing agents.
+
+### Roster policy — the harness owns the picker
+
+`mode` is **not** the only thing that governs picker visibility. The picker
+filter is `mode !== "subagent" && !hidden`, so a `hidden: true` flag removes an
+agent from the picker **regardless of its `mode`** — a user's `mode: "primary"`
+agent no longer appears once it is hidden. The harness sets that flag on every
+key it did not register itself, so the displayed roster is exactly the harness's
+agents and nothing else.
+
+- **What gets hidden.** Every `config.agent` key the harness did not register
+  (i.e. user/project agents discovered from `.opencode/agent/*.md`), plus the
+  native visible-primary built-ins `build` and `plan`.
+- **Mechanism.** `applyRosterPolicy(config, preExisting)`
+  (`src/modules/agent-roster/index.ts`) is invoked from the **merged `config`
+  hook** in `src/index.ts`, **after** the per-module config loop has run.
+  `preExisting` is a snapshot of `config.agent` keys taken **before** the loop —
+  the user/project agents. Anything the harness modules add during the loop is,
+  by construction, absent from that snapshot and therefore kept visible. The
+  policy (1) hides every pre-existing key via a snapshot-diff, (2) hides
+  `build`/`plan` via an override-by-key backstop, and (3) repoints
+  `default_agent` to a visible primary so the runtime does not throw.
+- **Why `hidden` and not `mode: "subagent"`.** Flipping `build`/`plan` to
+  `subagent` would make them dispatchable (the dispatch preflight rejects
+  `primary` targets but accepts `subagent`), and the backstop writes them
+  model-less. `hidden: true` removes them from the picker without touching their
+  `mode`, so they stay non-dispatchable.
+- **`NATIVE_BUILTINS` is the one manual touchpoint.** `NATIVE_BUILTINS =
+  ["build", "plan"]` is the hardcoded list of visible-primary natives. Native
+  built-ins live in the runtime's **internal** agent map and are never present
+  in `config.agent`, so the snapshot-diff cannot reach them — only the
+  override-by-key backstop can. This list is verified against opencode 1.15.10's
+  actual picker (not the SDK type enum); **re-verify it on every opencode bump.**
+- **Load-path invariant.** Harness agents become visible by registering in the
+  config-hook loop (added during the loop ⇒ absent from `preExisting` ⇒ kept).
+  They are **not** surfaced through `.opencode/agent/*.md` auto-discovery — any
+  agent that arrives via that path is treated as a user/project agent and
+  hidden.
+
+See [`docs/configuring-agents.md`](docs/configuring-agents.md) for the
+user-facing view of which agents reach the picker.
 
 ---
 

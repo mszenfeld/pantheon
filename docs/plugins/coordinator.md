@@ -119,6 +119,8 @@ opencode agent perun "napraw QA-001, QA-003 z docs/testing/reports/2026-05-18-ex
 | `poll_background` | Tool | n/a | Non-blocking snapshot of given `bg_…` ids. Returns `running` / `success` / `not_found` per id; does NOT remove successful tasks (collect with `wait_background` to free the slot). |
 | `wait_background` | Tool | n/a | Blocks until the given `bg_…` ids are idle (or per-task timeout fires), returns `success` / `error` / `timeout` / `aborted` / `not_found`. **Removes collected tasks** — one-time retrieval, frees background slots. Honors `context.abort`: aborting cancels the wait AND kills the waited child sessions. |
 
+Beyond the elements above, the config hook also sets `config.default_agent = "Perun - Coordinator"`, but only when `default_agent` is unset — an explicit user-configured `default_agent` is respected (needed because the roster policy hides OpenCode's native `build` default).
+
 ### `@perun` allowed tools
 
 `@perun` is intentionally locked down. Its `allowed-tools` frontmatter lists only:
