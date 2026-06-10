@@ -50,7 +50,7 @@ describe("AppVerkStribogPlugin model injection", () => {
     return config
   }
 
-  it("defaults to the Sonnet-class model when no pantheon.json exists", async () => {
+  it("defaults to the eval-picked model (openai/gpt-5.4) when no pantheon.json exists", async () => {
     const config = await runConfig()
     expect(config.agent![STRIBOG_AGENT_KEY]!.model).toBe(DEFAULT_STRIBOG_MODEL)
   })

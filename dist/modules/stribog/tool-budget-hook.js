@@ -2,23 +2,17 @@ import { isAbsolute, resolve } from "node:path";
 import { STRIBOG_AGENT_KEY, STRIBOG_ALLOWED_TOOL_IDS, STRIBOG_EDIT_BUDGET } from "./stribog.metadata.js";
 const TOOL_DENIED = "STRIBOG_TOOL_DENIED";
 const SCOPE_VIOLATION = "STRIBOG_SCOPE_VIOLATION";
-const editedPaths = /* @__PURE__ */ new Map();
-function pathsFor(sessionID) {
-  let set = editedPaths.get(sessionID);
-  if (set === void 0) {
-    set = /* @__PURE__ */ new Set();
-    editedPaths.set(sessionID, set);
-  }
-  return set;
-}
-function clearStribogSession(sessionID) {
-  editedPaths.delete(sessionID);
-}
-function __resetStribogStateForTests() {
-  editedPaths.clear();
-}
 function makeStribogToolHook(deps) {
-  return async (input, output) => {
+  const editedPaths = /* @__PURE__ */ new Map();
+  function pathsFor(sessionID) {
+    let set = editedPaths.get(sessionID);
+    if (set === void 0) {
+      set = /* @__PURE__ */ new Set();
+      editedPaths.set(sessionID, set);
+    }
+    return set;
+  }
+  const hook = async (input, output) => {
     try {
       const agent = await deps.resolveAgent(input.sessionID);
       if (agent !== STRIBOG_AGENT_KEY) return;
@@ -45,9 +39,11 @@ function makeStribogToolHook(deps) {
       if (message.startsWith(TOOL_DENIED) || message.startsWith(SCOPE_VIOLATION)) throw error;
     }
   };
+  const clearSession = (sessionID) => {
+    editedPaths.delete(sessionID);
+  };
+  return { hook, clearSession };
 }
 export {
-  __resetStribogStateForTests,
-  clearStribogSession,
   makeStribogToolHook
 };

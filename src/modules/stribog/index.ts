@@ -9,14 +9,16 @@ import {
   stribogSpecialistInfo,
 } from "./stribog.metadata.js"
 import { buildStribogPrompt } from "./prompt.js"
-import { clearStribogSession, makeStribogToolHook } from "./tool-budget-hook.js"
+import { makeStribogToolHook } from "./tool-budget-hook.js"
 
 export const AppVerkStribogPlugin: Plugin = async ({ client }) => {
   registerAgentMetadata(stribogSpecialistInfo)
 
   // The hook is the load-bearing enforcement (attribution via getSessionAgentCached,
   // which — unlike the dispatch-only SessionAgentRegistry — resolves direct/eval sessions too).
-  const toolHook = makeStribogToolHook({
+  // Edit-budget state is owned by this factory call's closure (see makeStribogToolHook,
+  // mirroring BackgroundTaskStore) rather than a module-global.
+  const { hook, clearSession } = makeStribogToolHook({
     resolveAgent: (sessionID) => getSessionAgentCached(sessionID, client),
   })
 
@@ -35,19 +37,19 @@ export const AppVerkStribogPlugin: Plugin = async ({ client }) => {
           return buildStribogPrompt()
         },
       }
-      // Stribog pins a Sonnet-class default (it is a doer, not cheap retrieval),
-      // overridable via `agents.stribog.model`. The override is pre-validated by
+      // Stribog pins an explicit eval-picked default (`openai/gpt-5.4`) — it is a
+      // doer, not cheap retrieval — overridable via `agents.stribog.model`. The override is pre-validated by
       // MODEL_REGEX (CWE-117) — see src/modules/pantheon-config/schema.ts — so an
       // invalid value is already absent here and falls through to the default.
       const override = loadPantheonConfig().agents[STRIBOG_AGENT_KEY]?.model
       config.agent[STRIBOG_AGENT_KEY].model = override ?? DEFAULT_STRIBOG_MODEL
     },
-    "tool.execute.before": toolHook,
+    "tool.execute.before": hook,
     event: async ({ event }) => {
       if (event.type === "session.deleted") {
         const deletedID = event.properties?.info?.id
         if (typeof deletedID === "string" && deletedID.length > 0) {
-          clearStribogSession(deletedID)
+          clearSession(deletedID)
         }
       }
     },

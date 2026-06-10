@@ -8,10 +8,10 @@ import {
   stribogSpecialistInfo
 } from "./stribog.metadata.js";
 import { buildStribogPrompt } from "./prompt.js";
-import { clearStribogSession, makeStribogToolHook } from "./tool-budget-hook.js";
+import { makeStribogToolHook } from "./tool-budget-hook.js";
 const AppVerkStribogPlugin = async ({ client }) => {
   registerAgentMetadata(stribogSpecialistInfo);
-  const toolHook = makeStribogToolHook({
+  const { hook, clearSession } = makeStribogToolHook({
     resolveAgent: (sessionID) => getSessionAgentCached(sessionID, client)
   });
   return {
@@ -32,12 +32,12 @@ const AppVerkStribogPlugin = async ({ client }) => {
       const override = loadPantheonConfig().agents[STRIBOG_AGENT_KEY]?.model;
       config.agent[STRIBOG_AGENT_KEY].model = override ?? DEFAULT_STRIBOG_MODEL;
     },
-    "tool.execute.before": toolHook,
+    "tool.execute.before": hook,
     event: async ({ event }) => {
       if (event.type === "session.deleted") {
         const deletedID = event.properties?.info?.id;
         if (typeof deletedID === "string" && deletedID.length > 0) {
-          clearStribogSession(deletedID);
+          clearSession(deletedID);
         }
       }
     }

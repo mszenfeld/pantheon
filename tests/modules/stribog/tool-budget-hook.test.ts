@@ -1,19 +1,16 @@
-import { beforeEach, describe, expect, it } from "vitest"
-import {
-  makeStribogToolHook,
-  clearStribogSession,
-  __resetStribogStateForTests,
-} from "../../../src/modules/stribog/tool-budget-hook.js"
+import { describe, expect, it } from "vitest"
+import { makeStribogToolHook } from "../../../src/modules/stribog/tool-budget-hook.js"
 import { STRIBOG_EDIT_BUDGET } from "../../../src/modules/stribog/stribog.metadata.js"
 
 const STRIBOG = "stribog"
-const hook = (agent: string | undefined) => makeStribogToolHook({ resolveAgent: async () => agent })
+// Each call builds a fresh factory handle (fresh closure-scoped edit-path map),
+// which is what gives per-test isolation now that state is no longer module-global.
+const hook = (agent: string | undefined) =>
+  makeStribogToolHook({ resolveAgent: async () => agent }).hook
 const input = (tool: string, sessionID = "s1") => ({ tool, sessionID, callID: "c" })
 const out = (filePath?: string) => ({ args: filePath === undefined ? {} : { filePath } })
 
 describe("stribog tool-budget hook", () => {
-  beforeEach(() => __resetStribogStateForTests())
-
   it("passes through for a non-stribog session (fail-open)", async () => {
     await expect(hook("Perun - Coordinator")(input("execute_recipe"), out())).resolves.toBeUndefined()
   })
@@ -27,6 +24,9 @@ describe("stribog tool-budget hook", () => {
     await expect(h(input("execute_recipe"), out())).rejects.toThrow(/STRIBOG_TOOL_DENIED/)
     await expect(h(input("task"), out())).rejects.toThrow(/STRIBOG_TOOL_DENIED/)
     await expect(h(input("webfetch"), out())).rejects.toThrow(/STRIBOG_TOOL_DENIED/)
+    // Degenerate inputs: empty and arbitrary-unknown ids are absent from the allow-list too.
+    await expect(h(input(""), out())).rejects.toThrow(/STRIBOG_TOOL_DENIED/)
+    await expect(h(input("some_unknown_tool"), out())).rejects.toThrow(/STRIBOG_TOOL_DENIED/)
   })
 
   it("allows read/glob/grep/bash for a stribog session", async () => {
@@ -87,7 +87,7 @@ describe("stribog tool-budget hook", () => {
   })
 
   it("fails open when attribution throws", async () => {
-    const h = makeStribogToolHook({ resolveAgent: async () => { throw new Error("boom") } })
+    const { hook: h } = makeStribogToolHook({ resolveAgent: async () => { throw new Error("boom") } })
     await expect(h(input("execute_recipe"), out())).resolves.toBeUndefined()
   })
 
@@ -98,11 +98,11 @@ describe("stribog tool-budget hook", () => {
     await expect(h(input("write", "s2"), out("/repo/c.ts"))).resolves.toBeUndefined()
   })
 
-  it("clearStribogSession resets a session's budget", async () => {
-    const h = hook(STRIBOG)
+  it("clearSession resets a session's budget", async () => {
+    const { hook: h, clearSession } = makeStribogToolHook({ resolveAgent: async () => STRIBOG })
     await h(input("write"), out("/repo/a.ts"))
     await h(input("edit"), out("/repo/b.ts"))
-    clearStribogSession("s1")
+    clearSession("s1")
     await expect(h(input("write"), out("/repo/c.ts"))).resolves.toBeUndefined()
   })
 

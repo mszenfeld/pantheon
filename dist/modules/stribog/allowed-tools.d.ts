@@ -1,3 +1,3 @@
-declare const STRIBOG_TOOLS: string[];
+declare const STRIBOG_TOOLS: readonly string[];
 
 export { STRIBOG_TOOLS };

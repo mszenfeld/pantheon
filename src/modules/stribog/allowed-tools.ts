@@ -41,7 +41,7 @@ const READONLY_GIT_TOOLS = [
   "Bash(git --no-pager diff:*)",
 ]
 
-export const STRIBOG_TOOLS: string[] = [
+export const STRIBOG_TOOLS: readonly string[] = [
   ...STRUCTURED_TOOLS,
   ...ACTUATOR_BASH_TOOLS,
   ...READONLY_GIT_TOOLS,

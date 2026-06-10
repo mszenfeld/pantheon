@@ -19,26 +19,17 @@ export interface StribogToolHookOutput {
   args: { filePath?: unknown }
 }
 
-/** Per-session set of distinct, resolved absolute paths modified via edit/write. */
-const editedPaths = new Map<string, Set<string>>()
+/** The `tool.execute.before` handler signature this factory produces. */
+export type StribogToolHook = (
+  input: StribogToolHookInput,
+  output: StribogToolHookOutput,
+) => Promise<void>
 
-function pathsFor(sessionID: string): Set<string> {
-  let set = editedPaths.get(sessionID)
-  if (set === undefined) {
-    set = new Set<string>()
-    editedPaths.set(sessionID, set)
-  }
-  return set
-}
-
-/** Drop a session's edit-budget state. Invoked from the plugin's `session.deleted` handler. */
-export function clearStribogSession(sessionID: string): void {
-  editedPaths.delete(sessionID)
-}
-
-/** Test-only: clear all per-session state. */
-export function __resetStribogStateForTests(): void {
-  editedPaths.clear()
+export interface StribogToolHookHandle {
+  /** The `tool.execute.before` handler enforcing the allow-list and edit budget. */
+  hook: StribogToolHook
+  /** Drop a session's edit-budget state. Invoked from the plugin's `session.deleted` handler. */
+  clearSession: (sessionID: string) => void
 }
 
 /**
@@ -49,11 +40,27 @@ export function __resetStribogStateForTests(): void {
  * Fail-open by construction: non-stribog/unknown sessions and any internal/attribution error
  * pass the call through. Only the two intended denials throw (their markers re-thrown past the
  * internal-error guard so they reach the model as a tool-error part).
+ *
+ * Per-session edit-path state is owned by this factory's closure (mirroring
+ * `BackgroundTaskStore`, constructed once per plugin factory), so its lifetime is bound to the
+ * plugin instance rather than the module/process. Each `makeStribogToolHook` call gets a fresh
+ * map; tests achieve isolation by constructing a fresh hook (no module-global reset needed).
+ * The returned `clearSession` is what the plugin's `session.deleted` handler calls.
  */
-export function makeStribogToolHook(
-  deps: StribogToolHookDeps,
-): (input: StribogToolHookInput, output: StribogToolHookOutput) => Promise<void> {
-  return async (input, output) => {
+export function makeStribogToolHook(deps: StribogToolHookDeps): StribogToolHookHandle {
+  /** Per-session set of distinct, resolved absolute paths modified via edit/write. */
+  const editedPaths = new Map<string, Set<string>>()
+
+  function pathsFor(sessionID: string): Set<string> {
+    let set = editedPaths.get(sessionID)
+    if (set === undefined) {
+      set = new Set<string>()
+      editedPaths.set(sessionID, set)
+    }
+    return set
+  }
+
+  const hook: StribogToolHook = async (input, output) => {
     try {
       const agent = await deps.resolveAgent(input.sessionID)
       if (agent !== STRIBOG_AGENT_KEY) return // pass-through for other/undefined agents
@@ -88,4 +95,10 @@ export function makeStribogToolHook(
       // never throw from a hook on internal/attribution errors
     }
   }
+
+  const clearSession = (sessionID: string): void => {
+    editedPaths.delete(sessionID)
+  }
+
+  return { hook, clearSession }
 }
