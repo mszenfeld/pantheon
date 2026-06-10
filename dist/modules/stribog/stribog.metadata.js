@@ -1,6 +1,22 @@
 const STRIBOG_AGENT_KEY = "stribog";
 const DEFAULT_STRIBOG_MODEL = "anthropic/claude-sonnet-4-6";
 const STRIBOG_DESCRIPTION = "Light execution specialist: performs ONE small, mechanical task with real side effects \u2014 bring up/fix a service, restart, read logs, or a 1\u20132 file config/value change \u2014 then verifies and returns a structured result. NOT for secrets (use zmora-setup) or feature work (main executor). EXPERIMENTAL (Phase 1): no automatic edit-recovery yet \u2014 a botched edit cannot be auto-restored.";
+const STRIBOG_EDIT_BUDGET = 2;
+const STRIBOG_ALLOWED_TOOL_IDS = /* @__PURE__ */ new Set([
+  "read",
+  "glob",
+  "grep",
+  "edit",
+  "write",
+  "bash"
+]);
+const STRIBOG_DENIED_TOOLS = {
+  task: false,
+  execute_recipe: false,
+  todowrite: false,
+  webfetch: false,
+  websearch: false
+};
 const stribogSpecialistInfo = {
   name: STRIBOG_AGENT_KEY,
   mode: "subagent",
@@ -34,6 +50,9 @@ const stribogSpecialistInfo = {
 export {
   DEFAULT_STRIBOG_MODEL,
   STRIBOG_AGENT_KEY,
+  STRIBOG_ALLOWED_TOOL_IDS,
+  STRIBOG_DENIED_TOOLS,
   STRIBOG_DESCRIPTION,
+  STRIBOG_EDIT_BUDGET,
   stribogSpecialistInfo
 };
