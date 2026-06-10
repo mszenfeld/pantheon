@@ -4,44 +4,38 @@
 
 This is the counterpart to Triglav's read-only [`exploration.md`](exploration.md): where Triglav *gathers*, Stribog *acts*.
 
-## Scope — accept the task only if ALL hold
+## Scope — hard limits (harness-enforced)
 
-Stribog accepts a task only when every rubric point holds, and otherwise returns `ESCALATE` rather than pressing on:
+Two of these limits are **enforced by the harness** (the tool-budget hook, see below); the rest is judgment Stribog applies, returning `ESCALATE` rather than pressing on:
 
-1. It touches a narrow, known set of files (order of 1–2), not a sprawling change.
-2. It is local and mechanical — bring up / restart a service, read logs, add a config field/entry, change a value — with **no** new abstractions, modules, or architectural decisions.
-3. Verification is deterministic and fast (build/lint passes, or the service answers).
+1. **At most 2 distinct files** per task (`edit`/`write`) — a third is refused with `STRIBOG_SCOPE_VIOLATION` (enforced).
+2. **Only** `read`/`glob`/`grep`/`edit`/`write`/`bash` — any other tool is refused with `STRIBOG_TOOL_DENIED` (enforced).
+3. Local and mechanical — no new abstractions, modules, or architectural decisions; verification is deterministic and fast (build/lint passes, or the service answers).
 
 A task that fails any check, or turns out non-trivial mid-way (it spreads across subsystems, or needs a design decision), is escalated — not attempted. **Producing or refreshing a secret/credential value is explicitly out of scope** (that is `zmora-setup`'s job); Stribog never mints, reads-for-output, or echoes secrets.
 
-## Security model — what the allow-list actually contains
+## Security model — the tool-budget hook is the boundary
 
-The **real** security boundary is OpenCode's **deny-by-default allow-list**: Stribog can only call tools that appear in its allow-list (`src/modules/stribog/allowed-tools.ts`). Anything not listed is simply uncallable.
+The runtime security boundary is the **`tool.execute.before` hook** in `src/modules/stribog/tool-budget-hook.ts`. A 2026-06-10 live probe established that opencode 1.15.10 does **not** enforce the prompt frontmatter `allowed-tools:` list, **nor** a `config.agent.stribog.tools` deny-map — both are inert (a non-listed tool still executed). So the allow-list in `allowed-tools.ts` is a **declaration** (rendered into the prompt, and the source the hook's allowed set is kept in sync with), not the gate.
 
-The list grants exactly three groups:
+For a session positively attributed as `stribog` (via `getSessionAgentCached`), the hook enforces two limits and **fails open** for any other/unknown session:
 
-- **Structured tools:** `Read`, `Glob`, `Grep`, `Edit`, `Write`.
-- **Actuator Bash verbs:** `Bash(docker:*)`, `Bash(docker compose:*)`, `Bash(make:*)`, `Bash(npm:*)`, `Bash(pnpm:*)`, `Bash(bun:*)`, `Bash(uv:*)`, `Bash(curl:*)`.
-- **Read-only git:** `Bash(git --no-pager log:*)`, `Bash(git --no-pager blame:*)`, `Bash(git --no-pager status:*)`, `Bash(git --no-pager diff:*)`.
+- **Tool-name allow-list.** Any tool whose lowercase runtime id is outside `{read, glob, grep, edit, write, bash}` is refused with `STRIBOG_TOOL_DENIED`. This is what makes the exclusions real:
+  - **`execute_recipe` / `serena-write` denied** → Stribog cannot value-hide-mint secrets (minter ≠ actuator; minting stays with `zmora-setup` — see [the invariant](#the-minter--actuator-invariant) below).
+  - **`task` / dispatch denied** → Stribog is a leaf; it never fans out.
+- **Edit budget.** At most `STRIBOG_EDIT_BUDGET` (2) distinct files via `edit`/`write`; a third is refused with `STRIBOG_SCOPE_VIOLATION`.
 
-### Why these exclusions are load-bearing
+The declared list grants three groups: structured tools (`Read`/`Glob`/`Grep`/`Edit`/`Write`), actuator Bash verbs (`docker`/`docker compose`/`make`/`npm`/`pnpm`/`bun`/`uv`/`curl`), and read-only git (`log`/`blame`/`status`/`diff`).
 
-The exclusions matter more than the inclusions. Each one is deliberate (see the EXCLUSIONS comment at the top of `src/modules/stribog/allowed-tools.ts`):
+> **Bash is allowed at the tool-name level only — the hook does not inspect sub-commands.** The `Bash(...)`-verb scoping in the declared list is therefore *not* enforced: at runtime Stribog's `bash` is effectively a full host shell (only `git commit` is globally blocked, by the commit plugin). So `rm`, `git reset`, `git revert`, etc. are **not** blocked. This is the accepted host-env trust boundary (see below): `make`/`npm`/`docker` already run repo-controlled code with the operator's env, so program-name matching is not the containment mechanism. Restricting bash verbs is a documented follow-up. Edit recovery is therefore **not** `git revert`/`reset` from within Stribog — it is the Perun scratch-ref snapshot (a Phase-2 component; see the [Experimental note](#experimental--phase-1-note)). `interactive_bash` is not ported in v1; long-running services run **detached** via plain `Bash`.
 
-- **No `execute_recipe` / `serena-write`** → Stribog cannot value-hide-mint secrets. Minting stays with `zmora-setup` (see [the minter ≠ actuator invariant](#the-minter--actuator-invariant) below).
-- **No `Task` / dispatch** → Stribog is a leaf; it never fans out to other agents.
-- **No `rm`, and `git` is read-only** → Stribog cannot use `rm`, `git revert`, or `git reset` to "recover" from a botched edit. Edit recovery is **not** Stribog's responsibility — it is the Perun scratch-ref snapshot (a Phase-2 component; see the [Experimental note](#experimental--phase-1-note) below). Program-name matching could never reliably stop `git reset --hard` / `git checkout -- .` / `git clean` from erasing an uncommitted diff anyway, so the recovery net lives outside Stribog by design.
-- **No `interactive_bash`** → not ported in v1; long-running services run **detached** via plain `Bash` (`docker compose up -d`, `<cmd> &`).
-
-> Per project doctrine (AGENTS.md): **Bash token-matching is defense-in-depth, not a security boundary.** It cannot inspect flag values, and `make` / `npm` / `docker` run repo-controlled code with the operator's env. Do not rely on Stribog's Bash rail to contain an adversarial prompt — the **tool exclusion** in the allow-list is the boundary; the Bash filtering only raises the cost of escalation.
-
-This mirrors the in-code note at `src/modules/stribog/allowed-tools.ts:1-13`.
+This mirrors the in-code note at the top of `src/modules/stribog/allowed-tools.ts` and the hook in `tool-budget-hook.ts`.
 
 ## The minter ≠ actuator invariant
 
 Secrets stay with `zmora-setup`; they are never co-resident with the actuator.
 
-- Stribog has **no `execute_recipe`**, so it has no path to the minting machinery in the first place.
+- The tool-budget hook **denies `execute_recipe`** for a stribog session (→ `STRIBOG_TOOL_DENIED`), so Stribog has no path to the minting machinery. (This is hook-enforced, not a property of an inert allow-list.)
 - The QA module injects minted binding values into a session's shell env only for sessions whose key matches the `zmora-` binding gate. **Stribog's agent key is `stribog`** — it cannot match that gate, so no minted QA binding is ever injected into a Stribog session. `zmora-setup` is unchanged and not retired; the QA mechanism (`VARIANTS` / `SETUP_TOOLS` / the `execute_recipe` gate / `BindingsStore` / the binding-injection hook) is untouched.
 
 The result is that the two roles stay cleanly separated: `zmora-setup` *mints and hides* secret values; Stribog *acts* and never sees them through any value-hiding channel. Any residual secret exposure is only the **same filesystem / host-env surface any operator-privileged coding agent has** (reading `.env`, `~/.aws`, etc.) — owned by the trust assumption below, not a value-hiding regression.
@@ -94,7 +88,7 @@ Stribog **always** ends its turn with exactly one fenced ` ```json ` block and n
 
 ## Model selection
 
-Unlike Triglav (which inherits the session default), **Stribog is a doer and pins a Sonnet-class default**: `anthropic/claude-sonnet-4-6` (`DEFAULT_STRIBOG_MODEL` in `src/modules/stribog/stribog.metadata.ts`). This is a role fit, **not** a security control — the security boundary is the allow-list, never the model choice.
+Unlike Triglav (which inherits the session default), **Stribog is a doer and pins a Sonnet-class default**: `anthropic/claude-sonnet-4-6` (`DEFAULT_STRIBOG_MODEL` in `src/modules/stribog/stribog.metadata.ts`). This is a role fit, **not** a security control — the security boundary is the tool-budget hook, never the model choice.
 
 The default is overridable via `agents.stribog.model` in `pantheon.json` (same mechanism as `perun`, `zmora`, and `triglav`). See [`configuring-agents.md`](configuring-agents.md) for the file's location, precedence rules, and full schema:
 
