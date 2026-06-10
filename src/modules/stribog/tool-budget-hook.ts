@@ -72,10 +72,10 @@ export function makeStribogToolHook(
         const path = resolve(filePath)
         const set = pathsFor(input.sessionID)
         if (!set.has(path) && set.size >= STRIBOG_EDIT_BUDGET) {
-          const [first, second] = [...set]
+          const alreadyModified = [...set].join(", ")
           throw new Error(
             `${SCOPE_VIOLATION}: edit budget exhausted (${STRIBOG_EDIT_BUDGET} distinct files ` +
-              `already modified: ${first}, ${second}; refused: ${path}). This task exceeds ` +
+              `already modified: ${alreadyModified}; refused: ${path}). This task exceeds ` +
               `Stribog's scope. Return the ESCALATE result now, listing the files you already ` +
               "touched in `reason`.",
           )
