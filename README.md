@@ -27,6 +27,7 @@ The harness curates the agent picker — only registered agents are shown and ne
 | ----------- | --------------------------------------------------------------------------------------------------------------------------- |
 | **Zmora**   | QA tester. Executes FE and BE test scenarios on demand, dispatched by Perun.                                                |
 | **Triglav** | Read-only codebase explorer. Maps structure and finds definitions/references/patterns; dispatched by Perun before planning. See [`docs/exploration.md`](docs/exploration.md). |
+| **Stribog** | Light execution specialist. Performs one small, mechanical task with real side effects (bring up/fix a service, restart, read logs, a 1–2 file config change), verifies it, and returns a structured result; dispatched by Perun. Experimental (Phase 1): no automatic edit-recovery yet. See [`docs/light-execution.md`](docs/light-execution.md). |
 
 ## Installation
 

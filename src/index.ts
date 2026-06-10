@@ -6,6 +6,7 @@ import { AppVerkFrontendDeveloperPlugin } from "../packages/frontend-developer/d
 import { AppVerkSkillRegistryPlugin } from "../packages/skill-registry/dist/index.js"
 import { AppVerkQAPlugin } from "./modules/qa/index.js"
 import { AppVerkExplorePlugin } from "./modules/explore/index.js"
+import { AppVerkStribogPlugin } from "./modules/stribog/index.js"
 import { AppVerkPlanPlugin } from "./modules/plan/index.js"
 import { AppVerkSwiftDeveloperPlugin } from "../packages/swift-developer/dist/index.js"
 import { AppVerkCoordinatorPlugin } from "./modules/coordinator/index.js"
@@ -27,6 +28,7 @@ const defaultPluginFactories: Plugin[] = [
   AppVerkSkillRegistryPlugin,
   AppVerkQAPlugin,
   AppVerkExplorePlugin,
+  AppVerkStribogPlugin,
   AppVerkPlanPlugin,
   AppVerkSwiftDeveloperPlugin,
   AppVerkCoordinatorPlugin,

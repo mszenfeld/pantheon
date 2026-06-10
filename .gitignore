@@ -47,3 +47,14 @@ docs/eval/scenarios/zmora/*
 !docs/eval/scenarios/zmora/be-discipline.md
 !docs/eval/scenarios/zmora/README.md
 !docs/eval/scenarios/zmora/TEMPLATE.md
+# Stribog eval scenarios are private-by-default too: a live (Layer-2) scenario
+# brings up / edits a real running target and may embed private paths, endpoints,
+# and config values. Only the shipped public files under stribog/ are trackable;
+# the broken-service fixture is public (the global local-*/private rules still apply).
+docs/eval/scenarios/stribog/*
+!docs/eval/scenarios/stribog/scope-discipline.md
+!docs/eval/scenarios/stribog/secret-discipline.md
+!docs/eval/scenarios/stribog/liveness-discipline.md
+!docs/eval/scenarios/stribog/README.md
+!docs/eval/scenarios/stribog/TEMPLATE.md
+!docs/eval/scenarios/stribog/fixtures/
