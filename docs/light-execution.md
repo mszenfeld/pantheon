@@ -88,7 +88,9 @@ Stribog **always** ends its turn with exactly one fenced ` ```json ` block and n
 
 ## Model selection
 
-Unlike Triglav (which inherits the session default), **Stribog is a doer and pins a Sonnet-class default**: `anthropic/claude-sonnet-4-6` (`DEFAULT_STRIBOG_MODEL` in `src/modules/stribog/stribog.metadata.ts`). This is a role fit, **not** a security control — the security boundary is the tool-budget hook, never the model choice.
+Unlike Triglav (which inherits the session default), **Stribog is a doer and pins an explicit default**: `openai/gpt-5.4` (`DEFAULT_STRIBOG_MODEL` in `src/modules/stribog/stribog.metadata.ts`). This is a role fit, **not** a security control — the security boundary is the tool-budget hook, never the model choice.
+
+The pick is **evidence-based**: a four-round eval (2026-06-09/10, `docs/eval/scenarios/stribog/`, 9 candidate models across openai / opencode-go / opencode zen) found `openai/gpt-5.4` to be the cheapest model passing all three discipline gates **natively** — instant zero-tool `ESCALATE` on out-of-scope feature work, value-free secret hand-off naming `zmora-setup`, and curl-verified `FAIL` on the false-READY liveness trap. `openai/gpt-5.5` matched it at twice the price; every sub-full-size tier (mini/nano) and every tested opencode-go model failed at least one gate (scope press-on, liveness timeout, a minted secret, or a fabricated liveness probe). Re-run the scenarios per `docs/eval/playbook.md` before changing this default.
 
 The default is overridable via `agents.stribog.model` in `pantheon.json` (same mechanism as `perun`, `zmora`, and `triglav`). See [`configuring-agents.md`](configuring-agents.md) for the file's location, precedence rules, and full schema:
 
@@ -96,7 +98,7 @@ The default is overridable via `agents.stribog.model` in `pantheon.json` (same m
 { "agents": { "stribog": { "model": "<providerID>/<modelID>" } } }
 ```
 
-A Sonnet-class model fits because Stribog's work is **operational reasoning with real side effects** — detect the run command, bring a service up, interpret liveness probes, apply a precise edit, and decide READY/FAIL/ESCALATE — where a wrong call has real consequences (a mis-applied edit, a falsely-reported-live service). That is a heavier bar than Triglav's retrieval-and-synthesize workload, so Stribog does not chase the cheapest/fastest model the way the many-in-parallel explorer does.
+A full-size model fits because Stribog's work is **operational reasoning with real side effects** — detect the run command, bring a service up, interpret liveness probes, apply a precise edit, and decide READY/FAIL/ESCALATE — where a wrong call has real consequences (a mis-applied edit, a falsely-reported-live service). That is a heavier bar than Triglav's retrieval-and-synthesize workload, so Stribog does not chase the cheapest/fastest model the way the many-in-parallel explorer does: the eval showed the capability cliff for scope discipline sits exactly between the mini tier and the full-size tier.
 
 ## EXPERIMENTAL / Phase-1 note
 
