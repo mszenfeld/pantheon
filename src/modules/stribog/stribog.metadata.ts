@@ -13,6 +13,35 @@ export const DEFAULT_STRIBOG_MODEL = "anthropic/claude-sonnet-4-6"
 export const STRIBOG_DESCRIPTION =
   "Light execution specialist: performs ONE small, mechanical task with real side effects — bring up/fix a service, restart, read logs, or a 1–2 file config/value change — then verifies and returns a structured result. NOT for secrets (use zmora-setup) or feature work (main executor). EXPERIMENTAL (Phase 1): no automatic edit-recovery yet — a botched edit cannot be auto-restored."
 
+/** Hard cap on the number of distinct files Stribog may modify (Edit/Write) per task.
+ *  Enforced structurally by the tool-budget hook — see tool-budget-hook.ts. */
+export const STRIBOG_EDIT_BUDGET = 2
+
+/** Lowercase RUNTIME tool ids the hook permits. These are the names opencode passes to
+ *  `tool.execute.before` (NOT the `Edit`/`Write` display casing of STRIBOG_TOOLS). Anything
+ *  outside this set is refused for a stribog session, making the allow-list a real boundary. */
+export const STRIBOG_ALLOWED_TOOL_IDS: ReadonlySet<string> = new Set([
+  "read",
+  "glob",
+  "grep",
+  "edit",
+  "write",
+  "bash",
+])
+
+/** Native opencode deny-map for `config.agent.stribog.tools`. NOTE: a live probe (2026-06-10)
+ *  found `config.agent[x].tools` is INERT in opencode 1.15.10 — this map is declarative only;
+ *  the tool-budget hook is the load-bearing enforcement. Kept so a future opencode fix yields
+ *  free defense-in-depth, and to document intent (no execute_recipe → minter != actuator; no
+ *  task → leaf). opencode is default-ALLOW, so denies are explicit opt-outs. */
+export const STRIBOG_DENIED_TOOLS: Readonly<Record<string, false>> = {
+  task: false,
+  execute_recipe: false,
+  todowrite: false,
+  webfetch: false,
+  websearch: false,
+}
+
 export const stribogSpecialistInfo: SpecialistInfo = {
   name: STRIBOG_AGENT_KEY,
   mode: "subagent",

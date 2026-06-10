@@ -4,6 +4,7 @@ import {
   DEFAULT_STRIBOG_MODEL,
   stribogSpecialistInfo,
 } from "../../../src/modules/stribog/stribog.metadata.js"
+import { STRIBOG_EDIT_BUDGET, STRIBOG_ALLOWED_TOOL_IDS, STRIBOG_DENIED_TOOLS } from "../../../src/modules/stribog/stribog.metadata.js"
 
 describe("stribogSpecialistInfo", () => {
   it("uses the bare 'stribog' key and subagent mode", () => {
@@ -48,5 +49,23 @@ describe("stribogSpecialistInfo", () => {
 
   it("defaults to a valid <provider>/<model> identifier", () => {
     expect(DEFAULT_STRIBOG_MODEL).toMatch(/^[A-Za-z0-9._-]+(\/[A-Za-z0-9._-]+)+$/)
+  })
+
+  it("pins the edit budget at 2", () => {
+    expect(STRIBOG_EDIT_BUDGET).toBe(2)
+  })
+
+  it("allow-lists exactly the lowercase runtime tool ids the hook enforces", () => {
+    expect([...STRIBOG_ALLOWED_TOOL_IDS].sort()).toEqual(["bash", "edit", "glob", "grep", "read", "write"])
+  })
+
+  it("denies the non-allow-listed structured tools natively (default-allow opt-out)", () => {
+    expect(STRIBOG_DENIED_TOOLS).toMatchObject({
+      task: false,
+      execute_recipe: false,
+      todowrite: false,
+      webfetch: false,
+      websearch: false,
+    })
   })
 })
