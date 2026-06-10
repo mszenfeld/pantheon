@@ -28,4 +28,22 @@ describe("buildStribogPrompt", () => {
   it("is cached (stable across calls)", () => {
     expect(buildStribogPrompt()).toBe(prompt)
   })
+
+  it("states the mechanical scope contract (2-file budget + tool allow-list)", () => {
+    const prompt = buildStribogPrompt()
+    expect(prompt).toMatch(/at most \*\*2 distinct files\*\*/)
+    expect(prompt).toContain("STRIBOG_SCOPE_VIOLATION")
+    expect(prompt).toContain("STRIBOG_TOOL_DENIED")
+  })
+
+  it("preserves the no-questions (4f71cce) rule", () => {
+    const prompt = buildStribogPrompt()
+    expect(prompt).toContain("do **not** ask a clarifying question")
+    expect(prompt).toContain("you have no `question` tool")
+  })
+
+  it("preserves the secret rule (minter != actuator)", () => {
+    const prompt = buildStribogPrompt()
+    expect(prompt).toContain("Producing or refreshing a SECRET / credential value is NOT your job")
+  })
 })
