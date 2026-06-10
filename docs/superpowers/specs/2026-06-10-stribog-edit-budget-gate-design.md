@@ -220,9 +220,13 @@ Current line 10 packs three rules into one paragraph; do NOT delete it wholesale
 
 ## Open questions for the plan
 
-1. **Does opencode 1.15.10 honor `config.agent[x].tools`?** First plan task: set it, probe a
-   live denial. Decides whether Decision #2's hook denial is redundant or load-bearing (ship
-   the hook either way).
+1. **Does opencode 1.15.10 honor `config.agent[x].tools`?** **ANSWERED (2026-06-10 live probe):
+   NO — it is inert.** A worktree patched with `tools: { execute_recipe: false }` still let a
+   `stribog` session call `execute_recipe` to completion. Therefore the **hook (Decision #2) is
+   the sole load-bearing enforcement**; the `config.tools` deny-map (Decision #1) is declarative
+   only — kept (well-commented) so a future opencode fix yields free defense-in-depth, but it
+   must NOT be presented as the boundary (that is exactly the cosmetic-allow-list trap this spec
+   exists to fix).
 2. **`session-identity` first-turn window:** confirm the first user message (carrying
    `info.agent`) exists before the first tool call in a stribog turn (coordinator-policy
    already relies on this; expected safe).
