@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest"
 import { SessionAgentRegistry } from "../../../src/modules/_shared/session-agent-registry.js"
-import { makeCallerGate } from "../../../src/modules/qa/caller-gate.js"
+import { makeCallerGate, SETUP_AGENT_KEY } from "../../../src/modules/qa/caller-gate.js"
 import { VARIANTS } from "../../../src/modules/qa/index.js"
 
 const SETUP_KEY = "zmora-setup"
@@ -57,6 +57,6 @@ describe("drift guard — setupAgentKey ↔ VARIANTS", () => {
     // index.ts builds config.agent keys as `zmora-${stack}` and constructs the
     // gate with setupAgentKey "zmora-setup". If the variant is renamed/reordered,
     // this catches the gate silently pointing at a non-existent agent key.
-    expect("zmora-setup").toBe(`zmora-${VARIANTS.find((v) => v === "setup")}`)
+    expect(SETUP_AGENT_KEY).toBe(`zmora-${VARIANTS.find((v) => v === "setup")}`)
   })
 })

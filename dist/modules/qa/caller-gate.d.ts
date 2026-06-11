@@ -1,5 +1,7 @@
 import { SessionAgentRegistry } from '../_shared/session-agent-registry.js';
 
+/** The only agent permitted to call execute_recipe (the secret minter). */
+declare const SETUP_AGENT_KEY = "zmora-setup";
 interface CallerGateDeps {
     registry: SessionAgentRegistry;
     /** The agent key permitted to call execute_recipe. Constructed as "zmora-setup" by the plugin. */
@@ -32,4 +34,4 @@ interface CallerGate {
 }
 declare function makeCallerGate(deps: CallerGateDeps): CallerGate;
 
-export { type CallerGate, type CallerGateDeps, makeCallerGate };
+export { type CallerGate, type CallerGateDeps, SETUP_AGENT_KEY, makeCallerGate };

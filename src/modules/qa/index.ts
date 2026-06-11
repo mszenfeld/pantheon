@@ -14,7 +14,7 @@ import { makePreflightHandler } from "./preflight.js"
 import { parseBindings } from "./binding-parser.js"
 import { scrubSecrets } from "./scrubber.js"
 import { makeRunBash } from "./run-bash.js"
-import { makeCallerGate } from "./caller-gate.js"
+import { makeCallerGate, SETUP_AGENT_KEY } from "./caller-gate.js"
 
 export { buildQATesterAgent }
 export { FE_TOOLS, BE_TOOLS, SETUP_TOOLS, SHARED_TOOLS, toolsForVariant } from "./allowed-tools.js"
@@ -70,7 +70,7 @@ export const AppVerkQAPlugin: Plugin = async ({ client }) => {
   // AGENTS.md "Plugin-tool enforcement model"), so the real gate is here:
   // execute_recipe → zmora-setup only; record_input/parse_plan/preflight → the
   // coordinator (a registry miss; Perun is never a dispatched child).
-  const gate = makeCallerGate({ registry, setupAgentKey: "zmora-setup" })
+  const gate = makeCallerGate({ registry, setupAgentKey: SETUP_AGENT_KEY })
 
   // Cache child→parent lookups positively: once resolved, the mapping never
   // changes for the life of a session (sessions don't re-parent). Skipping the
@@ -293,7 +293,7 @@ export const AppVerkQAPlugin: Plugin = async ({ client }) => {
         description: [
           "Execute a single binding recipe declared in the plan's **Bindings:** section. Atomically: validates recipe AST, runs via bash with composed env (host env + previously-bound inputs), validates output, registers the value in the bindings store. Returns status only — the value never appears in the LLM context.",
           "",
-          "Available only to zmora-setup. Other zmora variants see the tool disabled in their AgentConfig.",
+          "Available only to the dispatched zmora-setup variant — enforced at execute() by the caller gate (the per-agent AgentConfig tools map is declarative-only on opencode 1.15.10).",
           "",
           "Result shape (JSON-stringified):",
           "- `{ status: \"ok\" }` — binding minted and stored.",

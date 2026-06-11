@@ -1,3 +1,4 @@
+const SETUP_AGENT_KEY = "zmora-setup";
 function makeCallerGate(deps) {
   return {
     isSetupCaller: (sessionID) => deps.registry.lookup(sessionID) === deps.setupAgentKey,
@@ -5,5 +6,6 @@ function makeCallerGate(deps) {
   };
 }
 export {
+  SETUP_AGENT_KEY,
   makeCallerGate
 };
