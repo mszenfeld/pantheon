@@ -207,8 +207,22 @@ function hostOfURL(urlOrTemplate: string): string | null {
   // Fast-path: `${VAR}` / `$VAR` templates are resolved later from authorised
   // inputs, so we return the template token verbatim for the egress equality
   // check. Accept an optional scheme — any scheme://, not just http(s).
-  const varMatch = urlOrTemplate.match(/^(?:[a-zA-Z][a-zA-Z0-9+.-]*:\/\/)?(\$\{?[A-Z_][A-Z0-9_]*\}?)/)
-  if (varMatch) return varMatch[1] ?? null
+  const varMatch = urlOrTemplate.match(
+    /^(?:[a-zA-Z][a-zA-Z0-9+.-]*:\/\/)?(\$\{?[A-Z_][A-Z0-9_]*\}?)(.*)$/s,
+  )
+  if (varMatch) {
+    const rest = varMatch[2] ?? ""
+    // The variable must be the whole authority. A suffix in the same token
+    // collapses to the same template on both egress and recipe sides, so the
+    // raw equality check passes while bash/curl expand it to a DIFFERENT host.
+    // Reject anything before the first path/query/fragment that could change
+    // the host — a '@' (turns the egress host into userinfo), an extra host
+    // segment (api.host.com.evil), or an embedded newline (smuggles a second
+    // URL).
+    const authorityTail = rest.match(/^[^/?#]*/)?.[0] ?? ""
+    if (/[\n@]/.test(rest) || authorityTail.length > 0) return null
+    return varMatch[1] ?? null
+  }
   // Parse the authority with the platform URL API and reject any
   // embedded userinfo (`user[:pass]@host`). A bare-regex host class such as
   // `[\w.-]+` excludes `@`, so it would capture the userinfo segment as the

@@ -274,6 +274,11 @@ export const AppVerkCoordinatorPlugin: Plugin = async (input) => {
       const specialist = createSDKSpecialist(client, context.sessionID)
       const agentRegistry = await loadAgentRegistry(client)
       const callerMode = agentRegistry[context.agent]?.mode
+      // Same plugin-supplied extensions the foreground path reads. Threading
+      // the registry here makes the background child resolve as its own agent
+      // (not the coordinator) in the QA caller gate; cleanup is the QA module's
+      // generic `session.deleted` unregister.
+      const ext = getDispatchExtensions()
       const result = await startBackgroundTask({
         store: backgroundStore,
         specialist,
@@ -283,6 +288,7 @@ export const AppVerkCoordinatorPlugin: Plugin = async (input) => {
         agent: args.agent,
         prompt: args.prompt,
         context: args.context,
+        sessionAgentRegistry: ext.sessionAgentRegistry,
       })
       return JSON.stringify(result, null, 2)
     },

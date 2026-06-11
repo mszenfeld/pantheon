@@ -10,7 +10,7 @@ import { neutralizeUntrustedOutput, normalizeVariantSuffix } from "./sanitize.js
 import { truncateBytes } from "./truncate-bytes.js";
 const BACKGROUND_MAX_CONCURRENT = 4;
 async function startBackgroundTask(input) {
-  const { store, specialist, agentRegistry, parentSessionId, agent, prompt, context, callerMode } = input;
+  const { store, specialist, agentRegistry, parentSessionId, agent, prompt, context, callerMode, sessionAgentRegistry } = input;
   validateDispatchable(agentRegistry, agent, callerMode);
   if (store.countRunningByParent(parentSessionId) >= BACKGROUND_MAX_CONCURRENT) {
     throw new Error(
@@ -22,6 +22,7 @@ async function startBackgroundTask(input) {
 ${context}` : prompt;
   const childSessionId = await specialist.startBackground(agent, fullPrompt);
   const id = `bg_${randomUUID().slice(0, 8)}`;
+  sessionAgentRegistry?.register(childSessionId, agent);
   store.register({ id, childSessionId, parentSessionId, agent, startedAt: Date.now() });
   return { id, agent, status: "running" };
 }

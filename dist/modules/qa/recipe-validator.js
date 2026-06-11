@@ -159,8 +159,15 @@ function extractCurlURL(cmd) {
   return null;
 }
 function hostOfURL(urlOrTemplate) {
-  const varMatch = urlOrTemplate.match(/^(?:[a-zA-Z][a-zA-Z0-9+.-]*:\/\/)?(\$\{?[A-Z_][A-Z0-9_]*\}?)/);
-  if (varMatch) return varMatch[1] ?? null;
+  const varMatch = urlOrTemplate.match(
+    /^(?:[a-zA-Z][a-zA-Z0-9+.-]*:\/\/)?(\$\{?[A-Z_][A-Z0-9_]*\}?)(.*)$/s
+  );
+  if (varMatch) {
+    const rest = varMatch[2] ?? "";
+    const authorityTail = rest.match(/^[^/?#]*/)?.[0] ?? "";
+    if (/[\n@]/.test(rest) || authorityTail.length > 0) return null;
+    return varMatch[1] ?? null;
+  }
   try {
     const u = new URL(urlOrTemplate.includes("://") ? urlOrTemplate : `scheme://${urlOrTemplate}`);
     if (u.username !== "" || u.password !== "") return null;

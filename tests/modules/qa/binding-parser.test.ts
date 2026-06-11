@@ -459,6 +459,32 @@ describe("validateRecipe — SEC-001: egress allowlist bypass via URL userinfo",
       validateRecipe("curl https://api.host.com/x", "https://api.host.com").status,
     ).toBe("ok")
   })
+
+  it("rejects a var-template URL whose suffix smuggles userinfo", () => {
+    // `$URL@evil.example/x` collapses to the same `$URL` token on both sides
+    // of the egress equality check, but curl treats the allowlisted host as
+    // userinfo and connects to `evil.example`.
+    expect(
+      validateRecipe('curl "$URL@evil.example/x"', "$URL").status,
+    ).toBe("error")
+  })
+
+  it("rejects a var-template URL whose suffix extends the host segment", () => {
+    // `$URL.evil.example/x` expands to `…evil.example`, not the egress host.
+    expect(
+      validateRecipe('curl "$URL.evil.example/x"', "$URL").status,
+    ).toBe("error")
+  })
+
+  it("still accepts a var-template URL with a legitimate path/query suffix", () => {
+    expect(
+      validateRecipe('curl -sS "$URL/path?a=1" | jq -er .x', "$URL").status,
+    ).toBe("ok")
+  })
+
+  it("still accepts a bare var-template URL", () => {
+    expect(validateRecipe('curl "$URL"', "$URL").status).toBe("ok")
+  })
 })
 
 describe("validateRecipe — SEC-005: file-reader path confinement", () => {

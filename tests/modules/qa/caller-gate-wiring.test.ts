@@ -111,4 +111,39 @@ describe("QA tool execute() gate wiring", () => {
     // Empty env list → nothing missing → ok. Proves the gate let the call through.
     expect(out).toContain('"status":"ok"')
   })
+
+  // Background-dispatched subagents are now registered with their own agent
+  // name (e.g. "triglav") — a non-zmora-setup, non-Perun key. They must read
+  // as a dispatched specialist, NOT the coordinator, so the three lower-risk
+  // coordinator-only tools are denied while the minter stays denied too.
+  it("denies parse_plan from a background-origin session (triglav)", async () => {
+    const plugin = await AppVerkQAPlugin(fakeInput)
+    getDispatchExtensions().sessionAgentRegistry!.register("bg-child", "triglav")
+    const out = await plugin.tool!.parse_plan!.execute({ plan: "## Setup" }, ctx("bg-child"))
+    expect(out).toContain('"status":"forbidden"')
+  })
+
+  it("denies record_input from a background-origin session (triglav)", async () => {
+    const plugin = await AppVerkQAPlugin(fakeInput)
+    getDispatchExtensions().sessionAgentRegistry!.register("bg-child", "triglav")
+    const out = await plugin.tool!.record_input!.execute(
+      { name: "TEST_USER_EMAIL", value: "a@b.com" },
+      ctx("bg-child"),
+    )
+    expect(out).toContain('"status":"forbidden"')
+  })
+
+  it("denies preflight from a background-origin session (triglav)", async () => {
+    const plugin = await AppVerkQAPlugin(fakeInput)
+    getDispatchExtensions().sessionAgentRegistry!.register("bg-child", "triglav")
+    const out = await plugin.tool!.preflight!.execute({ env: [] }, ctx("bg-child"))
+    expect(out).toContain('"status":"forbidden"')
+  })
+
+  it("keeps execute_recipe denied for a background-origin session (triglav)", async () => {
+    const plugin = await AppVerkQAPlugin(fakeInput)
+    getDispatchExtensions().sessionAgentRegistry!.register("bg-child", "triglav")
+    const out = await plugin.tool!.execute_recipe!.execute({ binding_name: "QA_BIND_X" }, ctx("bg-child"))
+    expect(out).toContain('"status":"forbidden"')
+  })
 })

@@ -25,10 +25,13 @@ interface CallerGate {
      * (the only writer is the coordinator dispatch path, which registers children),
      * so a miss means Perun — including on Perun's turn-1, with no transcript fetch.
      *
-     * Residual (accepted, see spec §1): background-dispatched subagents (triglav)
-     * are not registered either, so they also read as coordinator for these three
-     * lower-risk tools. The minter (isSetupCaller) is unaffected — it needs a
-     * positive "zmora-setup".
+     * Both dispatch paths register their children, so a miss is Perun ONLY:
+     * the foreground `dispatch_parallel` path registers via `onSessionCreated`,
+     * and the background `dispatch_background` path registers right after the
+     * child session is created (see `coordinator/background.ts`). A background
+     * subagent (e.g. triglav) therefore reads as its own agent and is denied
+     * these three coordinator-only tools. The minter (isSetupCaller) was already
+     * unaffected — it needs a positive "zmora-setup".
      */
     isCoordinatorCaller: (sessionID: string) => boolean;
 }

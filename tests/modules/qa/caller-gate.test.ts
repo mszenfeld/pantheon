@@ -3,17 +3,15 @@ import { SessionAgentRegistry } from "../../../src/modules/_shared/session-agent
 import { makeCallerGate, SETUP_AGENT_KEY } from "../../../src/modules/qa/caller-gate.js"
 import { VARIANTS } from "../../../src/modules/qa/index.js"
 
-const SETUP_KEY = "zmora-setup"
-
 function gateWith(entries: Array<[string, string]>) {
   const registry = new SessionAgentRegistry()
   for (const [id, agent] of entries) registry.register(id, agent)
-  return makeCallerGate({ registry, setupAgentKey: SETUP_KEY })
+  return makeCallerGate({ registry, setupAgentKey: SETUP_AGENT_KEY })
 }
 
 describe("makeCallerGate — isSetupCaller (execute_recipe minter gate)", () => {
   it("allows a session registered as zmora-setup", () => {
-    const gate = gateWith([["setup-child", SETUP_KEY]])
+    const gate = gateWith([["setup-child", SETUP_AGENT_KEY]])
     expect(gate.isSetupCaller("setup-child")).toBe(true)
   })
   it("denies zmora-fe and zmora-be", () => {
@@ -39,7 +37,7 @@ describe("makeCallerGate — isCoordinatorCaller (Perun-only tools, registry-neg
     const gate = gateWith([
       ["fe-child", "zmora-fe"],
       ["be-child", "zmora-be"],
-      ["setup-child", SETUP_KEY],
+      ["setup-child", SETUP_AGENT_KEY],
       ["x-child", "some-other-specialist"],
     ])
     expect(gate.isCoordinatorCaller("fe-child")).toBe(false)
@@ -50,13 +48,12 @@ describe("makeCallerGate — isCoordinatorCaller (Perun-only tools, registry-neg
 })
 
 describe("drift guard — setupAgentKey ↔ VARIANTS", () => {
-  it("the setup variant is still named 'setup' (a rename must break this)", () => {
-    expect(VARIANTS).toContain("setup")
-  })
-  it("the gate's setup key equals the zmora-prefixed setup variant", () => {
+  it("the gate's setup key matches the zmora-prefixed 'setup' variant", () => {
     // index.ts builds config.agent keys as `zmora-${stack}` and constructs the
-    // gate with setupAgentKey "zmora-setup". If the variant is renamed/reordered,
-    // this catches the gate silently pointing at a non-existent agent key.
-    expect(SETUP_AGENT_KEY).toBe(`zmora-${VARIANTS.find((v) => v === "setup")}`)
+    // gate with setupAgentKey "zmora-setup". LHS and RHS are kept independent so
+    // this fails on BOTH a SETUP_AGENT_KEY typo AND a rename/removal of the variant.
+    const SETUP_STACK: string = "setup"
+    expect(VARIANTS).toContain(SETUP_STACK) // catches a rename/removal of the variant
+    expect(SETUP_AGENT_KEY).toBe(`zmora-${SETUP_STACK}`) // catches a typo in the gate's key
   })
 })

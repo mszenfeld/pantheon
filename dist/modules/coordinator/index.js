@@ -202,6 +202,7 @@ const AppVerkCoordinatorPlugin = async (input) => {
       const specialist = createSDKSpecialist(client, context.sessionID);
       const agentRegistry = await loadAgentRegistry(client);
       const callerMode = agentRegistry[context.agent]?.mode;
+      const ext = getDispatchExtensions();
       const result = await startBackgroundTask({
         store: backgroundStore,
         specialist,
@@ -210,7 +211,8 @@ const AppVerkCoordinatorPlugin = async (input) => {
         parentSessionId: context.sessionID,
         agent: args.agent,
         prompt: args.prompt,
-        context: args.context
+        context: args.context,
+        sessionAgentRegistry: ext.sessionAgentRegistry
       });
       return JSON.stringify(result, null, 2);
     }

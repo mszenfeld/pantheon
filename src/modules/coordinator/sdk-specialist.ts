@@ -97,16 +97,14 @@ export function createSDKSpecialist(
       await client.session.abort({ path: { id: sessionId } })
     },
     async startBackground(agentName: string, prompt: string): Promise<string> {
-      // NOTE: unlike `startTask`, `startBackground` deliberately takes no
-      // `onSessionCreated` callback and never registers the child in
-      // `sessionAgentRegistry`. Background dispatch is steered (by Perun's
-      // prompt) exclusively at read-only `triglav` exploration, which needs no
-      // QA bindings injected via the `shell.env` hook. Threading the callback
-      // here would ALSO require the QA module's `session.deleted` handler to
-      // unregister background-child sessions — otherwise a long-lived child
-      // would leave a stale (childSessionID → agent) mapping after the parent
-      // turn ends. Until a background path actually needs bindings, we keep the
-      // background adapter binding-free rather than wire that extra cleanup.
+      // NOTE: unlike `startTask`, `startBackground` takes no `onSessionCreated`
+      // callback — the background turn is fire-and-forget (`promptAsync`) and
+      // consults no `shell.env` bindings, so it has no before-the-turn ordering
+      // constraint. Identity registration in `sessionAgentRegistry` is instead
+      // done by the CALLER (`background.ts` `startBackgroundTask`) right after
+      // this resolves: that flips the child out of the caller gate's "is the
+      // coordinator" bucket. This adapter stays bindings-free; the QA module's
+      // generic `session.deleted` unregister covers cleanup.
       // See background.ts `startBackgroundTask` for the registration-site note.
       const created = await client.session.create({
         body: {
