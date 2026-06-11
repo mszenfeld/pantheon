@@ -24,8 +24,6 @@ export const velesSpecialistInfo: SpecialistInfo = {
   mode: "all",
   description: VELES_DESCRIPTION,
   metadata: {
-    category: "specialist",
-    cost: "EXPENSIVE",
     keyTrigger:
       "QA run requested but no plan exists → dispatch `veles` to author one before attempting QA",
     useWhen: [

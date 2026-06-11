@@ -34,12 +34,38 @@ declare function getSessionAgent(sessionID: string, client: Client): Promise<str
  * and the skill-registry transform) so the underlying transcript fetch happens at most
  * once per session.
  *
- * IMPORTANT: only RESOLVED (non-undefined) identities are cached. On the coordinator's
- * very first turn `getSessionAgent` may be unresolvable (messages not yet queryable);
- * caching that miss would freeze the turn-1 unresolved window and the identity could
- * never resolve later. So a miss is never cached and a subsequent call re-attempts.
+ * IMPORTANT: only RESOLVED (non-undefined) identities are cached forever. On the
+ * coordinator's very first turn `getSessionAgent` may be unresolvable (messages not yet
+ * queryable); caching that miss permanently would freeze the turn-1 unresolved window and
+ * the identity could never resolve later. So a miss is never cached forever — instead:
+ *
+ *  - concurrent resolves of the same session coalesce into ONE transcript fetch
+ *    (promise-dedup, the `loadAgentRegistry` pattern); and
+ *  - after {@link NEGATIVE_CACHE_AFTER_MISSES} consecutive misses a session is
+ *    negatively cached for {@link NEGATIVE_CACHE_TTL_MS}, so an unresolved identity no
+ *    longer triggers a full-transcript fetch on EVERY call (previously quadratic over the
+ *    life of a never-resolving session). The short TTL lets a late-resolving session
+ *    re-attempt within seconds.
  */
 declare function getSessionAgentCached(sessionID: string, client: Client): Promise<string | undefined>;
+/**
+ * Evict ALL per-session identity bookkeeping for `sessionID`. Call this from a
+ * consumer's `session.deleted` handler so the module-level maps do not grow
+ * unbounded over a long-lived process (one entry per session, plus one per
+ * dispatch-child, retained forever otherwise — mirrors the per-session eviction
+ * every other store in the repo already does: qa's `BindingsStore.purgeParent`,
+ * stribog's edit-budget `clearSession`, the coordinator's `BackgroundTaskStore`).
+ *
+ * Clears every map that {@link getSessionAgentCached} populates for a session —
+ * the resolved-identity cache AND the negative-cache bookkeeping (the in-flight
+ * coalescing promise, the consecutive-miss counter, and the negative-cache TTL).
+ * A deleted session id is never reused, so dropping a still-in-flight coalescing
+ * entry is safe: any awaiter already holds the promise; only the map slot is freed.
+ *
+ * Idempotent and safe to call for an id that was never cached (every `delete` is
+ * a no-op on an absent key).
+ */
+declare function forgetSessionAgent(sessionID: string): void;
 /**
  * True only when the session is positively identified as the coordinator.
  *
@@ -88,13 +114,7 @@ interface CreateSkillPluginOptions {
     moduleDirectory: string;
     mode?: "primary" | "subagent";
 }
-interface CreateSkillLoaderOptions {
-    namespace: string;
-    availableSkills: readonly string[];
-    moduleDirectory: string;
-}
-declare function createSkillLoader(options: CreateSkillLoaderOptions): (name: string) => string;
 
 declare function createSkillPlugin(options: CreateSkillPluginOptions): Plugin;
 
-export { type BashClassification, CATEGORY_PREFIX_MAPPING, COORDINATOR_AGENT_NAME, type CreateSkillLoaderOptions, type CreateSkillPluginOptions, VALID_CATEGORIES, VALID_PREFIXES, type ViolationInfo, buildViolationError, classifyCoordinatorBash, createSkillLoader, createSkillPlugin, getSessionAgent, getSessionAgentCached, isCompoundCommand, isCoordinatorSession, parseAllowedBashPrograms };
+export { type BashClassification, CATEGORY_PREFIX_MAPPING, COORDINATOR_AGENT_NAME, type CreateSkillPluginOptions, VALID_CATEGORIES, VALID_PREFIXES, type ViolationInfo, buildViolationError, classifyCoordinatorBash, createSkillPlugin, forgetSessionAgent, getSessionAgent, getSessionAgentCached, isCompoundCommand, isCoordinatorSession, parseAllowedBashPrograms };

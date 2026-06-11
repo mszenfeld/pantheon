@@ -11,15 +11,15 @@ This is an **OpenCode plugin monorepo** that bundles multiple workspace plugins 
 | `packages/python-developer` | Python-developer plugin source, tests, skills, build scripts. Output shipped at `packages/python-developer/dist/`. |
 | `packages/code-review` | Code-review plugin source, tests, agent prompts, command templates, skill-agents, build scripts. Output shipped at `packages/code-review/dist/`. All agents and commands automatically load the `standards-discovery` skill during pre-analysis to discover project-specific standards before reviewing. |
 | `packages/frontend-developer` | Frontend-developer plugin source, tests, skills, build scripts. Output shipped at `packages/frontend-developer/dist/`. |
-| `packages/skill-utils` | Shared helpers for creating skill-based plugins (`createSkillPlugin` / `createSkillLoader`). Also exports two **stateless coordinator-policy primitives** consumed by `coordinator-policy/` and `skill-registry`: `session-identity.ts` (`getSessionAgent` / `getSessionAgentCached` / `isCoordinatorSession` resolvers + the `COORDINATOR_AGENT_NAME` constant — the agent slug Perun runs under, kept in sync with `coordinator/`'s `config.agent[...]` key via the Task-7 sync test) and `coordinator-bash-policy.ts` (the pure `parseAllowedBashPrograms` / `classifyCoordinatorBash` / `buildViolationError` / `isCompoundCommand` resolver — allowlist + compound-shell rejection, no I/O). **Two consumers:** the `coordinator-policy/` `tool.execute.before` bash gate and the `skill-registry` `experimental.chat.system.transform` rule-suppression. Output shipped at `packages/skill-utils/dist/`. |
+| `packages/skill-utils` | Shared helpers for creating skill-based plugins (`createSkillPlugin`). Also exports two **stateless coordinator-policy primitives** consumed by `coordinator-policy/` and `skill-registry`: `session-identity.ts` (`getSessionAgent` / `getSessionAgentCached` / `isCoordinatorSession` resolvers + the `COORDINATOR_AGENT_NAME` constant — the agent slug Perun runs under, kept in sync with `coordinator/`'s `config.agent[...]` key via the Task-7 sync test) and `coordinator-bash-policy.ts` (the pure `parseAllowedBashPrograms` / `classifyCoordinatorBash` / `buildViolationError` / `isCompoundCommand` resolver — allowlist + compound-shell rejection, no I/O). **Two consumers:** the `coordinator-policy/` `tool.execute.before` bash gate and the `skill-registry` `experimental.chat.system.transform` rule-suppression. Output shipped at `packages/skill-utils/dist/`. |
 | `packages/skill-registry` | Global skill registry — scans skill folders, parses frontmatter, registers unified `load_appverk_skill` tool, injects activation rules into every agent's system prompt. Output shipped at `packages/skill-registry/dist/`. |
 | `src/modules/qa/` | Absorbed QA plugin — TS source only. Assets: `src/commands/{create-qa-plan,run-qa}.md`, `src/skills/qa/**`, `src/modules/qa/prompt-sections/{core,overlay-fe,overlay-be,overlay-setup}.md`. Registers three `zmora-{fe,be,setup}` subagent variants composed via `prompt-builder.ts` (overlay-setup.md joins overlay-fe/overlay-be on top of `core.md`); logical agent name `zmora` everywhere user-facing. Also registers the `parse_plan` (Perun-only, populates per-run recipe AST from the plan's `## Setup` → `**Bindings:**` block), `execute_recipe` (zmora-setup only, mints/refreshes bindings), and `record_input` (Perun-only, captures user-pasted `NAME=value` inputs) plugin tools, plus the `shell.env` hook that injects per-parent bindings into child shells, the `BindingsStore` / `scrubSecrets` pipeline, and a periodic TTL sweep that purges expired (non-pinned) entries. Tests: `tests/modules/qa/`. Built into `dist/modules/qa/`, `dist/commands/`, `dist/skills/qa/`. |
 | `src/modules/explore/` | Absorbed explore plugin — TS source only. Registers the `triglav` read-only explorer subagent (`mode: "subagent"`) and calls `registerAgentMetadata()` so Perun can route to it. Semantic search is gated on the optional serena MCP; if serena is absent the agent still registers but runs in degraded mode (Grep/Glob) and emits a one-time warning toast on `session.created`. Tests: `tests/modules/explore/`. Built into `dist/modules/explore/`. |
-| `src/modules/stribog/` | Absorbed light-executor module — TS source only. Registers the `stribog` actuator subagent (`mode: "subagent"`) and calls `registerAgentMetadata()` so Perun can route to it; pins an eval-picked default (`openai/gpt-5.4`), overridable via `agents.stribog.model`. Deny-by-default actuator allow-list: Read/Glob/Grep + Edit/Write + Bash for docker / make / package-managers (npm/pnpm/bun/uv) / curl + read-only git (`log`/`blame`/`status`/`diff`). Intentionally has **no** `execute_recipe`/secret-minting (minter ≠ actuator — that stays with `zmora-setup`), **no** dispatch/`Task` (it is a leaf, never fans out), and **no** `rm`. Asset: `stribog.md`. Tests: `tests/modules/stribog/`. Built into `dist/modules/stribog/`. |
+| `src/modules/stribog/` | Absorbed light-executor module — TS source only. Registers the `stribog` actuator subagent (`mode: "subagent"`) and calls `registerAgentMetadata()` so Perun can route to it; pins an eval-picked default (`openai/gpt-5.4`), overridable via `agents.stribog.model`. The pinned default is **provider-gated** (`_shared/provider-detect.ts`): if the `openai` provider the default needs is absent (fresh subscription/Anthropic install), the default is skipped (stribog inherits the session default) and a one-time warning toast fires on `session.created` — user/pantheon overrides are unaffected and still win. Deny-by-default actuator allow-list: Read/Glob/Grep + Edit/Write + Bash for docker / make / package-managers (npm/pnpm/bun/uv) / curl + read-only git (`log`/`blame`/`status`/`diff`). Intentionally has **no** `execute_recipe`/secret-minting (minter ≠ actuator — that stays with `zmora-setup`), **no** dispatch/`Task` (it is a leaf, never fans out), and **no** `rm`. Asset: `stribog.md`. Tests: `tests/modules/stribog/`. Built into `dist/modules/stribog/`. |
 | `src/modules/plan/` | Absorbed planning module — TS source only. Registers the planning agent under the display/dispatch name `Veles - Planner` (`mode: "all"`, user-switchable AND Perun-dispatchable via `DISPATCHABLE_ALL_AGENTS`; the pantheon-config slug stays `agents.veles`) and calls `registerAgentMetadata()` so Perun can route to it. Asset: `veles.md`. Opt-in dispatch tools via `config.agent.tools` (`dispatch_parallel`/`dispatch_background`/`poll_background`/`wait_background`). Serena-gated: if serena MCP is absent the agent still registers but runs in degraded mode (Grep/Glob) and emits a one-time warning toast on `session.created`. Tests: `tests/modules/plan/`. Built into `dist/modules/plan/`. |
 | `packages/swift-developer` | Swift-developer plugin source, tests, skills, build scripts. Output shipped at `packages/swift-developer/dist/`. |
 | `src/modules/agent-registry/` | Harness-resident **library** (no plugin export) — process-wide `SpecialistInfo` registry. Exposes `registerAgentMetadata()` (fail-fast on a conflicting duplicate logical name; idempotent on identical re-registration) / `getAgentMetadataRegistry()` (returns a name-sorted copy), and the `buildPerunPrompt` placeholder renderer that fills Perun's prompt template from the registered specialists. Agent-registering modules call `registerAgentMetadata()` in their factory bodies; `coordinator/` consumes the registry via `buildPerunPrompt` when it builds Perun's prompt. Tests: `tests/modules/agent-registry/`. Built into `dist/modules/agent-registry/`. |
-| `src/modules/agent-roster/` | Harness-resident **library** (no plugin export) — owns the visible agent roster. Exposes `applyRosterPolicy()` (mutates `config.agent` in place: snapshot-diff hides pre-existing user/project agents, the `NATIVE_BUILTINS` backstop hides native visible-primary built-ins via override-by-key, then a `default_agent` guard repoints any hidden/subagent default to a visible session target — preferring `Perun - Coordinator`), the `NATIVE_BUILTINS` constant (`build`, `plan` — re-verify against the actual picker on opencode bumps), and the `getDefaultAgent()` / `setDefaultAgent()` accessors that localize the cast for the v1-SDK-absent `default_agent` field. Consumed by `src/index.ts` (calls `applyRosterPolicy` in its `config` hook) and `coordinator/` (imports `COORDINATOR_AGENT` + the `default_agent` accessors). Tests: `tests/modules/agent-roster/`. Built into `dist/modules/agent-roster/`. |
+| `src/modules/agent-roster/` | Harness-resident roster module — owns the visible agent roster. Exposes `applyRosterPolicy()` (mutates `config.agent` in place: snapshot-diff hides pre-existing user/project agents, the `NATIVE_BUILTINS` backstop hides native visible-primary built-ins via override-by-key, then a `default_agent` guard repoints any hidden/subagent default to a visible session target — preferring `Perun - Coordinator`), the `NATIVE_BUILTINS` constant (`build`, `plan` — re-verify against the actual picker on opencode bumps), and the `getDefaultAgent()` / `setDefaultAgent()` accessors that localize the cast for the v1-SDK-absent `default_agent` field. Also exports `AppVerkAgentRosterPlugin` — a conservative **startup self-check** that, on first `session.created`, enumerates the runtime's actual agent map (`client.app.agents()`) and warns (one-shot toast + stderr, best-effort, never throws/mutates) when a native visible-primary key (`mode!=="subagent" && !hidden`) is NOT covered by `NATIVE_BUILTINS` — the drift alarm for the one manual touchpoint when an opencode bump adds a new native primary. The detection core is the pure `findUncoveredNatives()` (testable without driving the event hook). Consumed by `src/index.ts` (calls `applyRosterPolicy` in its `config` hook AND registers `AppVerkAgentRosterPlugin`) and `coordinator/` (imports `COORDINATOR_AGENT` + the `default_agent` accessors). Tests: `tests/modules/agent-roster/`. Built into `dist/modules/agent-roster/`. |
 | `src/modules/coordinator/` | Absorbed coordinator plugin — TS source only. Asset: `src/agents/perun.md`. Registers `dispatch_parallel` (worker pool, concurrency 4, cap 4 — chunk larger workloads), `assign_issue_ids`, and `compute_waves` tools alongside the `@perun` primary agent. Also registers the **background-dispatch** tools `dispatch_background` / `poll_background` / `wait_background` (non-blocking, within-turn overlap; `session.promptAsync` fire-and-forget + a factory-scoped in-memory `BackgroundTaskStore`, per-session cap 4, `session.deleted` cleanup). The exported `PERUN_TOOLS` constant lists every coordinator tool and `tests/modules/coordinator/perun-tools-sync.test.ts` enforces it matches perun.md's `allowed-tools` frontmatter. Tests: `tests/modules/coordinator/`. Built into `dist/modules/coordinator/` and `dist/agents/`. |
 | `src/modules/coordinator-policy/` | Absorbed coordinator-policy plugin — TS source only (no `.md` asset). Registers a `tool.execute.before` **bash gate** (`makeBashGate`) that enforces an allowlist on `bash` calls — but **only** when the session is positively identified as the coordinator (`getSessionAgent(...) === COORDINATOR_AGENT_NAME`). **Fail-OPEN on identity uncertainty:** if the agent can't be resolved the gate does nothing, so non-coordinator sessions are never blocked. The allowlist is read at plugin-init from `src/agents/perun.md` frontmatter (`Bash(<prog>:*)` entries — single source of truth) by `read-allowlist.ts`, with a hardcoded `FALLBACK_ALLOWLIST` (`mkdir`, `ls`) used when the frontmatter can't be read/parsed (the `qa-preflight.sh` grant was intentionally dropped in favor of the `preflight` plugin tool — the coordinator must not get a shell script; guarded against drift by `read-allowlist.test.ts`). Classification logic (`classifyCoordinatorBash` + compound-shell rejection) and the rejection error (`buildViolationError`) live in the `skill-utils` `coordinator-bash-policy.ts` primitive. Tests: `tests/modules/coordinator-policy/`. Built into `dist/modules/coordinator-policy/`. |
 | `src/modules/pantheon-config/` | Harness-resident **library** (no plugin export) — reads `pantheon.json` (user-global + per-project walk-up, closest-wins merge) and exposes `loadPantheonConfig()` / `getLoadErrors()` / `pantheonConfigEmpty()`. Consumed by `coordinator/` and `qa/` in their `config` hooks. Tests: `tests/modules/pantheon-config/`. Built into `dist/modules/pantheon-config/`. |
@@ -75,11 +75,27 @@ Root `typecheck`, `test`, and `build` all invoke `bun run build:skill-utils` ear
 
 The `build:skill-utils` script is exposed as a named root script (not inlined) so this side-effect is intentional and discoverable, not hidden chain magic. When adding a new workspace that imports from skill-utils, no script changes are needed — the dependency is already encoded.
 
+### skill-utils is a two-way keystone (frozen import direction)
+
+`packages/skill-utils` currently carries **two distinct kinds of code on opposite sides of the harness boundary**, and the mix is a known architectural debt (mirror of the earlier ARCH-001 sanitizer-misplacement):
+
+- **Genuinely shared, packaged-for-consumers:** `createSkillPlugin` — used by the three developer plugins (`python-developer`, `frontend-developer`, `swift-developer`). This belongs in a package. (A sibling `createSkillLoader` was removed once per-plugin skill loading moved to the global `skill-registry`, which carries its own independent loader — the skill-utils copy had no remaining caller.)
+- **Harness-core stranded on the legacy-package side:** `session-identity.ts` (who Perun *is*) and `coordinator-bash-policy.ts` (what Perun may *execute*). These are Pantheon-internal policy, not reusable helpers. They live in `skill-utils` only because `skill-registry` consumes them and the build boundary forbids `packages/ → src/`.
+
+The cost of that stranding: the coordinator's slug exists as **two constants on opposite sides of the boundary** — `COORDINATOR_AGENT_NAME` (in `skill-utils/src/session-identity.ts`) and `COORDINATOR_AGENT` (in `src/modules/agent-roster/index.ts`) — held together only by `tests/modules/coordinator/coordinator-name-sync.test.ts`. The migration direction makes it worse: `stribog` (the newest module) had to import the *legacy* package to get session identity.
+
+**Planned absorption ordering (sequence the unwind, do not reach for the end state first):**
+
+1. **`skill-registry` next.** It is harness-coupled (it injects activation rules into every agent's system prompt and is the second consumer of the coordinator primitives). Absorb it into `src/modules/` so it no longer needs to reach into a `packages/` build unit for identity/bash-policy.
+2. **Then split `skill-utils`.** Move `session-identity` + `coordinator-bash-policy` into `src/modules/_shared/` — this **kills the duplicated coordinator constant** (`COORDINATOR_AGENT` becomes the single source of truth and the sync test retires). Leave `createSkillPlugin` packaged for the three developer plugins.
+
+**Until that lands, the import direction is FROZEN:** no *new* `src/modules/` file may import from `@appverk/opencode-skill-utils`. The only grandfathered consumers are `coordinator-policy/` (the bash gate + `read-allowlist.ts`) and `stribog/` (session identity). This freeze is restated as a hard constraint in [Adding a New Absorbed Module](#adding-a-new-absorbed-module).
+
 ## Build & Packaging Details
 
 - **Module system:** ESM only (`"type": "module"`, NodeNext resolution).
-- **Package builds:** `tsup src/index.ts --format esm --dts`.
-- **Post-build asset copying:** Each package runs a Node script to copy markdown templates/skills into `dist/` (e.g., `dist/commands/commit.md`, `dist/skills/*.md`).
+- **Package builds:** `tsup src/index.ts --format esm --dts --clean`. The `--clean` flag (tsup defaults to `clean: false` on the CLI) wipes each package's `dist/` before emitting, so renamed/deleted source files cannot leave orphaned `.js`/`.d.ts` artifacts. This mirrors the root config's `clean: true`. **Keep `--clean` on every package build** — without it `verify-dist-sync` structurally cannot detect orphans (it diffs `git status` after a rebuild, which only fires when a build *changes/removes* a tracked file; a stale asset whose source was deleted stays untouched and ships forever).
+- **Post-build asset copying:** Each package runs a Node script to copy markdown templates/skills into `dist/` (e.g., `dist/commands/commit.md`, `dist/skills/*.md`) via the shared `scripts/copy-assets.mjs`. For `dir`/`glob` manifest entries the helper removes the destination dir before copying (belt-and-braces orphan-proofing for renamed/deleted skill `.md` files when the copy script runs without a preceding `tsup --clean`).
 - **Root entrypoint:** `src/index.ts` is the typed source. The root build (`bun run build:root`) compiles it (and everything under `src/`) to `dist/` via `tsup --bundle=false`. OpenCode loads `./dist/index.js` (the `main` field in root `package.json`). There is no longer a hand-edited `src/index.js`.
 - **Published files:** The root `dist/` tree (compiled `.js`/`.d.ts` + copied `.md` assets — this is where every absorbed module under `src/modules/` lands) plus the remaining `packages/*/dist/` directories for each workspace plugin — see root `package.json` `files` for the canonical list.
 
@@ -90,12 +106,22 @@ The `build:skill-utils` script is exposed as a named root script (not inlined) s
 - The `files` array in the root `package.json` (everything published must be verified).
 - The `.gitignore` carve-outs for each `packages/<name>/dist/` (everything verified must be committed).
 - The per-workspace `build` invocations in the root `build` script (everything verified must actually be built).
+- The `git diff --exit-code` path list in the **"Assert no dist drift"** step of `.github/workflows/ci.yml` (the belt-and-braces backstop must cover the same trees).
 
-When adding a new workspace plugin, update **all four** locations together. If any are out of sync, CI will either silently pass on dist drift (path missing from the script) or fail permanently (path tracked but never built/committed).
+When adding a new workspace plugin, update **all five** locations together. If any are out of sync, CI will either silently pass on dist drift (path missing from the script/workflow) or fail permanently (path tracked but never built/committed).
+
+### Continuous integration
+
+CI lives in [`.github/workflows/ci.yml`](.github/workflows/ci.yml) and is the layer the dist-sync and version-tag guards plug into:
+
+- **`check` job** (on every push and pull request to `master`): pins Bun via `.bun-version`, runs `bun install --frozen-lockfile` → `bun run check` (typecheck + test + build) → `bun run verify-dist`, then a `git diff --exit-code` backstop on the tracked dist paths. This is what makes "CI silently pass / fail permanently" (above) describe a real workflow rather than an aspiration.
+- **`version-tag` job** (only on pushed `v*` tags): runs `bun run verify-version-tag` (root `package.json` version ↔ reachable git tag) and `bun run verify-versions` (`scripts/verify-workspace-versions.mjs` — all workspace `package.json` versions plus every documented install pin must equal `v<root-version>`). See [Versioning & Git Installation](#versioning--git-installation).
+
+The release-time canonical-remote check (`verify-version-tag --remote=<name>`) is intentionally **not** wired into the workflow because the canonical install remote is unsettled (origin redirect trap, see [Versioning & Git Installation](#versioning--git-installation)). Add `--remote=<name>` to the `version-tag` job only after that decision is made.
 
 ### QA preflight tool
 
-QA preflight is a **plugin tool**, not a shell script. `@perun` declares `preflight` in its `allowed-tools` (see `src/agents/perun.md:5`) and invokes it at Step 3.5 via `preflight({ env: [...] })`; the handler lives in `src/modules/qa/preflight.ts`. There is intentionally no `scripts/qa-preflight.sh` — the coordinator's `Bash` allowlist is `mkdir`/`ls` only and cannot run the piped probe the old script required (see `src/agents/perun.md:515`: "Preflight is the `preflight` tool, not a shell script").
+QA preflight is a **plugin tool**, not a shell script. `@perun` declares `preflight` in its `allowed-tools` (see `src/agents/perun.md:5`) and invokes it at Step 3.5 via `preflight({ env: [...] })`; the handler lives in `src/modules/qa/preflight.ts`. There is intentionally no `scripts/qa-preflight.sh` — the coordinator's `Bash` allowlist is `mkdir`/`ls` only and cannot run the piped probe the old script required (see `src/agents/perun.md:522`: "Preflight is the `preflight` tool, not a shell script").
 
 The tool checks only env-var **presence**: a name is "resolvable" if it is bound in the run's `BindingsStore` (user-pasted via `record_input`, or minted) or set to a non-empty value in the OpenCode process env. It returns `{status:"ok"}` or `{status:"missing", missing:[...]}` and never echoes variable values, keeping secrets out of the session transcript. Service / database *liveness* is deliberately NOT probed here — that is left to the per-scenario `NEED_INFO` backstop at dispatch time (see `src/agents/perun.md:100`).
 
@@ -198,6 +224,16 @@ agents and nothing else.
   in `config.agent`, so the snapshot-diff cannot reach them — only the
   override-by-key backstop can. This list is verified against opencode 1.15.10's
   actual picker (not the SDK type enum); **re-verify it on every opencode bump.**
+- **Drift self-check guards that touchpoint.** `AppVerkAgentRosterPlugin`
+  (`src/modules/agent-roster/index.ts`, registered in `src/index.ts`) runs a
+  one-shot check on first `session.created`: it enumerates the runtime's actual
+  agent map via `client.app.agents()` and warns (toast + stderr) when a native
+  whose `mode!=="subagent" && !hidden` is NOT in `NATIVE_BUILTINS` — i.e. a new
+  native primary (e.g. `chat`) that would leak into the picker after an opencode
+  bump. It is **conservative**: warn only, never mutates the roster or throws, so
+  a stale list surfaces loudly without breaking startup. The pure detector is
+  `findUncoveredNatives()`. This does not remove the manual re-verify duty above
+  — it turns a silent regression into an audible one.
 - **Load-path invariant.** Harness agents become visible by registering in the
   config-hook loop (added during the loop ⇒ absent from `preExisting` ⇒ kept).
   They are **not** surfaced through `.opencode/agent/*.md` auto-discovery — any
@@ -257,35 +293,41 @@ For small absorbed modules (no separate workspace), follow this pattern instead:
 > - **`bundle: false`** in `tsup.root.config.ts` — each module is compiled standalone so relative imports between modules keep working at runtime.
 > - **Build-order matters:** the root build (`bun run build:root`) emits `dist/` from `src/` first; workspace package builds run afterwards. Modules that read assets from `dist/` (via `import.meta.url` resolution) rely on this ordering.
 > - **The config filename is `tsup.root.config.ts`** (not the default `tsup.config.ts`) — this is intentional so workspace `tsup.config.ts` files are not picked up by the root build.
+> - **FROZEN — no new `src/modules/` may import from `packages/skill-utils`.** The harness-core primitives parked there (`session-identity.ts`, `coordinator-bash-policy.ts`) are mid-migration back into `src/` (see [skill-utils is a two-way keystone](#skill-utils-is-a-two-way-keystone-frozen-import-direction)). The only grandfathered consumers are `coordinator-policy/` and `stribog/`; everything else gets identity/bash-policy from `src/modules/_shared/` once the split lands. A new module that needs coordinator identity today must coordinate that absorption — do **not** add a fresh `@appverk/opencode-skill-utils` import under `src/modules/`.
 
 1. Create `src/modules/<name>/` with `index.ts` and supporting `.ts` modules.
 2. Place `.md` assets under `src/commands/`, `src/agents/`, or `src/skills/` (the layout `scripts/copy-root-assets.mjs` knows about).
 3. Place tests under `tests/modules/<name>/`. Import sources via `from "../../../src/modules/<name>/<file>.js"`.
 4. Import and register the plugin factory in `src/index.ts` (see [Root Entrypoint Registration](#root-entrypoint-registration)).
 5. **If the module registers an agent Perun should route to**, call `registerAgentMetadata()` (from `src/modules/agent-registry/`) with the agent's `SpecialistInfo` in the module's factory body — otherwise the agent is invocable but invisible to Perun's routing (it never renders into Perun's prompt). **Ordering matters:** every agent must register *before* the coordinator builds Perun's prompt. `getPerunPrompt()` snapshots the registry on its first call and caches the result, so any agent-registering module must appear *before* `AppVerkCoordinatorPlugin` in the `defaultPluginFactories` array in `src/index.ts`. The coordinator is registered after every agent-registering module precisely to satisfy this (non-agent plugins like `coordinator-policy` may follow it); place a new agent-registering module ahead of it (e.g. as `src/modules/explore/` does with `triglav`).
-6. Build and test via root `bun run build:root` and `bun run check` — no per-package scripts.
-7. Update `tests/root-plugin.test.ts` packed-file assertions to include the new `dist/modules/<name>/*` and `dist/commands/<file>.md` paths.
-8. Update `README.md` and this `AGENTS.md` per the [Documentation Checklist](#documentation-checklist).
+   - **If the agent is registered with `mode: "all"`** (user-switchable in the picker *and* Perun-dispatchable, like `Veles - Planner`), add its registered agent key to `DISPATCHABLE_ALL_AGENTS` in `src/modules/coordinator/dispatch.ts`. The dispatch preflight rejects `mode: "primary"` targets and accepts `subagent`s, but an `all` agent is dispatchable **only** if it is in that allowlist — omit this and Perun cannot route to it. (`subagent`-mode agents need no entry; they are dispatchable by default.)
+6. **Wire the agent's model** in the module's `config` hook via the shared helper `src/modules/_shared/apply-model-override.ts` — do **not** hand-roll the `loadPantheonConfig().agents.<slug>?.model` block (that pattern was duplicated five times before the helper centralized it). At the top of the hook, snapshot any user `opencode.json` model with `captureUserModels(config, <agentKey(s)>)` **before** you wholesale-replace `config.agent[key]`; after registering the agent, call `applyModelOverride(config, "<slug>", <agentKey(s)>, <defaultModel?>, userModels)`. The `<slug>` is the `pantheon.json` `agents.<slug>` key (it may differ from the agent key — `plan`'s slug is `veles` but its key is `Veles - Planner`; `qa`'s `zmora` slug fans out to three `zmora-{fe,be,setup}` keys). Calling `applyModelOverride` also registers the slug as "known" so a typo in `pantheon.json` surfaces a diagnostic instead of silently doing nothing. Pass a `defaultModel` only to pin a tier (Stribog does); omit it to inherit the session default.
+7. Build and test via root `bun run build:root` and `bun run check` — no per-package scripts.
+8. Update `README.md` and this `AGENTS.md` per the [Documentation Checklist](#documentation-checklist). **If the agent is model-configurable** (any agent wired via step 6), also add a row to the "Available agents" table in [`docs/configuring-agents.md`](docs/configuring-agents.md) (Pantheon key → registered-as → description → model-configurable), and update the intro sentence and any agent-list copy there.
+
+> **No `tests/root-plugin.test.ts` edit is needed for the packed-file assertions.** That test derives the expected packed file set from root `package.json` `files[]` plus a recursive directory walk, and `files[]` already lists the top-level `dist` tree — so a new module's `dist/modules/<name>/*` and `dist/commands/<file>.md` outputs are picked up automatically once `bun run build:root` emits them. (Adding `stribog` required no edit there.) Touch that test only if you add a brand-new top-level published path to `files[]` — see [Tracked dist paths in CI](#tracked-dist-paths-in-ci).
 
 ## Versioning & Git Installation
 
 When installing from git, OpenCode (via Bun) caches the repository and **does not automatically pull updates** when the branch moves. To ensure users receive the latest commands and agents:
 
 1. **Bump the version** in **all** `package.json` files (root + every workspace) when adding new commands, agents, or built assets.
-2. **Create a git tag** matching the version (e.g. `v0.3.0`) after the bump commit.
-3. **Update installation examples** in `README.md` and `AGENTS.md` to reference the new tag instead of a branch name like `#master`.
+2. **Create a git tag** matching the version (e.g. `v0.4.0`) after the bump commit, and **push it to the canonical install remote** (see below). A tag that exists only locally is invisible to git-installs.
+3. **Update installation examples** in `README.md`, `AGENTS.md`, and `docs/plugins/commit.md` to reference the new tag instead of a branch name like `#master`. Keep every example on the **same tag as the current `package.json` version** — the `verify-version-tag` guard (`bun scripts/verify-version-tag.mjs`) fails CI when `package.json.version` has no matching reachable git tag.
 
-Example config:
+> **Canonical install remote (split-brain warning).** The README install URL points at `github.com/AppVerk/av-opencode-plugins`. That is the *documented* install source, but personal merges land on the `mszenfeld/pantheon` fork (the project memory's "origin redirect trap"), and the AppVerk upstream has at times diverged (e.g. it reverted the Stribog executor in PR #3 / `a938c9a` while this tree ships Stribog). **Before tagging a release, decide which remote is canonical and ensure the tag is reachable from the commit on *that* remote** — otherwise the documented install command resolves to a tree that does not match these docs. Re-land or document any upstream divergence before pointing users at it.
+
+Example config (keep the tag in lockstep with `package.json` version):
 ```json
 {
   "plugin": [
-    "av-opencode-plugins@git+https://github.com/AppVerk/av-opencode-plugins.git#v0.3.0"
+    "av-opencode-plugins@git+https://github.com/AppVerk/av-opencode-plugins.git#v0.4.0"
   ]
 }
 ```
 
 If a user reports missing commands after an update, instruct them to either:
-- Re-install with `opencode plugin -f av-opencode-plugins@git+https://github.com/AppVerk/av-opencode-plugins.git#v0.3.0`, or
+- Re-install with `opencode plugin -f av-opencode-plugins@git+https://github.com/AppVerk/av-opencode-plugins.git#v0.4.0`, or
 - Remove the old cache directory manually:
   ```bash
   rm -rf ~/.cache/opencode/packages/av-opencode-plugins*
@@ -341,7 +383,7 @@ Per-agent `config.agent[<name>].tools` has TWO distinct meanings; do not conflat
   **not** probed and must be treated as asserted-not-enforced for plugin tools.
 - **Native tools** (e.g. `skill`): `config.agent[].tools` DOES enforce, via opencode's
   string-keyed PermissionV2 engine. The coordinator's `skill: false`
-  (`src/modules/coordinator/index.ts:369`) is a real backstop on this path.
+  (`src/modules/coordinator/index.ts:447`) is a real backstop on this path.
 
 **Load-bearing enforcement for plugin tools is in code, not the map:**
 - QA's four tools are gated by `src/modules/qa/caller-gate.ts` at each tool's
@@ -357,12 +399,18 @@ BOTH the plugin deny-map AND the markdown allowlist behavior for plugin tools**
 
 ### Residual gaps (tracked)
 
-- The registry-negative coordinator gate does NOT deny background-dispatched
-  subagents (`triglav` is not registered in `SessionAgentRegistry`; see
-  `src/modules/coordinator/background.ts:54-62`) or non-dispatched custom agents.
-  Accepted: those tools are in no agent's frontmatter except Perun's, and `triglav`
-  is read-only. The minter (`execute_recipe`) is unaffected — it requires a positive
-  `zmora-setup`.
+- Background-dispatched subagents ARE now registered and gated: the background path
+  registers the child (childSessionID → agent name) in `SessionAgentRegistry`
+  (`src/modules/coordinator/background.ts:79`), fed by `sessionAgentRegistry:
+  ext.sessionAgentRegistry` at `src/modules/coordinator/index.ts:342`, with the
+  registry populated in production by the QA plugin
+  (`src/modules/qa/index.ts:132-133`, wired at `src/index.ts:29`). Registration flips
+  the child OUT of the caller gate's registry-negative "is the coordinator" bucket, so
+  it is denied the coordinator-only QA tools like the foreground `dispatch_parallel`
+  path. The remaining residual gap is **non-dispatched custom agents** (never routed
+  through `dispatch`, so never registered). Accepted: the coordinator-only QA tools are
+  in no agent's frontmatter except Perun's, and `triglav` is read-only. The minter
+  (`execute_recipe`) is unaffected — it requires a positive `zmora-setup`.
 - `load_appverk_skill: false` on the coordinator is plugin-map-only (inert). Truly
   preventing Perun from loading skills needs a handler/hook gate in `skill-registry`
   — tracked follow-up, not done here.

@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest"
 import type { Config } from "@opencode-ai/plugin"
 import { AppVerkFrontendDeveloperPlugin } from "../src/index.js"
-import { loadFrontendSkill } from "../src/tools/load-skill.js"
 
 describe("AppVerkFrontendDeveloperPlugin", () => {
   it("exports a plugin factory", () => {
@@ -35,29 +34,5 @@ describe("AppVerkFrontendDeveloperPlugin", () => {
   it("does not register load_frontend_skill tool (now global)", async () => {
     const plugin = await AppVerkFrontendDeveloperPlugin({} as never)
     expect(plugin.tool?.load_frontend_skill).toBeUndefined()
-  })
-})
-
-describe("loadFrontendSkill", () => {
-  it("loads a valid skill successfully", () => {
-    const content = loadFrontendSkill("frontend-coding-standards")
-    expect(content).toContain("TypeScript")
-    expect(content.length).toBeGreaterThan(0)
-  })
-
-  it("rejects unknown skill names", () => {
-    expect(() => loadFrontendSkill("unknown-skill")).toThrow("not found")
-  })
-
-  it("caches loaded skills", () => {
-    const first = loadFrontendSkill("frontend-coding-standards")
-    const second = loadFrontendSkill("frontend-coding-standards")
-    expect(first).toBe(second)
-  })
-
-  it("does not leak file paths in error messages for unknown skills", () => {
-    expect(() => loadFrontendSkill("unknown-skill")).toThrow("not found")
-    expect(() => loadFrontendSkill("unknown-skill")).not.toThrow("src/skills")
-    expect(() => loadFrontendSkill("unknown-skill")).not.toThrow("../")
   })
 })

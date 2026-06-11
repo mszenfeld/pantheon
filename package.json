@@ -11,6 +11,7 @@
     "packages/python-developer/dist",
     "packages/code-review/dist",
     "packages/frontend-developer/dist",
+    "packages/skill-utils/package.json",
     "packages/skill-utils/dist",
     "packages/skill-registry/dist",
     "packages/swift-developer/dist"
@@ -19,6 +20,7 @@
     "packages/*"
   ],
   "dependencies": {
+    "@appverk/opencode-skill-utils": "workspace:*",
     "@opencode-ai/plugin": "^1.14.19",
     "jsonc-parser": "^3.3.1"
   },
@@ -30,13 +32,18 @@
     "build:root": "tsup --config tsup.root.config.ts && bun scripts/copy-root-assets.mjs",
     "build:skill-utils": "bun --filter @appverk/opencode-skill-utils build",
     "build": "bun run build:root && bun run build:skill-utils && bun --filter @appverk/opencode-python-developer build && bun --filter @appverk/opencode-code-review build && bun --filter @appverk/opencode-frontend-developer build && bun --filter @appverk/opencode-skill-registry build && bun --filter @appverk/opencode-swift-developer build",
-    "test": "bun run build:root && bun run build:skill-utils && vitest run --config vitest.config.ts && bun --filter @appverk/opencode-python-developer test && bun --filter @appverk/opencode-code-review test && bun --filter @appverk/opencode-frontend-developer test && bun --filter @appverk/opencode-skill-registry test && bun --filter @appverk/opencode-swift-developer test",
-    "typecheck": "tsc -p tsconfig.json --noEmit && bun run build:skill-utils && bun --filter @appverk/opencode-skill-utils typecheck && bun --filter @appverk/opencode-python-developer typecheck && bun --filter @appverk/opencode-code-review typecheck && bun --filter @appverk/opencode-frontend-developer typecheck && bun --filter @appverk/opencode-skill-registry typecheck && bun --filter @appverk/opencode-swift-developer typecheck",
-    "check": "bun run typecheck && bun run test && bun run build",
+    "test": "bun run build && bun run test:nobuild",
+    "test:nobuild": "vitest run --config vitest.config.ts && bun --filter @appverk/opencode-python-developer test:nobuild && bun --filter @appverk/opencode-code-review test:nobuild && bun --filter @appverk/opencode-frontend-developer test:nobuild && bun --filter @appverk/opencode-skill-registry test:nobuild && bun --filter @appverk/opencode-swift-developer test:nobuild",
+    "typecheck": "bun run build:skill-utils && bun run typecheck:nobuild",
+    "typecheck:nobuild": "tsc -p tsconfig.json --noEmit && bun --filter @appverk/opencode-skill-utils typecheck && bun --filter @appverk/opencode-python-developer typecheck && bun --filter @appverk/opencode-code-review typecheck && bun --filter @appverk/opencode-frontend-developer typecheck && bun --filter @appverk/opencode-skill-registry typecheck && bun --filter @appverk/opencode-swift-developer typecheck",
+    "check": "bun run build && bun run typecheck:nobuild && bun run test:nobuild",
     "lint": "eslint .",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "verify-dist": "bun scripts/verify-dist-sync.mjs"
+    "verify-dist": "bun scripts/verify-dist-sync.mjs",
+    "verify-no-review-ids": "bun scripts/verify-no-review-ids.mjs",
+    "verify-version-tag": "bun scripts/verify-version-tag.mjs",
+    "verify-versions": "bun scripts/verify-workspace-versions.mjs"
   },
   "devDependencies": {
     "@types/node": "^22.15.3",

@@ -69,8 +69,32 @@ describe("AppVerkCoordinatorPlugin toast notification", () => {
       `{ "agents": { "perun": { "model": "anthropic/claude-opus-4-7" } } }`,
     )
     const plugin = await AppVerkCoordinatorPlugin({ client } as never)
+    // Run `config` first (as the runtime does) so the coordinator registers
+    // the `perun` slug — otherwise the unknown-slug check would flag it.
+    await plugin.config?.({ agent: {} } as never)
     await plugin.event?.({ event: { type: "session.created" } } as never)
     expect(showToast).not.toHaveBeenCalled()
+  })
+
+  it("fires warning toast for an unknown agent slug (typo) after config runs", async () => {
+    const dir = path.join(tmpHome, ".config", "opencode")
+    mkdirSync(dir, { recursive: true })
+    writeFileSync(
+      path.join(dir, "pantheon.json"),
+      `{ "agents": { "perun": { "model": "anthropic/claude-opus-4-7" }, "strigob": { "model": "anthropic/claude-opus-4-7" } } }`,
+    )
+    const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {})
+    try {
+      const plugin = await AppVerkCoordinatorPlugin({ client } as never)
+      await plugin.config?.({ agent: {} } as never)
+      await plugin.event?.({ event: { type: "session.created" } } as never)
+      expect(showToast).toHaveBeenCalledTimes(1)
+      expect(showToast.mock.calls[0]![0].body.variant).toBe("warning")
+      const allArgs = consoleErrorSpy.mock.calls.map((c) => String(c[0]))
+      expect(allArgs.some((m) => /\[pantheon\] unknown agent "strigob"/.test(m))).toBe(true)
+    } finally {
+      consoleErrorSpy.mockRestore()
+    }
   })
 
   it("ignores non-session.created events", async () => {

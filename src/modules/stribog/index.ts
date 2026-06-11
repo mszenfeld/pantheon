@@ -1,6 +1,8 @@
 import type { Plugin } from "@opencode-ai/plugin"
-import { getSessionAgentCached } from "@appverk/opencode-skill-utils"
+import { forgetSessionAgent, getSessionAgentCached } from "@appverk/opencode-skill-utils"
 import { registerAgentMetadata } from "../agent-registry/index.js"
+import { applyModelOverride, captureUserModels } from "../_shared/apply-model-override.js"
+import { isProviderConfigured, providerIdOf } from "../_shared/provider-detect.js"
 import { loadPantheonConfig } from "../pantheon-config/index.js"
 import {
   STRIBOG_AGENT_KEY,
@@ -10,6 +12,9 @@ import {
 } from "./stribog.metadata.js"
 import { buildStribogPrompt } from "./prompt.js"
 import { makeStribogToolHook } from "./tool-budget-hook.js"
+
+/** Provider id the pinned default needs (`openai` for `openai/gpt-5.4`). */
+const DEFAULT_MODEL_PROVIDER = providerIdOf(DEFAULT_STRIBOG_MODEL)
 
 export const AppVerkStribogPlugin: Plugin = async ({ client }) => {
   registerAgentMetadata(stribogSpecialistInfo)
@@ -22,9 +27,19 @@ export const AppVerkStribogPlugin: Plugin = async ({ client }) => {
     resolveAgent: (sessionID) => getSessionAgentCached(sessionID, client),
   })
 
+  // One-time degraded-mode warning, mirroring the serena-gate pattern in
+  // plan/explore: set in the `config` hook, surfaced once on `session.created`.
+  let providerMissing = false
+  let toastShown = false
+
   return {
     config: async (config) => {
       config.agent ??= {}
+      // Capture the user's opencode.json `agent.<key>.model` BEFORE the
+      // wholesale replace drops it, so applyModelOverride can keep it at the
+      // top of the documented precedence chain (opencode.json > pantheon.json >
+      // default). See docs/configuring-agents.md "Precedence vs. opencode.json".
+      const userModels = captureUserModels(config, STRIBOG_AGENT_KEY)
       config.agent[STRIBOG_AGENT_KEY] = {
         description: stribogSpecialistInfo.description,
         mode: "subagent",
@@ -38,11 +53,38 @@ export const AppVerkStribogPlugin: Plugin = async ({ client }) => {
         },
       }
       // Stribog pins an explicit eval-picked default (`openai/gpt-5.4`) — it is a
-      // doer, not cheap retrieval — overridable via `agents.stribog.model`. The override is pre-validated by
-      // MODEL_REGEX (CWE-117) — see src/modules/pantheon-config/schema.ts — so an
-      // invalid value is already absent here and falls through to the default.
-      const override = loadPantheonConfig().agents[STRIBOG_AGENT_KEY]?.model
-      config.agent[STRIBOG_AGENT_KEY].model = override ?? DEFAULT_STRIBOG_MODEL
+      // doer, not cheap retrieval — overridable via `agents.stribog.model`, and
+      // a user's opencode.json `agent.stribog.model` overrides even that. The
+      // shared helper resolves user > override > default per the documented
+      // precedence and registers the `stribog` slug for typo detection. The
+      // override is pre-validated by MODEL_REGEX (CWE-117) — see
+      // src/modules/pantheon-config/schema.ts — so an invalid value is already
+      // absent and falls through to the default.
+      //
+      // L3: that default needs the `openai` provider. On a fresh install where
+      // OpenAI is absent (e.g. opencode-subscription / Anthropic-only), pinning
+      // it would yield a stribog whose dispatch fails at model resolution. So we
+      // only pass the default when the provider is configured; otherwise we pass
+      // `undefined` and stribog inherits the session default (one-time toast
+      // below documents the dependency). User opencode.json and pantheon.json
+      // overrides take precedence over the default leg, so they still win even
+      // when the provider probe trips — the gate only affects the fallback.
+      const providerOk = isProviderConfigured(config, DEFAULT_MODEL_PROVIDER)
+      // A user opencode.json model or a valid pantheon.json `agents.stribog.model`
+      // override wins over the default regardless of the provider, so the degraded
+      // fallback (and its toast) only applies when NEITHER is set. The pantheon
+      // value is MODEL_REGEX-validated, so an invalid one is already absent here.
+      const overridePinned =
+        userModels.has(STRIBOG_AGENT_KEY) ||
+        loadPantheonConfig().agents[STRIBOG_AGENT_KEY]?.model !== undefined
+      providerMissing = !providerOk && !overridePinned
+      applyModelOverride(
+        config,
+        STRIBOG_AGENT_KEY,
+        STRIBOG_AGENT_KEY,
+        providerOk ? DEFAULT_STRIBOG_MODEL : undefined,
+        userModels,
+      )
     },
     "tool.execute.before": hook,
     event: async ({ event }) => {
@@ -50,8 +92,27 @@ export const AppVerkStribogPlugin: Plugin = async ({ client }) => {
         const deletedID = event.properties?.info?.id
         if (typeof deletedID === "string" && deletedID.length > 0) {
           clearSession(deletedID)
+          // Evict the shared session→agent identity cache too: `getSessionAgentCached`
+          // above keeps one entry per resolved session forever otherwise (the module-level
+          // map in skill-utils only grew before — no consumer freed it).
+          forgetSessionAgent(deletedID)
         }
+        return
       }
+      if (event.type !== "session.created") return
+      if (toastShown || !providerMissing) return
+      const message =
+        `Stribog's pinned default model (${DEFAULT_STRIBOG_MODEL}) needs the "${DEFAULT_MODEL_PROVIDER}" provider, which is not configured — ` +
+        `falling back to the session default. Set agents.stribog.model in pantheon.json to a model on your provider, or configure the provider.`
+      try {
+        console.error(`Pantheon: ${message}`)
+        await client.tui.showToast({
+          body: { variant: "warning", title: "Pantheon", message },
+        })
+      } catch {
+        // best-effort: headless / non-TUI invocations must not crash.
+      }
+      toastShown = true
     },
   }
 }

@@ -45,7 +45,7 @@ describe("BindingsStore.writeBinding — validation", () => {
     }
   })
 
-  it("rejects credential / cloud / secret-manager prefixes from user-paste (SEC-007)", () => {
+  it("rejects credential / cloud / secret-manager prefixes from user-paste", () => {
     // One representative per denylisted prefix — guards against accidental
     // removal/typo of any prefix in the list.
     const names = [
@@ -99,7 +99,7 @@ describe("BindingsStore.writeBinding — validation", () => {
     expect(store.getBinding("perun1", "SUPABASE_ANON_KEY")?.value.unwrap()).toBe("anon-key")
   })
 
-  it("still rejects a credential-prefix name when NOT a declared input (SEC-007 preserved)", () => {
+  it("still rejects a credential-prefix name when NOT a declared input", () => {
     const result = store.writeBinding("perun1", "SUPABASE_ANON_KEY", "anon-key", "secret", "user-paste", { declaredInput: false })
     expect(result.status).toBe("error")
     if (result.status === "error") expect(result.reason).toContain("denylist")
@@ -270,7 +270,7 @@ describe("BindingsStore — TTL sweep + clearParent", () => {
     expect(store.writeBinding("p99", "QA_BIND_NEW", "v", "plain", "minted-recipe").status).toBe("ok")
   })
 
-  it("clearParent skips pinned entries (SEC-006)", () => {
+  it("clearParent skips pinned entries", () => {
     // Two entries for the same parent: one will be pinned via snapshot, one will not.
     store.writeBinding("p1", "QA_BIND_PINNED", "vpin", "plain", "minted-recipe")
     store.writeBinding("p1", "QA_BIND_LOOSE", "vloose", "plain", "minted-recipe")

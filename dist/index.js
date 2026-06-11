@@ -11,7 +11,7 @@ import { AppVerkSwiftDeveloperPlugin } from "../packages/swift-developer/dist/in
 import { AppVerkCoordinatorPlugin } from "./modules/coordinator/index.js";
 import { AppVerkCoordinatorPolicyPlugin } from "./modules/coordinator-policy/index.js";
 import { AppVerkPantheonPlugin } from "./hooks/session-notification/plugin.js";
-import { applyRosterPolicy } from "./modules/agent-roster/index.js";
+import { AppVerkAgentRosterPlugin, applyRosterPolicy } from "./modules/agent-roster/index.js";
 const defaultPluginFactories = [
   AppVerkCommitPlugin,
   AppVerkPythonDeveloperPlugin,
@@ -25,6 +25,7 @@ const defaultPluginFactories = [
   AppVerkSwiftDeveloperPlugin,
   AppVerkCoordinatorPlugin,
   AppVerkCoordinatorPolicyPlugin,
+  AppVerkAgentRosterPlugin,
   AppVerkPantheonPlugin
 ];
 function mergeTools(plugins) {

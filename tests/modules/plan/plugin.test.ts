@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import { AppVerkPlanPlugin } from "../../../src/modules/plan/index.js"
 import { VELES_TOOLS } from "../../../src/modules/plan/allowed-tools.js"
+import { DISPATCH_TOOL_NAMES } from "../../../src/modules/coordinator/dispatch-tool-names.js"
 import {
   clearAgentMetadataRegistry,
   getAgentMetadataRegistry,
@@ -29,15 +30,20 @@ describe("AppVerkPlanPlugin", () => {
     expect(agent?.prompt).toContain(`allowed-tools: ${VELES_TOOLS.join(", ")}`)
   })
 
-  it("enables the dispatch plugin tools via the AgentConfig.tools map", async () => {
+  it("enables exactly the coordinator's canonical dispatch tools via the AgentConfig.tools map", async () => {
     const hooks = await AppVerkPlanPlugin(fakeInput())
     const config: { agent?: Record<string, { tools?: Record<string, boolean> }> } = {}
     await hooks.config?.(config as never)
     const tools = config.agent?.["Veles - Planner"]?.tools
-    expect(tools?.dispatch_parallel).toBe(true)
-    expect(tools?.dispatch_background).toBe(true)
-    expect(tools?.poll_background).toBe(true)
-    expect(tools?.wait_background).toBe(true)
+    // Assert against the imported canonical names rather than literals: if the
+    // coordinator renames a dispatch tool, DISPATCH_TOOL_NAMES (and this
+    // assertion) follow it — a stale literal can no longer leave the test green
+    // while the real wiring is broken.
+    for (const name of DISPATCH_TOOL_NAMES) {
+      expect(tools?.[name]).toBe(true)
+    }
+    // And nothing extra is enabled beyond the canonical dispatch set.
+    expect(Object.keys(tools ?? {}).sort()).toEqual([...DISPATCH_TOOL_NAMES].sort())
   })
 
   it("warns exactly once on session.created when serena is absent", async () => {

@@ -10,10 +10,15 @@ describe("velesSpecialistInfo", () => {
     expect(velesSpecialistInfo.name).toBe("Veles - Planner")
     expect(velesSpecialistInfo.mode).toBe("all")
   })
-  it("is a specialist with EXPENSIVE cost and a planning trigger", () => {
-    expect(velesSpecialistInfo.metadata.category).toBe("specialist")
-    expect(velesSpecialistInfo.metadata.cost).toBe("EXPENSIVE")
+  it("carries a planning trigger and keyTrigger that render into Perun's prompt", () => {
     expect(velesSpecialistInfo.metadata.triggers.length).toBeGreaterThan(0)
     expect(velesSpecialistInfo.metadata.keyTrigger).toBeDefined()
+  })
+
+  it("leaves the unrendered category/cost fields unset (no dead routing metadata)", () => {
+    // category/cost have no renderer in buildPerunPrompt; they are intentionally
+    // omitted so they cannot advertise a routing signal Perun never sees.
+    expect(velesSpecialistInfo.metadata.category).toBeUndefined()
+    expect(velesSpecialistInfo.metadata.cost).toBeUndefined()
   })
 })

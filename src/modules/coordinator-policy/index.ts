@@ -2,6 +2,7 @@ import type { Plugin, PluginInput } from "@opencode-ai/plugin"
 import {
   buildViolationError,
   classifyCoordinatorBash,
+  forgetSessionAgent,
   isCoordinatorSession,
 } from "@appverk/opencode-skill-utils"
 import { readCoordinatorBashAllowlist } from "./read-allowlist.js"
@@ -28,5 +29,16 @@ export const AppVerkCoordinatorPolicyPlugin: Plugin = async ({ client }) => {
   const gate = makeBashGate(client, allowed)
   return {
     "tool.execute.before": gate,
+    // The per-bash-call gate resolves identity through `isCoordinatorSession`, which
+    // memoizes into the shared session→agent cache in skill-utils. Evict that entry on
+    // session teardown so the module-level map does not grow unbounded over a long-lived
+    // process (one entry per session, plus one per dispatch-child, otherwise kept forever).
+    event: async ({ event }) => {
+      if (event.type !== "session.deleted") return
+      const deletedID = event.properties?.info?.id
+      if (typeof deletedID === "string" && deletedID.length > 0) {
+        forgetSessionAgent(deletedID)
+      }
+    },
   }
 }

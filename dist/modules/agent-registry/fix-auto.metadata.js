@@ -1,10 +1,8 @@
 const fixAutoSpecialistInfo = {
   name: "fix-auto",
   mode: "subagent",
-  description: "Auto-fix code issues from reports. Used when the user accepts a fix proposal after a QA run.",
+  description: "Auto-fix subagent for code review issues. Performs analysis, implementation, verification, and reporting without user confirmation.",
   metadata: {
-    category: "utility",
-    cost: "CHEAP",
     triggers: []
   }
 };

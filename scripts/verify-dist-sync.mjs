@@ -1,7 +1,11 @@
 #!/usr/bin/env node
 /**
  * Verifies that committed dist/ artifacts are in sync with src/.
- * Run this after `bun run build` in CI to prevent drift.
+ *
+ * Runs `bun run build`, then fails if any tracked dist path has uncommitted
+ * changes. Wired into CI as the `verify-dist` step of `.github/workflows/ci.yml`
+ * (also runnable locally via `bun run verify-dist`) to prevent committed-dist
+ * drift.
  */
 import { execFileSync } from "node:child_process"
 import process from "node:process"

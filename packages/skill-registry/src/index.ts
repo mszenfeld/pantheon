@@ -2,7 +2,7 @@ import path from "node:path"
 import { fileURLToPath } from "node:url"
 import type { Plugin } from "@opencode-ai/plugin"
 import { tool } from "@opencode-ai/plugin"
-import { isCoordinatorSession } from "@appverk/opencode-skill-utils"
+import { forgetSessionAgent, isCoordinatorSession } from "@appverk/opencode-skill-utils"
 import { buildSkillCatalog } from "./skill-catalog.js"
 import { createSkillLoader } from "./load-skill.js"
 import { generateActivationRules } from "./prompt-injector.js"
@@ -65,6 +65,17 @@ export const AppVerkSkillRegistryPlugin: Plugin = async ({ client }) => {
       // turn-1 miss is not cached, so the identity still resolves on later turns.
       if (await isCoordinatorSession(input.sessionID, client)) return
       output.system.push(activationRules)
+    },
+    // The per-turn transform above resolves identity through `isCoordinatorSession`, which
+    // memoizes into the shared session→agent cache in skill-utils. Evict that entry on
+    // session teardown so the module-level map does not grow unbounded over a long-lived
+    // process (one entry per resolved session, otherwise retained forever).
+    event: async ({ event }) => {
+      if (event.type !== "session.deleted") return
+      const deletedID = event.properties?.info?.id
+      if (typeof deletedID === "string" && deletedID.length > 0) {
+        forgetSessionAgent(deletedID)
+      }
     },
   }
 }

@@ -17,9 +17,11 @@ import { assignIssueIds, type Finding } from "../../../src/modules/coordinator/a
  * lower-level helpers in isolation.
  *
  * The fake client follows the same "fakes over mocks" pattern used in
- * `sdk-specialist.test.ts`: a plain recorder over the four SDK methods the
- * adapter touches (`session.create`, `session.prompt`, `session.messages`,
- * `app.agents`), cast through `unknown` to `SDKClient`.
+ * `sdk-specialist.test.ts`: a plain recorder over the SDK methods the adapter
+ * touches (`session.create`, `session.promptAsync`, `session.messages`,
+ * `app.agents`), cast through `unknown` to `SDKClient`. The foreground dispatch
+ * path fires the turn via the fire-and-forget `session.promptAsync`, not the
+ * blocking `session.prompt`, so `pollUntilIdle` governs the whole turn.
  */
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
@@ -27,6 +29,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url))
 interface FakeClientCalls {
   sessionCreate: Array<Record<string, unknown>>
   sessionPrompt: Array<Record<string, unknown>>
+  sessionPromptAsync: Array<Record<string, unknown>>
   sessionMessages: Array<Record<string, unknown>>
   sessionAbort: Array<Record<string, unknown>>
   appAgents: Array<Record<string, unknown> | undefined>
@@ -83,6 +86,7 @@ function makeFakeClient(config: FakeClientConfig): FakeClient {
   const calls: FakeClientCalls = {
     sessionCreate: [],
     sessionPrompt: [],
+    sessionPromptAsync: [],
     sessionMessages: [],
     sessionAbort: [],
     appAgents: [],
@@ -108,6 +112,10 @@ function makeFakeClient(config: FakeClientConfig): FakeClient {
       async prompt(options: Record<string, unknown>) {
         calls.sessionPrompt.push(options)
         return { data: {} }
+      },
+      async promptAsync(options: Record<string, unknown>) {
+        calls.sessionPromptAsync.push(options)
+        return { data: undefined }
       },
       async messages(options: { path: { id: string } }) {
         calls.sessionMessages.push(options)
@@ -292,7 +300,7 @@ describe("@perun QA flow integration (plugin entry point)", () => {
     // `result.name` is normalised from the internal variant
     // (`zmora-fe` / `zmora-be`) to the logical agent name
     // (`zmora`) inside `dispatchParallel`. The TS-level surface still
-    // *receives* the variant names — see `sessionPrompt[…].body.agent`
+    // *receives* the variant names — see `sessionPromptAsync[…].body.agent`
     // assertions below — but the OUTPUT contract collapses them so the
     // variant suffix cannot leak into a user-facing report.
     expect(results).toHaveLength(3)
@@ -304,8 +312,8 @@ describe("@perun QA flow integration (plugin entry point)", () => {
     expect(results[2]?.status).toBe("success")
 
     // SDK wiring assertions: registry was loaded once, three sessions were
-    // created with the perun parent ID, and each session was prompted with
-    // its bound variant.
+    // created with the perun parent ID, and each session's turn was fired
+    // (fire-and-forget via promptAsync) with its bound variant.
     expect(fake.calls.appAgents).toHaveLength(1)
     expect(fake.calls.sessionCreate).toHaveLength(3)
     expect(fake.calls.sessionCreate[0]).toEqual({
@@ -320,13 +328,15 @@ describe("@perun QA flow integration (plugin entry point)", () => {
         title: "[perun] dispatch to zmora-be",
       },
     })
-    expect(fake.calls.sessionPrompt).toHaveLength(3)
-    expect(fake.calls.sessionPrompt[0]).toMatchObject({
+    expect(fake.calls.sessionPromptAsync).toHaveLength(3)
+    expect(fake.calls.sessionPromptAsync[0]).toMatchObject({
       body: { agent: "zmora-fe" },
     })
-    expect(fake.calls.sessionPrompt[2]).toMatchObject({
+    expect(fake.calls.sessionPromptAsync[2]).toMatchObject({
       body: { agent: "zmora-be" },
     })
+    // The blocking endpoint is never used by the foreground path.
+    expect(fake.calls.sessionPrompt).toHaveLength(0)
 
     // Functional assertions: ID assignment routes through the public path
     // (assign_issue_ids tool) and produces the same deterministic ordering.
@@ -476,6 +486,7 @@ describe("@perun QA flow integration (plugin entry point)", () => {
     expect(fake.calls.appAgents).toHaveLength(1)
     expect(fake.calls.sessionCreate).toHaveLength(0)
     expect(fake.calls.sessionPrompt).toHaveLength(0)
+    expect(fake.calls.sessionPromptAsync).toHaveLength(0)
   })
 
   it("rejects primary-mode agents at the plugin entry point (anti-recursion)", async () => {

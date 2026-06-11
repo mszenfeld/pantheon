@@ -58,4 +58,17 @@ describe("AppVerkCoordinatorPlugin model injection", () => {
     await plugin.config?.(config)
     expect(config.agent!["Perun - Coordinator"]!.model).toBeUndefined()
   })
+
+  // M11 precedence contract: a user's opencode.json `agent["Perun -
+  // Coordinator"].model` survives the wholesale replace and wins over the
+  // pantheon.json override.
+  it("preserves the user's opencode.json model over a pantheon.json override", async () => {
+    writeUserGlobal(`{ "agents": { "perun": { "model": "anthropic/claude-sonnet-4-6" } } }`)
+    const plugin = await AppVerkCoordinatorPlugin({ client: {} } as never)
+    const config: Config = {
+      agent: { "Perun - Coordinator": { model: "anthropic/claude-opus-4-7" } },
+    }
+    await plugin.config?.(config)
+    expect(config.agent!["Perun - Coordinator"]!.model).toBe("anthropic/claude-opus-4-7")
+  })
 })

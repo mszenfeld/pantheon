@@ -1,6 +1,6 @@
 import { tool, type Plugin } from "@opencode-ai/plugin"
 import { buildQATesterAgent } from "./prompt-builder.js"
-import { loadPantheonConfig } from "../pantheon-config/index.js"
+import { applyModelOverride, captureUserModels } from "../_shared/apply-model-override.js"
 import { loadModuleAsset } from "../_shared/load-asset.js"
 import { registerDispatchExtensions } from "../_shared/dispatch-extensions.js"
 import { registerAgentMetadata } from "../agent-registry/index.js"
@@ -169,6 +169,15 @@ export const AppVerkQAPlugin: Plugin = async ({ client }) => {
   return {
     config: async (config) => {
       config.agent ??= {}
+      // Capture each variant's user opencode.json `agent.zmora-<stack>.model`
+      // before the wholesale replace below drops it. The capture/resolution is
+      // per-key, so a user pinning only `agent.zmora-be.model` keeps it while
+      // zmora-fe/setup still take the pantheon override. See
+      // docs/configuring-agents.md "Precedence vs. opencode.json".
+      const userModels = captureUserModels(
+        config,
+        VARIANTS.map((stack) => `zmora-${stack}`),
+      )
       for (const stack of VARIANTS) {
         // Per-variant lazy cache: build the markdown once per variant at first access.
         let cached: string | undefined
@@ -192,17 +201,19 @@ export const AppVerkQAPlugin: Plugin = async ({ client }) => {
         }
       }
 
-      // Inject model AFTER registration so we don't merge it into every literal
-      // above. Model already validated by MODEL_REGEX — see
+      // Inject model AFTER registration via the shared helper. The single
+      // `zmora` config slug fans out to all three `zmora-{fe,be,setup}` agent
+      // keys, and the slug is registered so a typo (`agents.zmroa`) is flagged.
+      // Precedence is applied per key: user opencode.json > `agents.zmora.model`.
+      // Model already validated by MODEL_REGEX — see
       // src/modules/pantheon-config/schema.ts for the CWE-117 rationale.
-      const zmoraModel = loadPantheonConfig().agents.zmora?.model
-      if (zmoraModel !== undefined) {
-        for (const stack of VARIANTS) {
-          const agent = config.agent[`zmora-${stack}`]
-          if (agent === undefined) continue // structurally impossible — loop above just set this key
-          agent.model = zmoraModel
-        }
-      }
+      applyModelOverride(
+        config,
+        "zmora",
+        VARIANTS.map((stack) => `zmora-${stack}`),
+        undefined,
+        userModels,
+      )
 
       config.command ??= {}
       for (const c of COMMANDS) {

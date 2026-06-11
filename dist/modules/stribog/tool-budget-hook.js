@@ -14,6 +14,8 @@ function makeStribogToolHook(deps) {
   }
   const hook = async (input, output) => {
     try {
+      const isEditWrite = input.tool === "edit" || input.tool === "write";
+      if (!isEditWrite && STRIBOG_ALLOWED_TOOL_IDS.has(input.tool)) return;
       const agent = await deps.resolveAgent(input.sessionID);
       if (agent !== STRIBOG_AGENT_KEY) return;
       if (!STRIBOG_ALLOWED_TOOL_IDS.has(input.tool)) {
@@ -21,7 +23,7 @@ function makeStribogToolHook(deps) {
           `${TOOL_DENIED}: tool "${input.tool}" is outside Stribog's allow-list (read/glob/grep/edit/write/bash only). Stribog is a leaf actuator \u2014 it does not mint secrets or dispatch. If the task requires this tool, return the ESCALATE result.`
         );
       }
-      if (input.tool === "edit" || input.tool === "write") {
+      if (isEditWrite) {
         const filePath = output.args?.filePath;
         if (typeof filePath !== "string" || !isAbsolute(filePath)) return;
         const path = resolve(filePath);

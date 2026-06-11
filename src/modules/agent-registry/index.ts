@@ -4,10 +4,13 @@ export * from "./agent-metadata.js"
 export {
   PERUN_PLACEHOLDERS,
   buildDelegationTable,
+  buildDispatchableAllowlistSentence,
   buildKeyTriggersSection,
   buildPerunPrompt,
   buildSpecialistsTable,
   buildUseAvoidSection,
+  buildWorkflowContribution,
+  type PerunPromptOptions,
 } from "./perun-prompt-builder.js"
 
 const registry: SpecialistInfo[] = []

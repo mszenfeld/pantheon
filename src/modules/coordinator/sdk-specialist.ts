@@ -27,7 +27,7 @@ export function createSDKSpecialist(
       onSessionCreated?: (sessionId: string) => void,
     ): Promise<string> {
       // OpenCode's session.create body accepts only parentID/title — the target
-      // agent is bound on the subsequent session.prompt call. Two-step is required.
+      // agent is bound on the subsequent prompt call. Two-step is required.
       const created = await client.session.create({
         body: {
           parentID: parentSessionID,
@@ -39,9 +39,9 @@ export function createSDKSpecialist(
         throw new Error(`createSession returned no session id for agent ${agentName}`)
       }
 
-      // Fire the created-callback BEFORE prompting. `session.prompt` blocks for
-      // the full turn (incl. the bash calls that trigger the `shell.env` hook),
-      // so the child→agent mapping must be recorded here — recording it after
+      // Fire the created-callback BEFORE prompting. The turn runs server-side
+      // (incl. the bash calls that trigger the `shell.env` hook), so the
+      // child→agent mapping must be recorded here — recording it after
       // `startTask` resolves would be after the hook already ran. Defensive
       // try/catch: a callback fault must not abort the dispatch.
       try {
@@ -67,7 +67,20 @@ export function createSDKSpecialist(
           .catch(() => {})
       }
 
-      await client.session.prompt({
+      // Fire-and-forget the turn via `promptAsync` (returns 204 immediately;
+      // the server runs the LLM turn autonomously). We deliberately do NOT use
+      // the blocking `session.prompt` here: awaiting it would park this worker
+      // inside an un-timed, un-abortable call for the WHOLE turn, so the
+      // 5-minute `taskTimeoutMs` and `ToolContext.abort` would only govern the
+      // post-turn confirmatory poll — never the turn itself (a hung specialist
+      // would block the worker, the dispatch, and Perun's turn indefinitely,
+      // and an aborting user could not cancel the child server-side). By firing
+      // async and letting `dispatch.ts`'s `pollUntilIdle` drive completion, the
+      // task timeout and abort signal cover the ENTIRE turn — and abort reaches
+      // `abortTask(sessionId)` while the child is still running, cancelling it
+      // server-side. This mirrors the background path (`startBackground`) so
+      // both dispatch primitives honour the same documented runtime contract.
+      await client.session.promptAsync({
         path: { id: sessionId },
         body: {
           agent: agentName,

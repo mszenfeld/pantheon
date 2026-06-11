@@ -9,7 +9,13 @@ export const STRIBOG_AGENT_KEY = "stribog" as const
  *  2026-06-10 four-round eval (docs/eval/scenarios/stribog/): the cheapest model
  *  passing all three discipline gates (scope/secret/liveness) natively. Overridable
  *  via `agents.stribog.model`. NOT a security control — see spec decision #7.
- *  Must satisfy MODEL_REGEX in src/modules/pantheon-config/schema.ts. */
+ *  Must satisfy MODEL_REGEX in src/modules/pantheon-config/schema.ts.
+ *
+ *  L3: this default needs the `openai` provider. The plugin's config hook probes
+ *  it (see index.ts / _shared/provider-detect.ts) and, when OpenAI is absent on a
+ *  fresh non-OpenAI install, falls back to the session default instead of pinning
+ *  an unresolvable model (plus a one-time toast). The provider id is derived from
+ *  this string, so keep it in `provider/model` form. */
 export const DEFAULT_STRIBOG_MODEL = "openai/gpt-5.4"
 
 export const STRIBOG_DESCRIPTION =
@@ -49,8 +55,6 @@ export const stribogSpecialistInfo: SpecialistInfo = {
   mode: "subagent",
   description: STRIBOG_DESCRIPTION,
   metadata: {
-    category: "specialist",
-    cost: "CHEAP",
     keyTrigger: "Environment down, or a tiny mechanical change needed → dispatch `stribog`",
     useWhen: [
       "Bring up / fix a downed environment for QA (docker compose / make / start a service)",

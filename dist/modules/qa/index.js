@@ -1,6 +1,6 @@
 import { tool } from "@opencode-ai/plugin";
 import { buildQATesterAgent } from "./prompt-builder.js";
-import { loadPantheonConfig } from "../pantheon-config/index.js";
+import { applyModelOverride, captureUserModels } from "../_shared/apply-model-override.js";
 import { loadModuleAsset } from "../_shared/load-asset.js";
 import { registerDispatchExtensions } from "../_shared/dispatch-extensions.js";
 import { registerAgentMetadata } from "../agent-registry/index.js";
@@ -108,6 +108,10 @@ const AppVerkQAPlugin = async ({ client }) => {
   return {
     config: async (config) => {
       config.agent ??= {};
+      const userModels = captureUserModels(
+        config,
+        VARIANTS.map((stack) => `zmora-${stack}`)
+      );
       for (const stack of VARIANTS) {
         let cached;
         config.agent[`zmora-${stack}`] = {
@@ -129,14 +133,13 @@ const AppVerkQAPlugin = async ({ client }) => {
           }
         };
       }
-      const zmoraModel = loadPantheonConfig().agents.zmora?.model;
-      if (zmoraModel !== void 0) {
-        for (const stack of VARIANTS) {
-          const agent = config.agent[`zmora-${stack}`];
-          if (agent === void 0) continue;
-          agent.model = zmoraModel;
-        }
-      }
+      applyModelOverride(
+        config,
+        "zmora",
+        VARIANTS.map((stack) => `zmora-${stack}`),
+        void 0,
+        userModels
+      );
       config.command ??= {};
       for (const c of COMMANDS) {
         let cached;

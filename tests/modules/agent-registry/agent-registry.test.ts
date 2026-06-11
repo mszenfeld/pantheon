@@ -11,7 +11,7 @@ function info(name: string): SpecialistInfo {
     name,
     mode: "subagent",
     description: `${name} desc`,
-    metadata: { category: "specialist", cost: "CHEAP", triggers: [] },
+    metadata: { triggers: [] },
   }
 }
 

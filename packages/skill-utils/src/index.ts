@@ -46,51 +46,6 @@ function createLazyFileLoader(packaged: string, source: string): () => string {
   }
 }
 
-export interface CreateSkillLoaderOptions {
-  namespace: string
-  availableSkills: readonly string[]
-  moduleDirectory: string
-}
-
-export function createSkillLoader(options: CreateSkillLoaderOptions): (name: string) => string {
-  const { namespace, availableSkills, moduleDirectory } = options
-
-  const skillCache = new Map<string, string>()
-
-  function loadSkillContent(name: string): string {
-    const candidates = [
-      path.resolve(moduleDirectory, "skills", name, "SKILL.md"), // packaged build (dist/skills/)
-      path.resolve(moduleDirectory, "../src/skills", name, "SKILL.md"), // from dist/ in repo (src/skills/)
-      path.resolve(moduleDirectory, "../skills", name, "SKILL.md"), // from src/tools/ in vitest (src/skills/)
-    ]
-    let lastError: Error | undefined
-    for (const candidate of candidates) {
-      try {
-        return readFileSync(candidate, "utf8")
-      } catch (error) {
-        lastError = error as Error
-      }
-    }
-    throw new Error(`${namespace} skill file not found for: ${name}`, { cause: lastError })
-  }
-
-  return function loadSkill(name: string): string {
-    if (!availableSkills.includes(name)) {
-      throw new Error(
-        `${namespace} skill not found: ${name}. Available: ${availableSkills.join(", ")}`,
-      )
-    }
-
-    if (skillCache.has(name)) {
-      return skillCache.get(name)!
-    }
-
-    const content = loadSkillContent(name)
-    skillCache.set(name, content)
-    return content
-  }
-}
-
 export { CATEGORY_PREFIX_MAPPING, VALID_PREFIXES, VALID_CATEGORIES } from "./category-prefix-mapping.js"
 
 export * from "./session-identity.js"

@@ -64,21 +64,19 @@ opencode agent swift-developer "Refactor networking layer to use async/await"
 ```
 packages/swift-developer/
 ├── src/
-│   ├── index.ts              # Plugin factory
-│   ├── tools/load-skill.ts   # Local skill loader for tests
+│   ├── index.ts              # Plugin entry point — thin createSkillPlugin wrapper (no local skill loader)
 │   ├── agent-prompt.md       # Agent system prompt
 │   ├── commands/swift.md     # /swift command template
-│   └── skills/
-│       ├── swift-coding-standards/
-│       ├── swift-tdd-workflow/
-│       ├── swiftui-patterns/
-│       ├── swift-concurrency-patterns/
-│       ├── swift-data-persistence/
-│       ├── swift-networking-patterns/
-│       └── swift-package-manager/
+│   └── skills/               # Skill definitions, consumed by the global skill-registry's load_appverk_skill tool
+│       ├── swift-coding-standards/SKILL.md
+│       ├── swift-tdd-workflow/SKILL.md
+│       ├── swiftui-patterns/SKILL.md
+│       ├── swift-concurrency-patterns/SKILL.md
+│       ├── swift-data-persistence/SKILL.md
+│       ├── swift-networking-patterns/SKILL.md
+│       └── swift-package-manager/SKILL.md
 └── tests/
     ├── plugin.test.ts
-    ├── load-skill.test.ts
     ├── package-smoke.test.ts
     └── build-output.test.ts
 ```

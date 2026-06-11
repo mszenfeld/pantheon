@@ -34,10 +34,57 @@ function applyRosterPolicy(config, preExisting) {
   const fallback = Object.keys(agents).sort().find((k) => isVisibleSessionTarget(agents[k]));
   if (fallback !== void 0) setDefaultAgent(config, fallback);
 }
+function isNative(agent) {
+  return agent.native === true || agent.builtIn === true;
+}
+function findUncoveredNatives(agents) {
+  const covered = new Set(NATIVE_BUILTINS);
+  const uncovered = /* @__PURE__ */ new Set();
+  for (const agent of agents) {
+    if (!isNative(agent)) continue;
+    const name = agent.name;
+    if (name === void 0 || name.length === 0) continue;
+    if (agent.mode === "subagent") continue;
+    if (agent.hidden === true) continue;
+    if (covered.has(name)) continue;
+    uncovered.add(name);
+  }
+  return [...uncovered].sort();
+}
+function buildDriftWarning(uncovered) {
+  return `Native visible-primary agent(s) not covered by the roster policy: ${uncovered.join(", ")}. These will leak into the picker \u2014 add them to NATIVE_BUILTINS in src/modules/agent-roster/index.ts and re-verify against the actual picker.`;
+}
+const AppVerkAgentRosterPlugin = async ({ client }) => {
+  let checked = false;
+  return {
+    event: async ({ event }) => {
+      if (event.type !== "session.created") return;
+      if (checked) return;
+      checked = true;
+      try {
+        const result = await client.app.agents();
+        const agents = result.data ?? [];
+        const uncovered = findUncoveredNatives(agents);
+        if (uncovered.length === 0) return;
+        const message = buildDriftWarning(uncovered);
+        console.error(`Pantheon: ${message}`);
+        await client.tui.showToast({
+          body: { variant: "warning", title: "Pantheon", message }
+        });
+      } catch {
+      }
+    }
+  };
+};
+var agent_roster_default = AppVerkAgentRosterPlugin;
 export {
+  AppVerkAgentRosterPlugin,
   COORDINATOR_AGENT,
   NATIVE_BUILTINS,
   applyRosterPolicy,
+  buildDriftWarning,
+  agent_roster_default as default,
+  findUncoveredNatives,
   getDefaultAgent,
   setDefaultAgent
 };

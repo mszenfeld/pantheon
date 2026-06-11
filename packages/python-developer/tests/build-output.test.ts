@@ -25,7 +25,7 @@ describe("build output assets", () => {
     }
   })
 
-  it("dist/commands/develop.md exists and contains agent frontmatter", async () => {
+  it("registers the python command with agent frontmatter from dist/commands/python.md", async () => {
     const { AppVerkPythonDeveloperPlugin } = await import("../dist/index.js")
     const plugin = await AppVerkPythonDeveloperPlugin({} as never)
     const config = { command: {} } as {

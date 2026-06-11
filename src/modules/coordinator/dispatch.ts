@@ -6,7 +6,11 @@ import {
   type PollerMessage,
 } from "./poller.js"
 import { neutralizeUntrustedOutput, normalizeVariantSuffix } from "./sanitize.js"
-import { truncateBytes } from "./truncate-bytes.js"
+import {
+  truncateBytes,
+  truncateBytesWithMarker,
+  AGGREGATE_TRUNCATION_MARKER,
+} from "./truncate-bytes.js"
 
 export interface DispatchTask {
   name: string
@@ -24,12 +28,15 @@ export interface DispatchResult {
 
 export interface DispatchSpecialist {
   /**
-   * Start a foreground task: create the child session, then run the turn via
-   * `session.prompt` (which blocks for the entire turn). `onSessionCreated`, if
-   * provided, fires with the child session id AFTER the session is created but
-   * BEFORE the turn runs — this is the only point at which a caller can record
-   * the child→agent mapping in time for the `shell.env` hook, which fires
-   * mid-turn. Resolves the child session id once the turn completes.
+   * Start a foreground task: create the child session, then fire the turn via
+   * `session.promptAsync` (returns immediately; the server runs the turn
+   * autonomously). Resolves the child session id WITHOUT awaiting the turn —
+   * completion is observed by `runTask`'s `pollUntilIdle`, so `taskTimeoutMs`
+   * and the abort `signal` govern the ENTIRE turn rather than only a post-turn
+   * confirmatory poll. `onSessionCreated`, if provided, fires with the child
+   * session id AFTER the session is created but BEFORE the turn is fired — this
+   * is the only point at which a caller can record the child→agent mapping in
+   * time for the `shell.env` hook, which fires mid-turn server-side.
    */
   startTask(
     agentName: string,
@@ -38,11 +45,13 @@ export interface DispatchSpecialist {
   ): Promise<string>
   fetchMessages(sessionId: string): Promise<PollerMessage[]>
   /**
-   * Cancel a previously-started session. Called when `ToolContext.abort`
-   * fires so the child session is cleaned up server-side (no orphaned
-   * compute, no charges). Implementations should treat this as best-effort:
-   * errors must not surface to the caller (the abort path already returns
-   * an "aborted" result).
+   * Cancel a previously-started session so the child stops doing work
+   * server-side (no orphaned compute, no charges). Called on BOTH terminal
+   * non-success paths: when `ToolContext.abort` fires, AND when the task times
+   * out — in both cases the child's `promptAsync` turn is still running
+   * autonomously and would otherwise run to completion as orphaned compute.
+   * Implementations should treat this as best-effort: errors must not surface
+   * to the caller (the abort/timeout path already returns its result).
    */
   abortTask(sessionId: string): Promise<void>
   /**
@@ -113,6 +122,16 @@ export interface DispatchParallelInput {
   taskTimeoutMs?: number
   resultMaxBytes?: number
   /**
+   * Optional aggregate (whole-wave) byte budget for the SUCCESSFUL results of
+   * this call, applied AFTER the per-task `resultMaxBytes` cap. Results are
+   * walked in input order, summing UTF-8 body bytes against the budget; once it
+   * is exhausted, each remaining successful body is truncated to fit (or to an
+   * empty-but-marked pointer when nothing fits) with a marker pointing to the
+   * child session. Defaults to `DEFAULT_AGGREGATE_MAX_BYTES`. See that constant
+   * for the rationale (bounds a single tool-result's token footprint).
+   */
+  aggregateMaxBytes?: number
+  /**
    * Optional abort signal threaded through to every in-flight task. When the
    * signal aborts, each task whose poller is still running terminates within
    * one poll-interval with status `"aborted"`, and `abortTask(sessionId)` is
@@ -175,12 +194,28 @@ export interface DispatchParallelInput {
   }) => Promise<void>
 }
 
-// 1 s tail-latency budget on completion observation. `session.prompt` in the
-// OpenCode SDK already blocks for the full LLM turn, so polling is mostly
-// confirmatory — 1 s is a sensible compromise between server-load and tail.
+// Poll interval for the foreground completion loop. `startTask` fires the turn
+// via `session.promptAsync` (fire-and-forget), so `pollUntilIdle` is what
+// actually drives the turn to completion — it is NOT merely confirmatory. The
+// 1 s interval bounds tail-latency on observing idle while keeping per-task
+// polling load low; it also bounds the abort/timeout reaction window to ~one
+// interval (the poller checks `signal` and the timeout each iteration and
+// during the inter-poll sleep). Shared with the background path.
 export const DEFAULT_POLL_INTERVAL_MS = 1000
 export const DEFAULT_TASK_TIMEOUT_MS = 5 * 60 * 1000
 export const DEFAULT_RESULT_MAX_BYTES = 100 * 1024
+// Aggregate (whole-wave) byte budget for the SUCCESSFUL results returned from a
+// single `dispatch_parallel` call. The per-task `DEFAULT_RESULT_MAX_BYTES` cap
+// alone is insufficient: with `DISPATCH_MAX_TASKS == 4`, four maxed-out tasks
+// return 4×100KB ≈ 400KB, and the model-facing `JSON.stringify` then inflates
+// that with field framing/escaping — a single tool-result can approach
+// ~100-130k tokens, dominating/overflowing the coordinator's window and
+// inflating every subsequent turn's cost. This cap bounds the wave total to
+// ~128KB (mid-range of the 100-150KB target). When the budget is exhausted,
+// later successful results are truncated in place with a marker that points the
+// reader to the child session for the full output — never silently dropped, and
+// `error`/`timeout`/`aborted` results (which carry no body) are left untouched.
+export const DEFAULT_AGGREGATE_MAX_BYTES = 128 * 1024
 // Aligned with DISPATCH_CONCURRENCY so the per-call cap matches the worker
 // pool size. The label `×N` rendered by the caller (e.g. Perun) now always
 // equals the concurrent burst, and callers with more than 4 tasks must chunk
@@ -201,6 +236,7 @@ export async function dispatchParallel(
     pollIntervalMs = DEFAULT_POLL_INTERVAL_MS,
     taskTimeoutMs = DEFAULT_TASK_TIMEOUT_MS,
     resultMaxBytes = DEFAULT_RESULT_MAX_BYTES,
+    aggregateMaxBytes = DEFAULT_AGGREGATE_MAX_BYTES,
     signal,
     sessionAgentRegistry,
     scrubber,
@@ -310,16 +346,59 @@ export async function dispatchParallel(
 
   // Convert the variant-suffix invariant from a prompt-only convention into
   // a code-enforced one. The agent registry still validates input task names
-  // as the original variants (zmora-fe / zmora-be); only the OUTPUT
-  // `name` and `error` strings are normalised, so prompt drift or partial
-  // injection cannot leak `zmora-fe` / `zmora-be` into reports.
+  // as the original variants (zmora-fe / zmora-be / zmora-setup); only the
+  // OUTPUT `name` and `error` strings are normalised, so prompt drift or
+  // partial injection cannot leak any zmora-<variant> suffix into reports.
   for (const r of results) {
     r.name = normalizeVariantSuffix(r.name)
     if (r.error !== undefined) {
       r.error = normalizeVariantSuffix(r.error)
     }
   }
+  // Aggregate (whole-wave) budget pass: bound the TOTAL bytes of successful
+  // result bodies returned from this call, on top of the per-task cap. Runs
+  // LAST so it sees the final (neutralised, scrubbed, per-task-truncated,
+  // name-normalised) bodies. See `DEFAULT_AGGREGATE_MAX_BYTES` for why.
+  enforceAggregateBudget(results, aggregateMaxBytes)
   return results
+}
+
+/**
+ * Bound the combined UTF-8 byte size of the SUCCESSFUL result bodies in a wave.
+ * Walks results in input order, charging each successful body against a shared
+ * budget. Once the budget is exhausted, every remaining successful body is
+ * truncated to whatever bytes still fit (possibly zero) and marked with a
+ * pointer to the child session, so the coordinator sees a clear "the rest lives
+ * in the child session" signal rather than a silently dropped or window-blowing
+ * payload.
+ *
+ * Non-success entries (`error` / `timeout` / `aborted`) carry an empty `result`
+ * by construction, so they neither consume budget nor get a marker — only
+ * bodies that actually contribute tokens are governed.
+ *
+ * Mutates `results` in place (consistent with the variant-suffix pass above);
+ * `name`/`error`/`status`/`duration_ms` are left untouched.
+ */
+function enforceAggregateBudget(
+  results: DispatchResult[],
+  aggregateMaxBytes: number,
+): void {
+  let remaining = aggregateMaxBytes
+  for (const r of results) {
+    if (r.status !== "success" || r.result.length === 0) {
+      continue
+    }
+    const bodyBytes = Buffer.byteLength(r.result, "utf8")
+    if (bodyBytes <= remaining) {
+      remaining -= bodyBytes
+      continue
+    }
+    // Budget exhausted for this (and every later) body: keep only what fits and
+    // append a pointer-to-child marker. `truncateBytesWithMarker` is UTF-8-safe
+    // and never splits a multi-byte sequence at the cut.
+    r.result = truncateBytesWithMarker(r.result, remaining, AGGREGATE_TRUNCATION_MARKER)
+    remaining = 0
+  }
 }
 
 /**
@@ -372,9 +451,11 @@ function classifyError(err: unknown): "timeout" | "error" | "aborted" {
 
 /**
  * Best-effort server-side cancellation of a dispatched child session. Called
- * from the abort path so the specialist stops doing work and resources are
- * released. Errors are swallowed — the caller is already returning an
- * "aborted" result and we must not mask it.
+ * from BOTH the abort and the timeout path so the specialist stops doing work
+ * and resources are released — a timed-out child whose turn is still running
+ * server-side is orphaned compute unless it is cancelled here. Errors are
+ * swallowed — the caller is already returning an "aborted"/"timeout" result
+ * and we must not mask it.
  */
 async function cleanupOnAbort(
   specialist: DispatchSpecialist,
@@ -409,15 +490,16 @@ async function runTask(
   try {
     const fullPrompt = task.context ? `${task.prompt}\n\n${task.context}` : task.prompt
     const id = await specialist.startTask(task.name, fullPrompt, (createdId) => {
-      // Runs after the child session is created but BEFORE its turn executes.
+      // Runs after the child session is created but BEFORE its turn is fired.
       //  - Mirror into the outer `let` so the catch block's abort-path cleanup
       //    can cancel a child that fails (or is aborted) mid-turn.
       //  - Register (childSessionID → agent name) so plugin hooks resolve which
       //    agent owns the session. This MUST happen before the turn: the
-      //    `shell.env` hook fires during `session.prompt` (which blocks for the
-      //    whole turn), so registering after `startTask` resolves is too late —
-      //    the hook would see no mapping and inject no bindings. Cleanup is the
-      //    plugin's `session.deleted` handler, not this dispatcher.
+      //    `shell.env` hook fires mid-turn server-side, and the turn starts as
+      //    soon as `session.promptAsync` is acknowledged, so registering after
+      //    `startTask` resolves would race the hook — it could see no mapping
+      //    and inject no bindings. Cleanup is the plugin's `session.deleted`
+      //    handler, not this dispatcher.
       sessionId = createdId
       options.sessionAgentRegistry?.register(createdId, task.name)
     })
@@ -453,7 +535,13 @@ async function runTask(
     }
   } catch (err) {
     const status = classifyError(err)
-    if (status === "aborted") {
+    // Cancel the child server-side on BOTH abort AND timeout. A timeout means
+    // we have stopped polling but the child's LLM turn is still running
+    // autonomously (it was fired fire-and-forget via `promptAsync`); without
+    // this `abortTask` the child runs to completion as orphaned compute and
+    // keeps accruing charges. `"error"` is left alone: those are create/ack
+    // failures where either no child exists or the turn never started.
+    if (status === "aborted" || status === "timeout") {
       await cleanupOnAbort(specialist, sessionId)
     }
     return {

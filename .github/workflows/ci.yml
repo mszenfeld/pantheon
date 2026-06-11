@@ -1,0 +1,89 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+    # Release tags trigger the version-tag job below. Without this, a
+    # `git push <remote> vX.Y.Z` would never start the workflow and the
+    # tag-time guards would not run.
+    tags: ['v*']
+  pull_request:
+    branches: [master]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: typecheck + test + build + dist sync
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Pin Bun to the version this repo standardises on. The version is the
+      # single source of truth in `.bun-version` (mise/asdf/proto auto-switch)
+      # and `packageManager` in root package.json — keep all three in lockstep.
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: .bun-version
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      # `bun run check` = typecheck + test + build (see AGENTS.md → Commands).
+      - name: Check (typecheck + test + build)
+        run: bun run check
+
+      # Assert no per-review code-review issue IDs (SEC-001, MAINT-006, …)
+      # leaked into source/test. See AGENTS.md → Code Review Artefacts.
+      - name: Verify no per-review issue IDs in source/test
+        run: bun run verify-no-review-ids
+
+      # Rebuild and assert committed dist/ trees match src/. `verify-dist` runs
+      # `bun run build` then `git status` on the tracked dist paths; the explicit
+      # `git diff --exit-code` below is a belt-and-braces backstop on the same
+      # paths in case any artifact differs without showing in `git status`.
+      - name: Verify dist sync
+        run: bun run verify-dist
+
+      - name: Assert no dist drift
+        run: |
+          git diff --exit-code -- \
+            dist \
+            packages/python-developer/dist \
+            packages/code-review/dist \
+            packages/frontend-developer/dist \
+            packages/skill-utils/dist \
+            packages/skill-registry/dist \
+            packages/swift-developer/dist
+
+  version-tag:
+    name: tag == version across all package.json + docs pins
+    # Only runs when a release tag is pushed. Verifies the tag matches the root
+    # package.json version AND that every workspace package.json + every
+    # documented install pin agrees (see AGENTS.md → Versioning & Git Installation).
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # Need tags reachable from HEAD for verify-version-tag's ancestry check.
+          fetch-depth: 0
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: .bun-version
+
+      - name: Verify root version has a matching reachable tag
+        run: bun run verify-version-tag
+
+      - name: Verify all package.json versions and install pins agree
+        run: bun run verify-versions

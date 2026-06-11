@@ -62,6 +62,18 @@ export function makeStribogToolHook(deps: StribogToolHookDeps): StribogToolHookH
 
   const hook: StribogToolHook = async (input, output) => {
     try {
+      // Cheap pre-filter, mirroring coordinator-policy's `tool!=="bash"` bail: skip the
+      // (full-transcript) attribution call entirely when this tool can have no effect on a
+      // stribog session. The hook only ever does two things for a stribog session:
+      //   (1) DENY a tool outside the allow-list, and
+      //   (2) enforce the edit budget on edit/write.
+      // So a tool that is BOTH allow-listed AND not edit/write (read/glob/grep/bash) always
+      // passes for stribog and is a no-op for everyone else — there is nothing to attribute.
+      // For sessions whose identity never resolves, this collapses the per-tool-call
+      // full-transcript fetch from "every tool call" to "only deny-candidates / edit / write".
+      const isEditWrite = input.tool === "edit" || input.tool === "write"
+      if (!isEditWrite && STRIBOG_ALLOWED_TOOL_IDS.has(input.tool)) return
+
       const agent = await deps.resolveAgent(input.sessionID)
       if (agent !== STRIBOG_AGENT_KEY) return // pass-through for other/undefined agents
 
@@ -73,7 +85,7 @@ export function makeStribogToolHook(deps: StribogToolHookDeps): StribogToolHookH
         )
       }
 
-      if (input.tool === "edit" || input.tool === "write") {
+      if (isEditWrite) {
         const filePath = output.args?.filePath
         if (typeof filePath !== "string" || !isAbsolute(filePath)) return // fail-open: missing/relative
         const path = resolve(filePath)

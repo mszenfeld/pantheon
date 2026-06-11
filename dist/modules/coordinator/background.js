@@ -12,9 +12,9 @@ const BACKGROUND_MAX_CONCURRENT = 4;
 async function startBackgroundTask(input) {
   const { store, specialist, agentRegistry, parentSessionId, agent, prompt, context, callerMode, sessionAgentRegistry } = input;
   validateDispatchable(agentRegistry, agent, callerMode);
-  if (store.countRunningByParent(parentSessionId) >= BACKGROUND_MAX_CONCURRENT) {
+  if (store.countActiveByParent(parentSessionId) >= BACKGROUND_MAX_CONCURRENT) {
     throw new Error(
-      `dispatch_background: max ${BACKGROUND_MAX_CONCURRENT} background tasks running for this session \u2014 collect one (wait_background / poll_background) before firing more`
+      `dispatch_background: max ${BACKGROUND_MAX_CONCURRENT} background tasks (running or finished-but-uncollected) for this session \u2014 collect one (wait_background, or poll_background until it reports success) before firing more`
     );
   }
   const fullPrompt = context ? `${prompt}
@@ -27,9 +27,29 @@ ${context}` : prompt;
   return { id, agent, status: "running" };
 }
 async function collectBackground(input) {
-  return Promise.all(input.ids.map((id) => collectOne(id, input)));
+  let scrubberSession;
+  if (input.scrubberFactory !== void 0 && input.parentSessionId !== void 0 && input.parentSessionId.length > 0) {
+    try {
+      scrubberSession = input.scrubberFactory(input.parentSessionId);
+    } catch {
+      scrubberSession = void 0;
+    }
+  }
+  const effectiveScrubber = scrubberSession !== void 0 ? (text) => scrubberSession.scrub(text) : input.scrubber;
+  try {
+    return await Promise.all(
+      input.ids.map((id) => collectOne(id, input, effectiveScrubber))
+    );
+  } finally {
+    if (scrubberSession !== void 0) {
+      try {
+        scrubberSession.release();
+      } catch {
+      }
+    }
+  }
 }
-async function collectOne(id, input) {
+async function collectOne(id, input, scrubber) {
   const {
     store,
     specialist,
@@ -38,11 +58,17 @@ async function collectOne(id, input) {
     pollIntervalMs = DEFAULT_POLL_INTERVAL_MS,
     resultMaxBytes = DEFAULT_RESULT_MAX_BYTES,
     signal,
-    scrubber,
-    parentSessionId
+    parentSessionId,
+    allowUnscopedCollect = false
   } = input;
   const task = store.get(id);
   if (task === void 0) {
+    return { id, agent: "", status: "not_found" };
+  }
+  const callerIsUnknown = parentSessionId === void 0;
+  const callerOwnsTask = !callerIsUnknown && task.parentSessionId === parentSessionId;
+  const skipGate = callerIsUnknown && allowUnscopedCollect;
+  if (!callerOwnsTask && !skipGate) {
     return { id, agent: "", status: "not_found" };
   }
   const agent = normalizeVariantSuffix(task.agent);
@@ -55,6 +81,7 @@ async function collectOne(id, input) {
     const messages = await specialist.fetchMessages(task.childSessionId);
     const last = messages[messages.length - 1];
     if (last !== void 0 && last.role === "assistant" && last.finish_reason) {
+      store.remove(id);
       return {
         id,
         agent,
@@ -76,12 +103,14 @@ async function collectOne(id, input) {
     store.remove(id);
     return { id, agent, status: "success", result: finalize(raw), duration_ms: Date.now() - task.startedAt };
   } catch (err) {
-    store.remove(id);
-    if (err instanceof PollerAbortError) {
+    if (err instanceof PollerAbortError || err instanceof PollerTimeoutError) {
       try {
         await specialist.abortTask(task.childSessionId);
       } catch {
       }
+    }
+    store.remove(id);
+    if (err instanceof PollerAbortError) {
       return { id, agent, status: "aborted", result: "", duration_ms: Date.now() - task.startedAt, error: "aborted" };
     }
     if (err instanceof PollerTimeoutError) {

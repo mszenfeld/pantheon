@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from "vitest"
+import { beforeEach, describe, expect, it, vi } from "vitest"
 import { AppVerkStribogPlugin } from "../../../src/modules/stribog/index.js"
 import { STRIBOG_TOOLS } from "../../../src/modules/stribog/allowed-tools.js"
 import { STRIBOG_AGENT_KEY, STRIBOG_DENIED_TOOLS } from "../../../src/modules/stribog/stribog.metadata.js"
@@ -10,6 +10,11 @@ import { __resetCacheForTests } from "../../../src/modules/pantheon-config/index
 
 function fakeInput() {
   return { client: {} } as never
+}
+
+/** Plugin input with a stub `tui.showToast`, for the provider-missing toast tests. */
+function toastInput(showToast = vi.fn(async () => {})) {
+  return { client: { tui: { showToast } } } as never
 }
 
 /**
@@ -74,6 +79,26 @@ describe("AppVerkStribogPlugin", () => {
     const hooks = await AppVerkStribogPlugin(fakeInput())
     expect(typeof hooks.event).toBe("function")
     await hooks.event?.({ event: { type: "session.deleted", properties: { info: { id: "x" } } } } as never)
+  })
+
+  // L3: when the openai provider the pinned default needs is absent, the default
+  // is skipped (stribog inherits the session default) AND a one-time warning toast
+  // documents the dependency — the serena-gate pattern from plan/explore.
+  it("warns exactly once on session.created when the openai provider is absent", async () => {
+    const showToast = vi.fn(async () => {})
+    const hooks = await AppVerkStribogPlugin(toastInput(showToast))
+    await hooks.config?.({ agent: {}, provider: {} } as never)
+    await hooks.event?.({ event: { type: "session.created" } } as never)
+    await hooks.event?.({ event: { type: "session.created" } } as never)
+    expect(showToast).toHaveBeenCalledTimes(1)
+  })
+
+  it("does not warn when the openai provider is configured", async () => {
+    const showToast = vi.fn(async () => {})
+    const hooks = await AppVerkStribogPlugin(toastInput(showToast))
+    await hooks.config?.({ agent: {}, provider: { openai: {} } } as never)
+    await hooks.event?.({ event: { type: "session.created" } } as never)
+    expect(showToast).not.toHaveBeenCalled()
   })
 
   it("session.deleted clears that session's edit budget through the real event wiring", async () => {

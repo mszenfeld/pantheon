@@ -22,8 +22,6 @@ const stribogSpecialistInfo = {
   mode: "subagent",
   description: STRIBOG_DESCRIPTION,
   metadata: {
-    category: "specialist",
-    cost: "CHEAP",
     keyTrigger: "Environment down, or a tiny mechanical change needed \u2192 dispatch `stribog`",
     useWhen: [
       "Bring up / fix a downed environment for QA (docker compose / make / start a service)",

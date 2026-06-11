@@ -17,7 +17,17 @@ declare class BackgroundTaskStore {
     register(task: BackgroundTask): void;
     get(id: string): BackgroundTask | undefined;
     listByParent(parentSessionId: string): BackgroundTask[];
-    countRunningByParent(parentSessionId: string): number;
+    /**
+     * Count this parent's *active* (registered-but-not-yet-collected) tasks.
+     * The store holds no liveness state, so this counts every registered entry —
+     * tasks that are still running AND tasks that finished but were never
+     * collected. Collection (a successful `poll_background` or any
+     * `wait_background` terminal outcome) calls `remove(id)`, so a completed task
+     * stops counting the moment its result is retrieved. This is the number the
+     * per-parent `BACKGROUND_MAX_CONCURRENT` cap is checked against: it bounds
+     * uncollected fan-out (cost-DoS), not strictly concurrent execution.
+     */
+    countActiveByParent(parentSessionId: string): number;
     remove(id: string): void;
     removeByChild(childSessionId: string): void;
     clearParent(parentSessionId: string): void;

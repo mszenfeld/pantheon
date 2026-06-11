@@ -160,7 +160,7 @@ New endpoint with statuses 200 and 504.
     }
   })
 
-  // MAINT-007: Recipe deindent must use textwrap.dedent semantics so plans
+  // Recipe deindent must use textwrap.dedent semantics so plans
   // authored with 2-space, tab, or otherwise non-4-space indentation still
   // parse cleanly. The resulting recipe field must not carry leading
   // whitespace that would corrupt firstWord extraction in validateRecipe.
@@ -334,16 +334,16 @@ describe("parseBindings + validateRecipe integration", () => {
 })
 
 // =============================================================================
-// COMP-002: Sandbox bypass regression tests.
+// Sandbox bypass regression tests.
 //
-// Each block below corresponds to one of the four bypass classes documented in
-// the code review: SEC-002 (curl --next), SEC-003 (awk/sed shell-exec), SEC-004
-// (DSN egress), SEC-005 (file-reader path confinement), plus SEC-008 (recipe
-// length DoS). Each test MUST fail against the pre-fix code and pass after the
-// remediation. Do not delete or weaken without security review.
+// Each block below covers one bypass class against the recipe egress sandbox:
+// curl --next chaining, awk/sed shell-exec, DSN egress, file-reader path
+// confinement, URL-userinfo host spoofing, and recipe-length regex DoS. Each
+// test MUST fail against the pre-fix code and pass after the remediation. Do
+// not delete or weaken without security review.
 // =============================================================================
 
-describe("validateRecipe — SEC-002: curl --next bypass", () => {
+describe("validateRecipe — curl --next bypass", () => {
   it("rejects curl --next chaining a second request", () => {
     // --next lets curl issue a second request to an arbitrary host AFTER the
     // first URL passes the egress check. The extractCurlURL helper only
@@ -369,7 +369,7 @@ describe("validateRecipe — SEC-002: curl --next bypass", () => {
   })
 })
 
-describe("validateRecipe — SEC-003: awk/sed shell-exec primitives", () => {
+describe("validateRecipe — awk/sed shell-exec primitives", () => {
   it("rejects awk entirely (BEGIN{system(...)} executes shell)", () => {
     expect(
       validateRecipe(`awk 'BEGIN{system("echo PWNED")}'`, "$URL").status,
@@ -398,7 +398,7 @@ describe("validateRecipe — SEC-003: awk/sed shell-exec primitives", () => {
   })
 })
 
-describe("validateRecipe — SEC-004: DSN egress validation", () => {
+describe("validateRecipe — DSN egress validation", () => {
   it("rejects psql with a DSN pointing to a non-Egress host", () => {
     expect(
       validateRecipe(
@@ -433,7 +433,7 @@ describe("validateRecipe — SEC-004: DSN egress validation", () => {
   })
 })
 
-describe("validateRecipe — SEC-001: egress allowlist bypass via URL userinfo", () => {
+describe("validateRecipe — egress allowlist bypass via URL userinfo", () => {
   it("rejects a curl URL whose userinfo spoofs the Egress host", () => {
     // `https://api.host.com@evil.com/x` resolves to host `evil.com`; the
     // userinfo segment `api.host.com` must NOT be treated as the host.
@@ -487,7 +487,7 @@ describe("validateRecipe — SEC-001: egress allowlist bypass via URL userinfo",
   })
 })
 
-describe("validateRecipe — SEC-005: file-reader path confinement", () => {
+describe("validateRecipe — file-reader path confinement", () => {
   it("rejects tail of an absolute system path", () => {
     expect(validateRecipe(`tail /etc/passwd`, "$URL").status).toBe("error")
   })
@@ -529,7 +529,7 @@ describe("validateRecipe — SEC-005: file-reader path confinement", () => {
   })
 })
 
-describe("validateRecipe — SEC-008: recipe length cap (regex DoS)", () => {
+describe("validateRecipe — recipe length cap (regex DoS)", () => {
   it("rejects recipes longer than 16 KB", () => {
     // 16 KB + a token — exact cap is implementation detail, we just need a
     // large input to be rejected before the regex pipeline scans it.

@@ -4,6 +4,7 @@ import {
   neutralizeUntrustedOutput,
   normalizeVariantSuffix,
 } from "../../../src/modules/coordinator/sanitize.js"
+import { VARIANTS } from "../../../src/modules/qa/index.js"
 
 describe("neutralizeUntrustedOutput", () => {
   it("returns empty string unchanged", () => {
@@ -122,10 +123,17 @@ describe("normalizeVariantSuffix", () => {
     expect(normalizeVariantSuffix("zmora-be")).toBe("zmora")
   })
 
-  it("rewrites both variants in the same string", () => {
-    const input = "dispatched zmora-fe and zmora-be in parallel"
+  it("rewrites zmora-setup to zmora", () => {
+    // zmora-setup is the third dispatchable variant (the SETUP-NN flow in
+    // perun.md dispatches it to mint bindings). Its name flows back through
+    // result.name and must be normalised like fe/be.
+    expect(normalizeVariantSuffix("zmora-setup")).toBe("zmora")
+  })
+
+  it("rewrites all three variants in the same string", () => {
+    const input = "dispatched zmora-fe, zmora-be, and zmora-setup in parallel"
     expect(normalizeVariantSuffix(input)).toBe(
-      "dispatched zmora and zmora in parallel",
+      "dispatched zmora, zmora, and zmora in parallel",
     )
   })
 
@@ -148,9 +156,10 @@ describe("normalizeVariantSuffix", () => {
     )
   })
 
-  it("does not match zmora-* with an unknown suffix (only fe/be)", () => {
-    // The pattern is anchored on the two known internal variants; a future
-    // variant must be added here deliberately rather than silently absorbed.
+  it("does not match zmora-* with an unknown suffix (only fe/be/setup)", () => {
+    // The pattern is anchored on the known internal variants; a future
+    // variant must be added to VARIANT_SUFFIXES (and to qa's VARIANTS, pinned
+    // by the sync test below) deliberately rather than silently absorbed.
     expect(normalizeVariantSuffix("zmora-mobile")).toBe("zmora-mobile")
     expect(normalizeVariantSuffix("zmora-api")).toBe("zmora-api")
   })
@@ -179,14 +188,30 @@ describe("normalizeVariantSuffix", () => {
       "## Result for zmora-fe",
       "- status: timeout",
       "- error: zmora-be failed to start",
+      "- note: zmora-setup minted no bindings",
     ].join("\n")
     expect(normalizeVariantSuffix(input)).toBe(
       [
         "## Result for zmora",
         "- status: timeout",
         "- error: zmora failed to start",
+        "- note: zmora minted no bindings",
       ].join("\n"),
     )
+  })
+
+  // Sync guard: pins coordinator/sanitize.ts's VARIANT_SUFFIXES to qa's
+  // VARIANTS. The two lists are intentionally duplicated (no coordinator → qa
+  // import edge — see the comment on VARIANT_SUFFIXES in sanitize.ts), so this
+  // test is the only thing keeping them from drifting. If qa adds a fourth
+  // dispatchable variant, every `zmora-<variant>` must still collapse to the
+  // logical `zmora` name in user-facing output, or the variant suffix leaks
+  // into reports / TUI.
+  it("collapses every declared qa VARIANT to the logical zmora name", () => {
+    expect(VARIANTS.length).toBeGreaterThan(0)
+    for (const v of VARIANTS) {
+      expect(normalizeVariantSuffix(`zmora-${v}`)).toBe("zmora")
+    }
   })
 })
 

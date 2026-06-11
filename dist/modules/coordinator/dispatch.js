@@ -4,7 +4,11 @@ import {
   PollerTimeoutError
 } from "./poller.js";
 import { neutralizeUntrustedOutput, normalizeVariantSuffix } from "./sanitize.js";
-import { truncateBytes } from "./truncate-bytes.js";
+import {
+  truncateBytes,
+  truncateBytesWithMarker,
+  AGGREGATE_TRUNCATION_MARKER
+} from "./truncate-bytes.js";
 const DISPATCHABLE_ALL_AGENTS = /* @__PURE__ */ new Set(["Veles - Planner"]);
 function validateDispatchable(agentRegistry, name, callerMode) {
   const agentInfo = agentRegistry[name];
@@ -22,6 +26,7 @@ function validateDispatchable(agentRegistry, name, callerMode) {
 const DEFAULT_POLL_INTERVAL_MS = 1e3;
 const DEFAULT_TASK_TIMEOUT_MS = 5 * 60 * 1e3;
 const DEFAULT_RESULT_MAX_BYTES = 100 * 1024;
+const DEFAULT_AGGREGATE_MAX_BYTES = 128 * 1024;
 const DISPATCH_MAX_TASKS = 4;
 const DISPATCH_CONCURRENCY = 4;
 async function dispatchParallel(input) {
@@ -32,6 +37,7 @@ async function dispatchParallel(input) {
     pollIntervalMs = DEFAULT_POLL_INTERVAL_MS,
     taskTimeoutMs = DEFAULT_TASK_TIMEOUT_MS,
     resultMaxBytes = DEFAULT_RESULT_MAX_BYTES,
+    aggregateMaxBytes = DEFAULT_AGGREGATE_MAX_BYTES,
     signal,
     sessionAgentRegistry,
     scrubber,
@@ -105,7 +111,23 @@ async function dispatchParallel(input) {
       r.error = normalizeVariantSuffix(r.error);
     }
   }
+  enforceAggregateBudget(results, aggregateMaxBytes);
   return results;
+}
+function enforceAggregateBudget(results, aggregateMaxBytes) {
+  let remaining = aggregateMaxBytes;
+  for (const r of results) {
+    if (r.status !== "success" || r.result.length === 0) {
+      continue;
+    }
+    const bodyBytes = Buffer.byteLength(r.result, "utf8");
+    if (bodyBytes <= remaining) {
+      remaining -= bodyBytes;
+      continue;
+    }
+    r.result = truncateBytesWithMarker(r.result, remaining, AGGREGATE_TRUNCATION_MARKER);
+    remaining = 0;
+  }
 }
 function fillUnstartedAsAborted(results, tasks, nextRef) {
   while (nextRef.value < tasks.length) {
@@ -170,7 +192,7 @@ ${task.context}` : task.prompt;
     };
   } catch (err) {
     const status = classifyError(err);
-    if (status === "aborted") {
+    if (status === "aborted" || status === "timeout") {
       await cleanupOnAbort(specialist, sessionId);
     }
     return {
@@ -183,6 +205,7 @@ ${task.context}` : task.prompt;
   }
 }
 export {
+  DEFAULT_AGGREGATE_MAX_BYTES,
   DEFAULT_POLL_INTERVAL_MS,
   DEFAULT_RESULT_MAX_BYTES,
   DEFAULT_TASK_TIMEOUT_MS,

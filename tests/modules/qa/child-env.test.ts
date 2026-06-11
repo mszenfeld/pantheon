@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest"
 import { buildChildEnv } from "../../../src/modules/qa/child-env.js"
 
-// COMP-002: The recipe child process must NOT inherit the full host env.
+// The recipe child process must NOT inherit the full host env.
 // Only a small allowlist of process-control variables (PATH, HOME, LANG, LC_*,
 // TZ) flows through; everything else is dropped unless it appears in the
 // composed env (recipe inputs + minted bindings). This prevents a sandbox

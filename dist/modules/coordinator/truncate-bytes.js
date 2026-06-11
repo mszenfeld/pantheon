@@ -1,16 +1,22 @@
 const TRUNCATION_MARKER = "\n[\u2026truncated\u2026]";
-function truncateBytes(input, maxBytes) {
+const AGGREGATE_TRUNCATION_MARKER = "\n[\u2026truncated: wave output budget reached \u2014 full result is in this task's child session\u2026]";
+function truncateBytesWithMarker(input, maxBytes, marker) {
   const buf = Buffer.from(input, "utf8");
-  if (buf.byteLength <= maxBytes) {
+  if (maxBytes > 0 && buf.byteLength <= maxBytes) {
     return input;
   }
-  const sliced = buf.subarray(0, maxBytes);
+  const sliced = buf.subarray(0, Math.max(maxBytes, 0));
   const decoded = new TextDecoder("utf-8", { fatal: false }).decode(sliced, {
     stream: true
   });
-  return decoded + TRUNCATION_MARKER;
+  return decoded + marker;
+}
+function truncateBytes(input, maxBytes) {
+  return truncateBytesWithMarker(input, maxBytes, TRUNCATION_MARKER);
 }
 export {
+  AGGREGATE_TRUNCATION_MARKER,
   TRUNCATION_MARKER,
-  truncateBytes
+  truncateBytes,
+  truncateBytesWithMarker
 };

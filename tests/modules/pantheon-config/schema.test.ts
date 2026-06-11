@@ -200,7 +200,7 @@ describe("validateConfigFile", () => {
     // `agent.model`. Even after neutralization the rendered form would flood
     // `console.error` and make the warning toast unreadable, so the renderer
     // caps the shown value at MAX_SHOWN_LEN (120 chars) with a trailing
-    // ellipsis. SEC-003.
+    // ellipsis.
     const oversized = "x".repeat(10_000)
     const result = validateConfigFile({
       agents: { perun: { model: oversized } },

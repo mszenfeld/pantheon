@@ -1,5 +1,7 @@
-import { getSessionAgentCached } from "@appverk/opencode-skill-utils";
+import { forgetSessionAgent, getSessionAgentCached } from "@appverk/opencode-skill-utils";
 import { registerAgentMetadata } from "../agent-registry/index.js";
+import { applyModelOverride, captureUserModels } from "../_shared/apply-model-override.js";
+import { isProviderConfigured, providerIdOf } from "../_shared/provider-detect.js";
 import { loadPantheonConfig } from "../pantheon-config/index.js";
 import {
   STRIBOG_AGENT_KEY,
@@ -9,14 +11,18 @@ import {
 } from "./stribog.metadata.js";
 import { buildStribogPrompt } from "./prompt.js";
 import { makeStribogToolHook } from "./tool-budget-hook.js";
+const DEFAULT_MODEL_PROVIDER = providerIdOf(DEFAULT_STRIBOG_MODEL);
 const AppVerkStribogPlugin = async ({ client }) => {
   registerAgentMetadata(stribogSpecialistInfo);
   const { hook, clearSession } = makeStribogToolHook({
     resolveAgent: (sessionID) => getSessionAgentCached(sessionID, client)
   });
+  let providerMissing = false;
+  let toastShown = false;
   return {
     config: async (config) => {
       config.agent ??= {};
+      const userModels = captureUserModels(config, STRIBOG_AGENT_KEY);
       config.agent[STRIBOG_AGENT_KEY] = {
         description: stribogSpecialistInfo.description,
         mode: "subagent",
@@ -29,8 +35,16 @@ const AppVerkStribogPlugin = async ({ client }) => {
           return buildStribogPrompt();
         }
       };
-      const override = loadPantheonConfig().agents[STRIBOG_AGENT_KEY]?.model;
-      config.agent[STRIBOG_AGENT_KEY].model = override ?? DEFAULT_STRIBOG_MODEL;
+      const providerOk = isProviderConfigured(config, DEFAULT_MODEL_PROVIDER);
+      const overridePinned = userModels.has(STRIBOG_AGENT_KEY) || loadPantheonConfig().agents[STRIBOG_AGENT_KEY]?.model !== void 0;
+      providerMissing = !providerOk && !overridePinned;
+      applyModelOverride(
+        config,
+        STRIBOG_AGENT_KEY,
+        STRIBOG_AGENT_KEY,
+        providerOk ? DEFAULT_STRIBOG_MODEL : void 0,
+        userModels
+      );
     },
     "tool.execute.before": hook,
     event: async ({ event }) => {
@@ -38,8 +52,21 @@ const AppVerkStribogPlugin = async ({ client }) => {
         const deletedID = event.properties?.info?.id;
         if (typeof deletedID === "string" && deletedID.length > 0) {
           clearSession(deletedID);
+          forgetSessionAgent(deletedID);
         }
+        return;
       }
+      if (event.type !== "session.created") return;
+      if (toastShown || !providerMissing) return;
+      const message = `Stribog's pinned default model (${DEFAULT_STRIBOG_MODEL}) needs the "${DEFAULT_MODEL_PROVIDER}" provider, which is not configured \u2014 falling back to the session default. Set agents.stribog.model in pantheon.json to a model on your provider, or configure the provider.`;
+      try {
+        console.error(`Pantheon: ${message}`);
+        await client.tui.showToast({
+          body: { variant: "warning", title: "Pantheon", message }
+        });
+      } catch {
+      }
+      toastShown = true;
     }
   };
 };

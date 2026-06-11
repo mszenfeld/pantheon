@@ -116,7 +116,7 @@ opencode agent perun "napraw QA-001, QA-003 z docs/testing/reports/2026-05-18-ex
 | `assign_issue_ids` | Tool | n/a | Pure function — deterministic, zero-padded 3-digit IDs (e.g. `QA-001`). |
 | `compute_waves` | Tool | n/a | Pure function — deterministic dependency-graph → wave grouping via topological sort, with cycle detection. |
 | `dispatch_background` | Tool | n/a | Fire-and-forget: starts a single specialist task via `session.promptAsync`, returns `{ id: "bg_…", agent, status: "running" }` immediately. Per-session cap of 4 concurrent background tasks. See [Background dispatch (within-turn overlap)](#background-dispatch-within-turn-overlap). |
-| `poll_background` | Tool | n/a | Non-blocking snapshot of given `bg_…` ids. Returns `running` / `success` / `not_found` per id; does NOT remove successful tasks (collect with `wait_background` to free the slot). |
+| `poll_background` | Tool | n/a | Non-blocking snapshot of given `bg_…` ids. Returns `running` / `success` / `not_found` per id. A `success` is **terminal**: the task is removed and its slot freed (one-time retrieval, like `wait_background`) — re-polling a collected id returns `not_found`. A `running` result is non-terminal: keep working and poll/wait again. |
 | `wait_background` | Tool | n/a | Blocks until the given `bg_…` ids are idle (or per-task timeout fires), returns `success` / `error` / `timeout` / `aborted` / `not_found`. **Removes collected tasks** — one-time retrieval, frees background slots. Honors `context.abort`: aborting cancels the wait AND kills the waited child sessions. |
 
 Beyond the elements above, the config hook also sets `config.default_agent = "Perun - Coordinator"`, but only when `default_agent` is unset — an explicit user-configured `default_agent` is respected (needed because the roster policy hides OpenCode's native `build` default).
@@ -181,10 +181,12 @@ Perun normalises `zmora-fe` / `zmora-be` / `zmora-setup` → `zmora` in every us
 - `{KEY_TRIGGERS}` — the "check BEFORE classification" trigger bullets.
 - `{DELEGATION_TABLE}` — the Domain / Agent / Trigger table.
 - `{USE_AVOID:<name>}` — the per-agent "use when / avoid when" block for the named agent.
+- `{DISPATCHABLE_ALLOWLIST}` — the sentence naming the `mode: all` agents Perun may dispatch (the no-plan branch's mechanism). Unlike the others, this is **not** derived from the metadata registry: it is threaded in at render time from `DISPATCHABLE_ALL_AGENTS` in `src/modules/coordinator/dispatch.ts` (which is downstream of the builder, so importing it would invert the `coordinator → agent-registry` layering); when omitted it renders to "".
+- `{WORKFLOW:<name>}` — the named agent's free-form `workflowContribution` block; renders to "" when the agent has none, and throws on an unknown target.
 
 At init, `getPerunPrompt()` (`src/modules/coordinator/index.ts`) loads the template and calls `buildPerunPrompt(template, getAgentMetadataRegistry())` (`src/modules/agent-registry/perun-prompt-builder.ts`), which replaces each placeholder with content rendered from the agent **metadata registry**. The registry is populated by each agent's `*.metadata.ts` entry — e.g. `triglav.metadata.ts` (`src/modules/explore/`), `zmora.metadata.ts` (`src/modules/qa/`), `stribog.metadata.ts` (`src/modules/stribog/`, the light-execution actuator), and `fix-auto.metadata.ts` (`src/modules/agent-registry/`, registered explicitly in `index.ts` because `packages/code-review` cannot import this bridge).
 
-**To change Perun's specialist roster or delegation triggers, edit the agent's `*.metadata.ts` entry — never the placeholder regions of `perun.md`.** Those regions are overwritten by `buildPerunPrompt` on every load, so direct edits there are silently lost. The hand-authored prose around the placeholders (workflows, safety rules) is yours to edit; the placeholder-filled tables and trigger blocks are not.
+**To change Perun's specialist roster, delegation triggers, or per-agent workflow blocks, edit the agent's `*.metadata.ts` entry — never the placeholder regions of `perun.md`.** This covers the `{SPECIALISTS_TABLE}`, `{KEY_TRIGGERS}`, `{DELEGATION_TABLE}`, `{USE_AVOID:<name>}`, and `{WORKFLOW:<name>}` regions. The `{DISPATCHABLE_ALLOWLIST}` region is the one exception with a different source: to change which `mode: all` agents Perun may dispatch, edit `DISPATCHABLE_ALL_AGENTS` in `src/modules/coordinator/dispatch.ts`, not the placeholder. Every one of these regions is overwritten by `buildPerunPrompt` on every load, so direct edits there are silently lost. The hand-authored prose around the placeholders (workflows, safety rules) is yours to edit; the placeholder-filled tables, trigger blocks, allowlist sentence, and workflow blocks are not.
 
 ### `dispatch_parallel` runtime characteristics
 
@@ -238,17 +240,17 @@ The three background-dispatch tools (`dispatch_background`, `poll_background`, `
 | Tool | Args | Returns |
 |---|---|---|
 | `dispatch_background` | `{ agent: string, summary: string, prompt: string, context?: string }` — single task per call. | `{ id: "bg_<8hex>", agent, status: "running" }`. |
-| `poll_background` | `{ ids: string[] }` — task ids returned by `dispatch_background`. | One entry per id: `{ id, agent, status: "running" \| "success" \| "not_found", result?, duration_ms? }`. **Does not remove successful tasks** — call `wait_background` to collect and free the slot. |
+| `poll_background` | `{ ids: string[] }` — task ids returned by `dispatch_background`. | One entry per id: `{ id, agent, status: "running" \| "success" \| "not_found", result?, duration_ms? }`. **A `success` is terminal** — the task is removed and its slot freed (one-time retrieval, like `wait_background`); re-polling a collected id returns `not_found`. |
 | `wait_background` | `{ ids: string[], timeoutMs?: number }` — blocks until each id is idle. | One entry per id: `{ id, agent, status: "success" \| "error" \| "timeout" \| "aborted" \| "not_found", result, duration_ms, error? }`. **Removes collected tasks**. |
 
 Defaults match `dispatch_parallel`: 1 s poll interval (`DEFAULT_POLL_INTERVAL_MS`), 5 min per-task timeout (`DEFAULT_TASK_TIMEOUT_MS`), 100 KB result cap (`DEFAULT_RESULT_MAX_BYTES`). Result strings pass through the same `neutralizeUntrustedOutput` and `truncateBytes` pipeline as `dispatch_parallel`.
 
 #### Per-session cap
 
-The number of in-flight background tasks **per parent session** is capped at 4 (`BACKGROUND_MAX_CONCURRENT` in `src/modules/coordinator/background.ts`). The cap mirrors the synchronous worker pool but is enforced independently — synchronous `dispatch_parallel` calls and background tasks do not share a budget. `dispatch_background` rejects with an explicit error when the cap is reached:
+The number of **active** background tasks **per parent session** is capped at 4 (`BACKGROUND_MAX_CONCURRENT` in `src/modules/coordinator/background.ts`). "Active" means *registered-but-not-yet-collected* — the store holds no liveness state, so the cap counts both still-running tasks and tasks that finished but were never collected (`countActiveByParent`). The moment a result is collected — by `wait_background`, or by a `poll_background` that reports `success` — the entry is removed and the slot frees. The cap mirrors the synchronous worker pool but is enforced independently — synchronous `dispatch_parallel` calls and background tasks do not share a budget. `dispatch_background` rejects with an explicit error when the cap is reached:
 
 ```text
-dispatch_background: max 4 background tasks running for this session — collect one (wait_background / poll_background) before firing more
+dispatch_background: max 4 background tasks (running or finished-but-uncollected) for this session — collect one (wait_background, or poll_background until it reports success) before firing more
 ```
 
 The cap exists to bound spawn count (cost-DoS). A confused agent that calls `dispatch_background` in a loop without ever collecting cannot mint unbounded child sessions.
@@ -276,10 +278,10 @@ Both store calls are no-ops for the "wrong" kind of id, so calling both is safe.
 | Ordered QA waves; need result before next dispatch | `dispatch_parallel` |
 | Issue-fix dispatches (sequential, one issue at a time) | `dispatch_parallel` |
 | `triglav` exploration overlapped with Perun's own classification / planning | `dispatch_background` + `wait_background` |
-| Check whether a background task has finished without blocking | `poll_background` |
-| Collect background results, freeing slots for new tasks | `wait_background` |
+| Check whether a background task has finished without blocking (a `success` poll also collects it and frees the slot) | `poll_background` |
+| Collect background results, freeing slots for new tasks | `wait_background` (or `poll_background` once it reports `success`) |
 
-Always collect (`wait_background` / `poll_background`) what you started before ending the turn — uncollected background work is wasted compute.
+Always collect (`wait_background`, or `poll_background` until it reports `success`) what you started before ending the turn — uncollected background work is wasted compute.
 
 ## Security model — code-enforced vs LLM-requested
 
@@ -343,7 +345,7 @@ src/modules/coordinator/
 ├── dispatch.ts             # dispatchParallel(): worker pool, cap enforcement, abort-at-start drain
 ├── background.ts           # startBackgroundTask() + collectBackground(); BACKGROUND_MAX_CONCURRENT = 4
 ├── background-store.ts     # BackgroundTaskStore — in-memory parent→child registry
-│                           # (register/get/listByParent/countRunningByParent/remove/removeByChild/clearParent)
+│                           # (register/get/listByParent/countActiveByParent/remove/removeByChild/clearParent)
 ├── sdk-specialist.ts       # SDK adapter — createSDKSpecialist (incl. startBackground via session.promptAsync),
 │                           # loadAgentRegistry, toPollerMessage
 ├── poller.ts               # pollUntilIdle() + PollerTimeoutError

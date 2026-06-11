@@ -2,7 +2,7 @@
 import path2 from "path";
 import { fileURLToPath } from "url";
 import { tool } from "@opencode-ai/plugin";
-import { isCoordinatorSession } from "@appverk/opencode-skill-utils";
+import { forgetSessionAgent, isCoordinatorSession } from "@appverk/opencode-skill-utils";
 
 // src/skill-catalog.ts
 import { existsSync, readFileSync, readdirSync } from "fs";
@@ -183,6 +183,17 @@ var AppVerkSkillRegistryPlugin = async ({ client }) => {
       if (!input.sessionID) return;
       if (await isCoordinatorSession(input.sessionID, client)) return;
       output.system.push(activationRules);
+    },
+    // The per-turn transform above resolves identity through `isCoordinatorSession`, which
+    // memoizes into the shared session→agent cache in skill-utils. Evict that entry on
+    // session teardown so the module-level map does not grow unbounded over a long-lived
+    // process (one entry per resolved session, otherwise retained forever).
+    event: async ({ event }) => {
+      if (event.type !== "session.deleted") return;
+      const deletedID = event.properties?.info?.id;
+      if (typeof deletedID === "string" && deletedID.length > 0) {
+        forgetSessionAgent(deletedID);
+      }
     }
   };
 };

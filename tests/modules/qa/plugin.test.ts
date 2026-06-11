@@ -23,7 +23,7 @@ describe("AppVerkQAPlugin", () => {
   const REMOVED_AGENTS = ["qa-tester-fe", "qa-tester-be", "qa-tester", "qa-fe-tester", "qa-be-tester"]
   const EXPECTED_COMMANDS = ["qa:create-plan", "qa:run"]
   // Deprecated aliases for the pre-namespace names must still register (back-compat
-  // shim — see MAINT-001). They resolve to the same templates as the canonical
+  // shim). They resolve to the same templates as the canonical
   // qa:* commands and carry a "renamed → /qa:*" description.
   const DEPRECATED_ALIAS_COMMANDS = ["create-qa-plan", "run-qa"]
 
@@ -197,7 +197,7 @@ describe("session.deleted cleanup", () => {
 })
 
 /**
- * Regression for ARCH-004: the dispatch scrubber must operate on a snapshot
+ * Regression: the dispatch scrubber must operate on a snapshot
  * pinned at dispatch start, not on live BindingsStore state. Otherwise a
  * binding minted/cleared mid-dispatch by another agent (record_input,
  * execute_recipe, session.deleted purge) creates a race window where a
@@ -215,7 +215,7 @@ describe("session.deleted cleanup", () => {
  *   - Mid-scrub clearParent: purging the parent during scrub does NOT remove
  *     pinned entries — the in-flight scrub still completes correctly.
  */
-describe("ARCH-004 scrubberFactory snapshot lifecycle", () => {
+describe("scrubberFactory snapshot lifecycle", () => {
   afterEach(() => {
     clearDispatchExtensions()
   })

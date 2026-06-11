@@ -22,21 +22,21 @@ describe("BackgroundTaskStore", () => {
     expect(s.get("nope")).toBeUndefined()
   })
 
-  it("counts running tasks per parent", () => {
+  it("counts active (registered-but-uncollected) tasks per parent", () => {
     const s = new BackgroundTaskStore()
     s.register(task({ id: "bg_1", parentSessionId: "p1" }))
     s.register(task({ id: "bg_2", parentSessionId: "p1" }))
     s.register(task({ id: "bg_3", parentSessionId: "p2" }))
-    expect(s.countRunningByParent("p1")).toBe(2)
-    expect(s.countRunningByParent("p2")).toBe(1)
-    expect(s.countRunningByParent("p3")).toBe(0)
+    expect(s.countActiveByParent("p1")).toBe(2)
+    expect(s.countActiveByParent("p2")).toBe(1)
+    expect(s.countActiveByParent("p3")).toBe(0)
   })
 
   it("remove frees the count (post-collect slot reuse)", () => {
     const s = new BackgroundTaskStore()
     s.register(task({ id: "bg_1", parentSessionId: "p1" }))
     s.remove("bg_1")
-    expect(s.countRunningByParent("p1")).toBe(0)
+    expect(s.countActiveByParent("p1")).toBe(0)
     expect(s.get("bg_1")).toBeUndefined()
   })
 
@@ -53,8 +53,8 @@ describe("BackgroundTaskStore", () => {
     s.register(task({ id: "bg_2", parentSessionId: "p1" }))
     s.register(task({ id: "bg_3", parentSessionId: "p2" }))
     s.clearParent("p1")
-    expect(s.countRunningByParent("p1")).toBe(0)
-    expect(s.countRunningByParent("p2")).toBe(1)
+    expect(s.countActiveByParent("p1")).toBe(0)
+    expect(s.countActiveByParent("p2")).toBe(1)
   })
 
   it("listByParent returns only that parent's tasks", () => {

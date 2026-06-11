@@ -73,18 +73,42 @@ export function neutralizeUntrustedOutput(s: string): string {
 }
 
 /**
+ * The internal `zmora` variant suffixes that must be collapsed to the logical
+ * agent name before surfacing in user-facing output. These mirror the
+ * `VARIANTS` tuple in `src/modules/qa/index.ts` (`fe` / `be` / `setup`).
+ *
+ * They are duplicated here rather than imported because `coordinator/` and
+ * `qa/` deliberately have NO direct import edge (they communicate only via the
+ * `_shared/dispatch-extensions` bridge — see `qa/index.ts` "avoids
+ * coordinator → qa layer inversion"). Pulling `VARIANTS` into `sanitize.ts`
+ * would introduce exactly that coupling. The two lists are instead pinned
+ * together by `tests/modules/coordinator/sanitize.test.ts`, which imports
+ * `VARIANTS` from `qa` and asserts `normalizeVariantSuffix(\`zmora-${v}\`)`
+ * collapses every declared variant — so adding a fourth variant fails that
+ * sync test until this list is updated.
+ */
+const VARIANT_SUFFIXES = ["fe", "be", "setup"] as const
+
+/**
  * Rewrites the internal `zmora` variant suffix into the logical agent name
- * before it surfaces in user-facing output. Internally Zmora is two
- * subagents — `zmora-fe` and `zmora-be` — but `docs/configuring-agents.md`
- * and the Perun prompt both promise that only the logical `zmora` name
- * appears in reports, dispatch labels, and report paths.
+ * before it surfaces in user-facing output. Internally Zmora is three
+ * subagents — `zmora-fe`, `zmora-be`, and `zmora-setup` — but
+ * `docs/configuring-agents.md` and the Perun prompt both promise that only the
+ * logical `zmora` name appears in reports, dispatch labels, and report paths.
  *
  * The variant suffix is internal scaffolding; sanitization is what keeps
  * that promise. We still validate the un-rewritten variant names
- * (`zmora-fe` / `zmora-be`) against the agent registry — only the
- * stringification for human eyes is normalized here.
+ * (`zmora-fe` / `zmora-be` / `zmora-setup`) against the agent registry — only
+ * the stringification for human eyes is normalized here.
+ *
+ * The pattern is built from `VARIANT_SUFFIXES` so a new variant cannot drift
+ * out of normalization silently: it stays in lockstep with that list, which
+ * the sync test pins to `qa`'s `VARIANTS`.
  */
-const VARIANT_SUFFIX_PATTERN = /\bzmora-(?:fe|be)\b/g
+const VARIANT_SUFFIX_PATTERN = new RegExp(
+  String.raw`\bzmora-(?:${VARIANT_SUFFIXES.join("|")})\b`,
+  "g",
+)
 
 export function normalizeVariantSuffix(s: string): string {
   if (s.length === 0) {

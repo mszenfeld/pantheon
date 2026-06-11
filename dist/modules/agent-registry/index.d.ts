@@ -1,6 +1,6 @@
 import { SpecialistInfo } from './agent-metadata.js';
 export { AgentCategory, AgentCost, AgentMode, AgentPromptMetadata, DelegationTrigger } from './agent-metadata.js';
-export { PERUN_PLACEHOLDERS, buildDelegationTable, buildKeyTriggersSection, buildPerunPrompt, buildSpecialistsTable, buildUseAvoidSection } from './perun-prompt-builder.js';
+export { PERUN_PLACEHOLDERS, PerunPromptOptions, buildDelegationTable, buildDispatchableAllowlistSentence, buildKeyTriggersSection, buildPerunPrompt, buildSpecialistsTable, buildUseAvoidSection, buildWorkflowContribution } from './perun-prompt-builder.js';
 
 /**
  * Push one logical agent's metadata into the process-wide registry. Called once

@@ -36,6 +36,39 @@ describe("stribog tool-budget hook", () => {
     }
   })
 
+  it("skips attribution (no resolveAgent call) for allow-listed non-edit/write tools", async () => {
+    // Cheap pre-filter, mirroring coordinator-policy's tool!=="bash" bail: read/glob/grep/bash
+    // are allow-listed AND not edit/write, so the hook has nothing to enforce and must NOT pay
+    // for the (full-transcript) attribution call.
+    let calls = 0
+    const { hook: h } = makeStribogToolHook({
+      resolveAgent: async () => {
+        calls++
+        return STRIBOG
+      },
+    })
+    for (const t of ["read", "glob", "grep", "bash"]) {
+      await expect(h(input(t), out())).resolves.toBeUndefined()
+    }
+    expect(calls).toBe(0)
+  })
+
+  it("still attributes deny-candidates and edit/write (pre-filter does not skip them)", async () => {
+    // A tool outside the allow-list (must be resolvable to DENY for stribog) and edit/write
+    // (must be resolvable to enforce the budget) still call resolveAgent.
+    let calls = 0
+    const { hook: h } = makeStribogToolHook({
+      resolveAgent: async () => {
+        calls++
+        return STRIBOG
+      },
+    })
+    await expect(h(input("execute_recipe"), out())).rejects.toThrow(/STRIBOG_TOOL_DENIED/)
+    await expect(h(input("write"), out("/repo/a.ts"))).resolves.toBeUndefined()
+    await expect(h(input("edit"), out("/repo/b.ts"))).resolves.toBeUndefined()
+    expect(calls).toBe(3)
+  })
+
   it("matches lowercase runtime ids only (capital Edit is NOT allow-listed)", async () => {
     await expect(hook(STRIBOG)(input("Edit"), out("/repo/a.ts"))).rejects.toThrow(/STRIBOG_TOOL_DENIED/)
   })

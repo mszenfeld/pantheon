@@ -13,7 +13,11 @@ function neutralizeUntrustedOutput(s) {
   out = out.replace(/</g, "&lt;").replace(/>/g, "&gt;");
   return out;
 }
-const VARIANT_SUFFIX_PATTERN = /\bzmora-(?:fe|be)\b/g;
+const VARIANT_SUFFIXES = ["fe", "be", "setup"];
+const VARIANT_SUFFIX_PATTERN = new RegExp(
+  String.raw`\bzmora-(?:${VARIANT_SUFFIXES.join("|")})\b`,
+  "g"
+);
 function normalizeVariantSuffix(s) {
   if (s.length === 0) {
     return s;

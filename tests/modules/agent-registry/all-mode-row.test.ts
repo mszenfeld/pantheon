@@ -8,7 +8,7 @@ const veles: SpecialistInfo = {
   name: "Veles - Planner",
   mode: "all",
   description: "planner",
-  metadata: { category: "specialist", cost: "EXPENSIVE", triggers: [] },
+  metadata: { triggers: [] },
 }
 
 describe("buildSpecialistsTable with an all-mode specialist", () => {

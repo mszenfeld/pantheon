@@ -8,7 +8,13 @@ declare const STRIBOG_AGENT_KEY: "stribog";
  *  2026-06-10 four-round eval (docs/eval/scenarios/stribog/): the cheapest model
  *  passing all three discipline gates (scope/secret/liveness) natively. Overridable
  *  via `agents.stribog.model`. NOT a security control — see spec decision #7.
- *  Must satisfy MODEL_REGEX in src/modules/pantheon-config/schema.ts. */
+ *  Must satisfy MODEL_REGEX in src/modules/pantheon-config/schema.ts.
+ *
+ *  L3: this default needs the `openai` provider. The plugin's config hook probes
+ *  it (see index.ts / _shared/provider-detect.ts) and, when OpenAI is absent on a
+ *  fresh non-OpenAI install, falls back to the session default instead of pinning
+ *  an unresolvable model (plus a one-time toast). The provider id is derived from
+ *  this string, so keep it in `provider/model` form. */
 declare const DEFAULT_STRIBOG_MODEL = "openai/gpt-5.4";
 declare const STRIBOG_DESCRIPTION = "Light execution specialist: performs ONE small, mechanical task with real side effects \u2014 bring up/fix a service, restart, read logs, or a 1\u20132 file config/value change \u2014 then verifies and returns a structured result. NOT for secrets (use zmora-setup) or feature work (main executor). EXPERIMENTAL (Phase 1): no automatic edit-recovery yet \u2014 a botched edit cannot be auto-restored.";
 /** Hard cap on the number of distinct files Stribog may modify (Edit/Write) per task.

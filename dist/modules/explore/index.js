@@ -1,15 +1,19 @@
 import { registerAgentMetadata } from "../agent-registry/index.js";
-import { loadPantheonConfig } from "../pantheon-config/index.js";
+import { applyModelOverride, captureUserModels } from "../_shared/apply-model-override.js";
 import { TRIGLAV_AGENT_KEY, triglavSpecialistInfo } from "./triglav.metadata.js";
 import { buildTriglavPrompt } from "./prompt.js";
 import { isSerenaAvailable } from "../_shared/serena-detect.js";
+import { makeSerenaDegradedNotifier } from "../_shared/serena-degraded-notifier.js";
 const AppVerkExplorePlugin = async ({ client }) => {
   registerAgentMetadata(triglavSpecialistInfo);
-  let serenaMissing = false;
-  let toastShown = false;
+  const serenaNotifier = makeSerenaDegradedNotifier(
+    client,
+    "Triglav registered but serena MCP not found \u2014 exploration runs in degraded mode (Grep/Glob). Install serena for semantic search."
+  );
   return {
     config: async (config) => {
       config.agent ??= {};
+      const userModels = captureUserModels(config, TRIGLAV_AGENT_KEY);
       config.agent[TRIGLAV_AGENT_KEY] = {
         description: triglavSpecialistInfo.description,
         mode: "subagent",
@@ -17,25 +21,10 @@ const AppVerkExplorePlugin = async ({ client }) => {
           return buildTriglavPrompt();
         }
       };
-      const triglavModel = loadPantheonConfig().agents.triglav?.model;
-      if (triglavModel !== void 0) {
-        config.agent[TRIGLAV_AGENT_KEY].model = triglavModel;
-      }
-      serenaMissing = !isSerenaAvailable(config);
+      applyModelOverride(config, "triglav", TRIGLAV_AGENT_KEY, void 0, userModels);
+      serenaNotifier.markSerenaMissing(!isSerenaAvailable(config));
     },
-    event: async ({ event }) => {
-      if (event.type !== "session.created") return;
-      if (toastShown || !serenaMissing) return;
-      const message = "Triglav registered but serena MCP not found \u2014 exploration runs in degraded mode (Grep/Glob). Install serena for semantic search.";
-      try {
-        console.error(`Pantheon: ${message}`);
-        await client.tui.showToast({
-          body: { variant: "warning", title: "Pantheon", message }
-        });
-      } catch {
-      }
-      toastShown = true;
-    }
+    event: serenaNotifier.onEvent
   };
 };
 var explore_default = AppVerkExplorePlugin;

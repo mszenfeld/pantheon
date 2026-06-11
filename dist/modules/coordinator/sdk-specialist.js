@@ -24,7 +24,7 @@ function createSDKSpecialist(client, parentSessionID) {
         }).catch(() => {
         });
       }
-      await client.session.prompt({
+      await client.session.promptAsync({
         path: { id: sessionId },
         body: {
           agent: agentName,

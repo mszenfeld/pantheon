@@ -15,21 +15,26 @@ interface DispatchResult {
 }
 interface DispatchSpecialist {
     /**
-     * Start a foreground task: create the child session, then run the turn via
-     * `session.prompt` (which blocks for the entire turn). `onSessionCreated`, if
-     * provided, fires with the child session id AFTER the session is created but
-     * BEFORE the turn runs — this is the only point at which a caller can record
-     * the child→agent mapping in time for the `shell.env` hook, which fires
-     * mid-turn. Resolves the child session id once the turn completes.
+     * Start a foreground task: create the child session, then fire the turn via
+     * `session.promptAsync` (returns immediately; the server runs the turn
+     * autonomously). Resolves the child session id WITHOUT awaiting the turn —
+     * completion is observed by `runTask`'s `pollUntilIdle`, so `taskTimeoutMs`
+     * and the abort `signal` govern the ENTIRE turn rather than only a post-turn
+     * confirmatory poll. `onSessionCreated`, if provided, fires with the child
+     * session id AFTER the session is created but BEFORE the turn is fired — this
+     * is the only point at which a caller can record the child→agent mapping in
+     * time for the `shell.env` hook, which fires mid-turn server-side.
      */
     startTask(agentName: string, prompt: string, onSessionCreated?: (sessionId: string) => void): Promise<string>;
     fetchMessages(sessionId: string): Promise<PollerMessage[]>;
     /**
-     * Cancel a previously-started session. Called when `ToolContext.abort`
-     * fires so the child session is cleaned up server-side (no orphaned
-     * compute, no charges). Implementations should treat this as best-effort:
-     * errors must not surface to the caller (the abort path already returns
-     * an "aborted" result).
+     * Cancel a previously-started session so the child stops doing work
+     * server-side (no orphaned compute, no charges). Called on BOTH terminal
+     * non-success paths: when `ToolContext.abort` fires, AND when the task times
+     * out — in both cases the child's `promptAsync` turn is still running
+     * autonomously and would otherwise run to completion as orphaned compute.
+     * Implementations should treat this as best-effort: errors must not surface
+     * to the caller (the abort/timeout path already returns its result).
      */
     abortTask(sessionId: string): Promise<void>;
     /**
@@ -72,6 +77,16 @@ interface DispatchParallelInput {
     pollIntervalMs?: number;
     taskTimeoutMs?: number;
     resultMaxBytes?: number;
+    /**
+     * Optional aggregate (whole-wave) byte budget for the SUCCESSFUL results of
+     * this call, applied AFTER the per-task `resultMaxBytes` cap. Results are
+     * walked in input order, summing UTF-8 body bytes against the budget; once it
+     * is exhausted, each remaining successful body is truncated to fit (or to an
+     * empty-but-marked pointer when nothing fits) with a marker pointing to the
+     * child session. Defaults to `DEFAULT_AGGREGATE_MAX_BYTES`. See that constant
+     * for the rationale (bounds a single tool-result's token footprint).
+     */
+    aggregateMaxBytes?: number;
     /**
      * Optional abort signal threaded through to every in-flight task. When the
      * signal aborts, each task whose poller is still running terminates within
@@ -138,8 +153,9 @@ interface DispatchParallelInput {
 declare const DEFAULT_POLL_INTERVAL_MS = 1000;
 declare const DEFAULT_TASK_TIMEOUT_MS: number;
 declare const DEFAULT_RESULT_MAX_BYTES: number;
+declare const DEFAULT_AGGREGATE_MAX_BYTES: number;
 declare const DISPATCH_MAX_TASKS = 4;
 declare const DISPATCH_CONCURRENCY = 4;
 declare function dispatchParallel(input: DispatchParallelInput): Promise<DispatchResult[]>;
 
-export { type AgentInfo, DEFAULT_POLL_INTERVAL_MS, DEFAULT_RESULT_MAX_BYTES, DEFAULT_TASK_TIMEOUT_MS, DISPATCHABLE_ALL_AGENTS, DISPATCH_CONCURRENCY, DISPATCH_MAX_TASKS, type DispatchParallelInput, type DispatchResult, type DispatchSpecialist, type DispatchTask, dispatchParallel, validateDispatchable };
+export { type AgentInfo, DEFAULT_AGGREGATE_MAX_BYTES, DEFAULT_POLL_INTERVAL_MS, DEFAULT_RESULT_MAX_BYTES, DEFAULT_TASK_TIMEOUT_MS, DISPATCHABLE_ALL_AGENTS, DISPATCH_CONCURRENCY, DISPATCH_MAX_TASKS, type DispatchParallelInput, type DispatchResult, type DispatchSpecialist, type DispatchTask, dispatchParallel, validateDispatchable };

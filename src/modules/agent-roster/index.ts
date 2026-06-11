@@ -1,4 +1,4 @@
-import type { Config } from "@opencode-ai/plugin"
+import type { Config, Plugin } from "@opencode-ai/plugin"
 
 /**
  * Visible-primary native built-in agents on opencode 1.15.10 — the ONLY natives
@@ -93,3 +93,104 @@ export function applyRosterPolicy(config: Config, preExisting: Set<string>): voi
     .find((k) => isVisibleSessionTarget(agents[k]))
   if (fallback !== undefined) setDefaultAgent(config, fallback)
 }
+
+/**
+ * Shape of an entry from the runtime's `client.app.agents()` listing — the
+ * AUTHORITATIVE agent map, including the native built-ins that never appear in
+ * `config.agent` (so the snapshot-diff cannot see them). We only read the three
+ * fields the picker filter cares about. `native`/`builtIn` are accepted as a
+ * union because the flag's name differs across SDK type versions (`builtIn` in
+ * the v1 listing type, `native` in v2); `hidden` is honored by the runtime but
+ * is absent from the v1 listing type — same v1-SDK gap localized for
+ * `default_agent` above, so we read it via a tolerant cast.
+ */
+interface RuntimeAgent {
+  name?: string
+  mode?: string
+  native?: boolean
+  builtIn?: boolean
+  hidden?: boolean
+}
+
+function isNative(agent: RuntimeAgent): boolean {
+  return agent.native === true || agent.builtIn === true
+}
+
+/**
+ * Drift detector for the one manual touchpoint. `NATIVE_BUILTINS` is hand-pinned
+ * to the natives the picker shows on the verified opencode build; a future bump
+ * could introduce a NEW native visible-primary (e.g. `chat`) that silently
+ * leaks into the picker, breaking "the harness owns the roster". This enumerates
+ * the runtime agent map and returns any native whose `mode!=="subagent" &&
+ * !hidden` is NOT covered by `NATIVE_BUILTINS` — i.e. would slip past the
+ * backstop. Pure (no I/O); the caller decides how to surface the result.
+ * Returns a sorted, de-duplicated list of uncovered native keys.
+ */
+export function findUncoveredNatives(agents: readonly RuntimeAgent[]): string[] {
+  const covered = new Set<string>(NATIVE_BUILTINS)
+  const uncovered = new Set<string>()
+  for (const agent of agents) {
+    if (!isNative(agent)) continue
+    const name = agent.name
+    if (name === undefined || name.length === 0) continue
+    // Picker filter: mode!=="subagent" && !hidden. `mode:undefined` is treated
+    // as visible by the runtime for natives, so it counts as a leak too — only
+    // an explicit "subagent" excludes it.
+    if (agent.mode === "subagent") continue
+    if (agent.hidden === true) continue
+    if (covered.has(name)) continue
+    uncovered.add(name)
+  }
+  return [...uncovered].sort()
+}
+
+/**
+ * Human-readable warning describing the uncovered natives. Exported so the test
+ * can assert the message without driving the whole event hook.
+ */
+export function buildDriftWarning(uncovered: readonly string[]): string {
+  return (
+    `Native visible-primary agent(s) not covered by the roster policy: ${uncovered.join(", ")}. ` +
+    `These will leak into the picker — add them to NATIVE_BUILTINS in ` +
+    `src/modules/agent-roster/index.ts and re-verify against the actual picker.`
+  )
+}
+
+/**
+ * Harness self-check plugin: on first `session.created`, enumerate the runtime's
+ * actual agent map (`client.app.agents()`) and warn — toast + stderr — if a
+ * native visible-primary key is not covered by `NATIVE_BUILTINS`. CONSERVATIVE
+ * by design: it warns, it never mutates the roster or throws, so a missed native
+ * surfaces loudly without breaking startup. Mirrors the explore/plan
+ * degraded-mode toast wiring (one-shot, best-effort, `console.error` +
+ * `client.tui.showToast`). The actual hiding still happens in
+ * `applyRosterPolicy`; this only guards against `NATIVE_BUILTINS` going stale on
+ * an opencode bump.
+ */
+export const AppVerkAgentRosterPlugin: Plugin = async ({ client }) => {
+  let checked = false
+  return {
+    event: async ({ event }) => {
+      if (event.type !== "session.created") return
+      if (checked) return
+      checked = true
+      try {
+        const result = await client.app.agents()
+        const agents = (result.data ?? []) as RuntimeAgent[]
+        const uncovered = findUncoveredNatives(agents)
+        if (uncovered.length === 0) return
+        const message = buildDriftWarning(uncovered)
+        console.error(`Pantheon: ${message}`)
+        await client.tui.showToast({
+          body: { variant: "warning", title: "Pantheon", message },
+        })
+      } catch {
+        // best-effort: a missing/failing agents endpoint or headless / non-TUI
+        // invocation must never crash startup. The self-check is a drift alarm,
+        // not a correctness dependency.
+      }
+    },
+  }
+}
+
+export default AppVerkAgentRosterPlugin

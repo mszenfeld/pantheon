@@ -4,6 +4,8 @@ import {
   buildSpecialistsTable,
   buildDelegationTable,
   buildUseAvoidSection,
+  buildWorkflowContribution,
+  buildDispatchableAllowlistSentence,
   buildPerunPrompt,
 } from "../../../src/modules/agent-registry/perun-prompt-builder.js"
 import type { SpecialistInfo } from "../../../src/modules/agent-registry/agent-metadata.js"
@@ -13,7 +15,7 @@ function info(over: Partial<SpecialistInfo> & { name: string }): SpecialistInfo 
     name: over.name,
     mode: over.mode ?? "subagent",
     description: over.description ?? `${over.name} desc`,
-    metadata: over.metadata ?? { category: "specialist", cost: "CHEAP", triggers: [] },
+    metadata: over.metadata ?? { triggers: [] },
   }
 }
 
@@ -38,6 +40,23 @@ describe("buildSpecialistsTable", () => {
     expect(lines[2]).toBe("| `fix-auto` | subagent | f |")
     expect(lines[3]).toBe("| `zmora` | subagent | z |")
   })
+
+  it("emits only Name/Mode/Purpose — no Cost column or cost-tier leak", () => {
+    // Guards the dead-field fix: cost/category are unrendered, so even when set
+    // they must not surface in the specialists table (no Cost column, no
+    // FREE/CHEAP/EXPENSIVE prose). If a Cost column is ever added, do it here and
+    // re-populate metadata.cost together.
+    const out = buildSpecialistsTable([
+      info({
+        name: "zmora",
+        description: "QA work",
+        metadata: { cost: "EXPENSIVE", category: "specialist", triggers: [] },
+      }),
+    ])
+    expect(out.split("\n")[0]).toBe("| Name | Mode | Purpose |")
+    expect(out).not.toContain("Cost")
+    expect(out).not.toMatch(/FREE|CHEAP|EXPENSIVE/)
+  })
 })
 
 describe("buildKeyTriggersSection", () => {
@@ -50,7 +69,7 @@ describe("buildKeyTriggersSection", () => {
       info({ name: "zmora" }),
       info({
         name: "triglav",
-        metadata: { category: "exploration", cost: "FREE", triggers: [], keyTrigger: "user asks where X is" },
+        metadata: { triggers: [], keyTrigger: "user asks where X is" },
       }),
     ])
     expect(out).toBe(
@@ -69,8 +88,6 @@ describe("buildDelegationTable", () => {
       info({
         name: "triglav",
         metadata: {
-          category: "exploration",
-          cost: "FREE",
           triggers: [
             { domain: "Code search", trigger: "find where X is defined" },
             { domain: "Impact analysis", trigger: "what calls Y" },
@@ -94,8 +111,6 @@ describe("buildDelegationTable", () => {
 const triglav = info({
   name: "triglav",
   metadata: {
-    category: "exploration",
-    cost: "FREE",
     triggers: [],
     useWhen: ["you need to find code", "you need impact analysis"],
     avoidWhen: ["you already know the file"],
@@ -124,6 +139,57 @@ describe("buildUseAvoidSection", () => {
         "- you already know the file",
       ].join("\n"),
     )
+  })
+})
+
+describe("buildWorkflowContribution", () => {
+  it("returns empty string for an agent without a workflowContribution", () => {
+    expect(buildWorkflowContribution("zmora", [info({ name: "zmora" })])).toBe("")
+  })
+
+  it("throws for an unknown agent target", () => {
+    expect(() => buildWorkflowContribution("ghost", [info({ name: "zmora" })])).toThrow(
+      /Unknown agent in placeholder: ghost/,
+    )
+  })
+
+  it("renders the contribution prose verbatim", () => {
+    const withWorkflow = info({
+      name: "stribog",
+      metadata: {
+        triggers: [],
+        workflowContribution: "### Stribog routing\n\n- prefer for build/deploy actuation",
+      },
+    })
+    expect(buildWorkflowContribution("stribog", [withWorkflow])).toBe(
+      "### Stribog routing\n\n- prefer for build/deploy actuation",
+    )
+  })
+})
+
+describe("buildDispatchableAllowlistSentence", () => {
+  it("describes the empty allowlist", () => {
+    expect(buildDispatchableAllowlistSentence([])).toContain(
+      "No `mode: all` agent is dispatchable",
+    )
+  })
+
+  it("renders a single entry backticked verbatim", () => {
+    const out = buildDispatchableAllowlistSentence(["Veles - Planner"])
+    expect(out).toContain("`Veles - Planner`")
+    expect(out).toContain(" is ")
+  })
+
+  it("joins two entries with 'and' and uses a plural verb", () => {
+    const out = buildDispatchableAllowlistSentence(["Veles - Planner", "Mokosh - Archivist"])
+    expect(out).toContain("`Veles - Planner` and `Mokosh - Archivist`")
+    expect(out).toContain(" are ")
+  })
+
+  it("joins three+ entries with a serial comma before the final 'and'", () => {
+    const out = buildDispatchableAllowlistSentence(["A", "B", "C"])
+    expect(out).toContain("`A`, `B` and `C`")
+    expect(out).toContain(" are ")
   })
 })
 
@@ -167,5 +233,38 @@ describe("buildPerunPrompt", () => {
     expect(out).not.toMatch(/\n{3,}/)
     expect(out).toContain("A")
     expect(out).toContain("B")
+  })
+
+  it("renders {DISPATCHABLE_ALLOWLIST} from the supplied option", () => {
+    const out = buildPerunPrompt("X {DISPATCHABLE_ALLOWLIST} Y", [], {
+      dispatchableAllowlist: ["Veles - Planner"],
+    })
+    expect(out).toContain("`Veles - Planner`")
+    expect(out).not.toContain("{DISPATCHABLE_ALLOWLIST}")
+  })
+
+  it("renders {DISPATCHABLE_ALLOWLIST} to empty when no allowlist is supplied", () => {
+    const out = buildPerunPrompt("X{DISPATCHABLE_ALLOWLIST}Y", [])
+    expect(out).toBe("XY")
+  })
+
+  it("substitutes a {WORKFLOW:<name>} per-agent placeholder", () => {
+    const out = buildPerunPrompt("{WORKFLOW:stribog}", [
+      info({
+        name: "stribog",
+        metadata: {
+          triggers: [],
+          workflowContribution: "stribog handles actuation",
+        },
+      }),
+    ])
+    expect(out).toContain("stribog handles actuation")
+    expect(out).not.toContain("{WORKFLOW:stribog}")
+  })
+
+  it("throws when a {WORKFLOW:<name>} placeholder targets an unknown agent", () => {
+    expect(() => buildPerunPrompt("{WORKFLOW:ghost}", [triglav])).toThrow(
+      /Unknown agent in placeholder: ghost/,
+    )
   })
 })

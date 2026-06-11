@@ -52,4 +52,20 @@ describe("AppVerkQAPlugin Zmora model injection", () => {
     expect(config.agent!["zmora-fe"]!.model).toBeUndefined()
     expect(config.agent!["zmora-be"]!.model).toBeUndefined()
   })
+
+  // M11 precedence contract, per-variant: a user's opencode.json
+  // `agent.zmora-<stack>.model` survives the wholesale replace and wins over the
+  // pantheon.json `zmora` override. A user pinning ONLY one variant must not
+  // clobber the override on the others.
+  it("preserves a per-variant opencode.json model and leaves other variants on the override", async () => {
+    writeUserGlobal(`{ "agents": { "zmora": { "model": "anthropic/claude-sonnet-4-6" } } }`)
+    const plugin = await AppVerkQAPlugin({} as never)
+    const config: Config = {
+      agent: { "zmora-be": { model: "anthropic/claude-opus-4-7" } },
+    }
+    await plugin.config?.(config)
+    expect(config.agent!["zmora-be"]!.model).toBe("anthropic/claude-opus-4-7")
+    expect(config.agent!["zmora-fe"]!.model).toBe("anthropic/claude-sonnet-4-6")
+    expect(config.agent!["zmora-setup"]!.model).toBe("anthropic/claude-sonnet-4-6")
+  })
 })

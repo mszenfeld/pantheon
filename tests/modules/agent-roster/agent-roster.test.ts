@@ -5,6 +5,8 @@ import {
   getDefaultAgent,
   setDefaultAgent,
   applyRosterPolicy,
+  findUncoveredNatives,
+  buildDriftWarning,
 } from "../../../src/modules/agent-roster/index.js"
 
 type Entry = { mode?: string; hidden?: boolean; model?: string; description?: string }
@@ -165,5 +167,100 @@ describe("agent-roster: constants & default_agent accessors", () => {
     expect((config as { default_agent?: string }).default_agent).toBe(
       "Perun - Coordinator",
     )
+  })
+})
+
+type RuntimeAgent = {
+  name?: string
+  mode?: string
+  native?: boolean
+  builtIn?: boolean
+  hidden?: boolean
+}
+
+describe("agent-roster: findUncoveredNatives (drift detector)", () => {
+  it("returns nothing when the runtime exposes only covered natives", () => {
+    const agents: RuntimeAgent[] = [
+      { name: "build", mode: "primary", native: true },
+      { name: "plan", mode: "primary", native: true },
+    ]
+    expect(findUncoveredNatives(agents)).toEqual([])
+  })
+
+  it("flags a NEW native visible-primary not in NATIVE_BUILTINS (the leak case)", () => {
+    const agents: RuntimeAgent[] = [
+      { name: "build", mode: "primary", native: true },
+      { name: "plan", mode: "primary", native: true },
+      { name: "chat", mode: "primary", native: true },
+    ]
+    expect(findUncoveredNatives(agents)).toEqual(["chat"])
+  })
+
+  it("flags a native with mode:undefined (runtime treats unspecified as visible)", () => {
+    const agents: RuntimeAgent[] = [{ name: "chat", native: true }]
+    expect(findUncoveredNatives(agents)).toEqual(["chat"])
+  })
+
+  it("flags a native with mode:'all'", () => {
+    const agents: RuntimeAgent[] = [{ name: "chat", mode: "all", native: true }]
+    expect(findUncoveredNatives(agents)).toEqual(["chat"])
+  })
+
+  it("ignores native subagents (already excluded by the picker filter)", () => {
+    const agents: RuntimeAgent[] = [
+      { name: "general", mode: "subagent", native: true },
+      { name: "explore", mode: "subagent", native: true },
+    ]
+    expect(findUncoveredNatives(agents)).toEqual([])
+  })
+
+  it("ignores a native already hidden by the runtime", () => {
+    const agents: RuntimeAgent[] = [
+      { name: "summary", mode: "primary", native: true, hidden: true },
+    ]
+    expect(findUncoveredNatives(agents)).toEqual([])
+  })
+
+  it("ignores non-native (harness/user) visible-primary agents", () => {
+    const agents: RuntimeAgent[] = [
+      { name: "Perun - Coordinator", mode: "primary", native: false },
+      { name: "user-agent", mode: "primary" },
+    ]
+    expect(findUncoveredNatives(agents)).toEqual([])
+  })
+
+  it("accepts the v1 SDK `builtIn` flag as the native marker", () => {
+    const agents: RuntimeAgent[] = [{ name: "chat", mode: "primary", builtIn: true }]
+    expect(findUncoveredNatives(agents)).toEqual(["chat"])
+  })
+
+  it("de-duplicates and sorts uncovered names", () => {
+    const agents: RuntimeAgent[] = [
+      { name: "zeta", mode: "primary", native: true },
+      { name: "alpha", mode: "primary", native: true },
+      { name: "alpha", mode: "all", native: true },
+    ]
+    expect(findUncoveredNatives(agents)).toEqual(["alpha", "zeta"])
+  })
+
+  it("skips entries with a missing/empty name", () => {
+    const agents: RuntimeAgent[] = [
+      { mode: "primary", native: true },
+      { name: "", mode: "primary", native: true },
+    ]
+    expect(findUncoveredNatives(agents)).toEqual([])
+  })
+
+  it("returns nothing for an empty runtime map", () => {
+    expect(findUncoveredNatives([])).toEqual([])
+  })
+})
+
+describe("agent-roster: buildDriftWarning", () => {
+  it("names the uncovered agents and points at NATIVE_BUILTINS", () => {
+    const message = buildDriftWarning(["chat", "voice"])
+    expect(message).toContain("chat, voice")
+    expect(message).toContain("NATIVE_BUILTINS")
+    expect(message).toContain("picker")
   })
 })

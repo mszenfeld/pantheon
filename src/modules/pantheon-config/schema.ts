@@ -24,20 +24,21 @@ export type ValidationResult = {
 // uses only the characters observed in real OpenCode model identifiers
 // (alphanumerics, dot, dash, underscore). This is deliberately stricter
 // than `[^/]+` so untrusted control sequences (ESC `\x1b`, BiDi `U+202E`,
-// `\r\n`, zero-width chars) cannot reach the TUI sinks at
-// `src/modules/coordinator/index.ts`, `src/modules/qa/index.ts`, and
-// `src/modules/explore/index.ts` via `config.agent[...]!.model` — same
-// CWE-117 class addressed for session-notification in commit 392b781.
+// `\r\n`, zero-width chars) cannot reach the TUI sinks via the single
+// `config.agent[...].model` assignment in
+// `src/modules/_shared/apply-model-override.ts` (which every agent module now
+// funnels through) — same CWE-117 class addressed for session-notification in
+// commit 392b781.
 //
 // SINGLE SOURCE OF TRUTH: this is the canonical CWE-117 narrative for
-// `agents.<name>.model` injection. Call sites that read
-// `loadPantheonConfig().agents.<name>?.model` and assign it back to
-// `config.agent[...].model` rely on this regex for their security
-// guarantee and reference it with a short one-liner instead of
-// duplicating this explanation. If you loosen this allow-list, audit
-// every reference to `MODEL_REGEX` and every `.model = ` assignment
-// reachable from `loadPantheonConfig()` to confirm the relaxed character
-// set is still safe for the TUI/log sinks downstream.
+// `agents.<name>.model` injection. The shared `applyModelOverride` helper reads
+// `loadPantheonConfig().agents.<slug>?.model` and assigns it back to
+// `config.agent[...].model`, relying on this regex for its security guarantee
+// and referencing it with a short one-liner instead of duplicating this
+// explanation. If you loosen this allow-list, audit every reference to
+// `MODEL_REGEX` and the `.model = ` assignment in `apply-model-override.ts` to
+// confirm the relaxed character set is still safe for the TUI/log sinks
+// downstream.
 const MODEL_REGEX = /^[A-Za-z0-9._-]+(\/[A-Za-z0-9._-]+)+$/
 
 // Upper bound for the rendered `model` value in `invalid model …` errors.

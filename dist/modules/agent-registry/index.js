@@ -2,10 +2,12 @@ export * from "./agent-metadata.js";
 import {
   PERUN_PLACEHOLDERS,
   buildDelegationTable,
+  buildDispatchableAllowlistSentence,
   buildKeyTriggersSection,
   buildPerunPrompt,
   buildSpecialistsTable,
-  buildUseAvoidSection
+  buildUseAvoidSection,
+  buildWorkflowContribution
 } from "./perun-prompt-builder.js";
 const registry = [];
 function registerAgentMetadata(info) {
@@ -25,10 +27,12 @@ function clearAgentMetadataRegistry() {
 export {
   PERUN_PLACEHOLDERS,
   buildDelegationTable,
+  buildDispatchableAllowlistSentence,
   buildKeyTriggersSection,
   buildPerunPrompt,
   buildSpecialistsTable,
   buildUseAvoidSection,
+  buildWorkflowContribution,
   clearAgentMetadataRegistry,
   getAgentMetadataRegistry,
   registerAgentMetadata

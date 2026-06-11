@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest"
 import { STRIBOG_TOOLS } from "../../../src/modules/stribog/allowed-tools.js"
 import { STRIBOG_ALLOWED_TOOL_IDS } from "../../../src/modules/stribog/stribog.metadata.js"
 
-// MAINT-002: STRIBOG_TOOLS (display-cased prompt frontmatter, allowed-tools.ts) and
+// STRIBOG_TOOLS (display-cased prompt frontmatter, allowed-tools.ts) and
 // STRIBOG_ALLOWED_TOOL_IDS (lowercase runtime gate, stribog.metadata.ts) are two
 // hand-maintained lists describing ONE boundary. The "kept in sync" comment is prose;
 // this test is the cross-check. It fails if a verb is added/removed on one side only —

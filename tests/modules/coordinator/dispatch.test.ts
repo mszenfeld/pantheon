@@ -2,12 +2,14 @@ import { afterEach, describe, expect, it, vi } from "vitest"
 import {
   dispatchParallel,
   DEFAULT_RESULT_MAX_BYTES,
+  DEFAULT_AGGREGATE_MAX_BYTES,
   DISPATCH_CONCURRENCY,
   DISPATCH_MAX_TASKS,
   type DispatchSpecialist,
   type DispatchTask,
   type AgentInfo,
 } from "../../../src/modules/coordinator/dispatch.js"
+import { AGGREGATE_TRUNCATION_MARKER } from "../../../src/modules/coordinator/truncate-bytes.js"
 import type { PollerMessage } from "../../../src/modules/coordinator/poller.js"
 
 function finishedMessage(content: string): PollerMessage {
@@ -327,10 +329,10 @@ describe("dispatchParallel", () => {
     expect(results[1]?.result).toBe("be success")
   })
 
-  it("classifies timeout errors correctly and records non-zero duration", async () => {
+  it("classifies timeout errors correctly, records non-zero duration, and aborts the child server-side", async () => {
     vi.useFakeTimers()
 
-    const { specialist } = makeSpecialistRecorder({
+    const { specialist, calls } = makeSpecialistRecorder({
       startTaskHandler: async () => "s-timeout",
       fetchMessagesHandler: async (): Promise<PollerMessage[]> => [],
     })
@@ -353,6 +355,10 @@ describe("dispatchParallel", () => {
     expect(results[0]?.status).toBe("timeout")
     expect(results[0]?.error).toMatch(/timeout/i)
     expect(results[0]?.duration_ms).toBeGreaterThan(0)
+    // A timed-out child's turn is still running server-side (fired
+    // fire-and-forget via promptAsync); the dispatcher must cancel it with the
+    // child session id so it is not orphaned compute.
+    expect(calls.abortTask.map((c) => c.sessionId)).toEqual(["s-timeout"])
   })
 
   it("neutralizes specialist output before returning (prompt re-injection defense)", async () => {
@@ -820,6 +826,168 @@ describe("dispatchParallel", () => {
 
       expect(results[0]?.result).toContain("[REDACTED]")
       expect(results[0]?.result).not.toContain("eyJSECRET")
+    })
+  })
+
+  describe("aggregate (whole-wave) byte budget", () => {
+    // Four maxed-out tasks would otherwise return 4×100KB ≈ 400KB in a single
+    // tool-result, dominating/overflowing @perun's context window. The aggregate
+    // budget bounds the COMBINED successful-body bytes of one dispatch call on
+    // top of the per-task cap. The four tests below pin: (1) the cap fires, (2)
+    // it points to the child session, (3) it leaves sub-budget waves alone, and
+    // (4) it never charges non-success (bodiless) results.
+    const fourSubagents: Record<string, AgentInfo> = {
+      "qa-fe-tester": { mode: "subagent" },
+      "qa-be-tester": { mode: "subagent" },
+    }
+
+    function bytesOf(s: string | undefined): number {
+      return Buffer.byteLength(s ?? "", "utf8")
+    }
+
+    it("bounds combined successful-body bytes to aggregateMaxBytes (+ markers)", async () => {
+      // Two tasks, each producing a body that is half the wave budget plus a
+      // little — together they exceed `aggregateMaxBytes`, so the second body
+      // (in input order) is trimmed to whatever remains.
+      const cap = 4096
+      const big = "x".repeat(cap) // each body alone exceeds half the budget
+      const { specialist } = makeSpecialistRecorder({
+        startTaskHandler: async (agentName: string) => agentName,
+        fetchMessagesHandler: async () => [finishedMessage(big)],
+      })
+
+      const tasks: DispatchTask[] = [
+        { name: "qa-fe-tester", prompt: "fe" },
+        { name: "qa-be-tester", prompt: "be" },
+      ]
+
+      const results = await dispatchParallel({
+        tasks,
+        agentRegistry: fourSubagents,
+        specialist,
+        pollIntervalMs: 10,
+        resultMaxBytes: cap, // per-task cap does NOT trim a `cap`-byte body
+        aggregateMaxBytes: cap,
+      })
+
+      // First task spends the whole budget and is returned whole.
+      expect(results[0]?.status).toBe("success")
+      expect(bytesOf(results[0]?.result)).toBe(cap)
+      expect(results[0]?.result.endsWith(AGGREGATE_TRUNCATION_MARKER)).toBe(false)
+
+      // Second task: budget exhausted → trimmed to the marker (zero body bytes
+      // remained) and pointed at the child session.
+      expect(results[1]?.status).toBe("success")
+      expect(results[1]?.result.endsWith(AGGREGATE_TRUNCATION_MARKER)).toBe(true)
+
+      // The combined SUCCESSFUL bodies (marker bytes excluded) never exceed the
+      // aggregate budget — the core invariant.
+      const body0 = bytesOf(results[0]?.result)
+      const r1 = results[1]?.result ?? ""
+      const body1 = bytesOf(r1.slice(0, r1.length - AGGREGATE_TRUNCATION_MARKER.length))
+      expect(body0 + body1).toBeLessThanOrEqual(cap)
+    })
+
+    it("appends a child-session pointer marker, not a silent drop", async () => {
+      const cap = 1024
+      const { specialist } = makeSpecialistRecorder({
+        startTaskHandler: async (agentName: string) => agentName,
+        fetchMessagesHandler: async () => [finishedMessage("y".repeat(cap))],
+      })
+
+      const tasks: DispatchTask[] = [
+        { name: "qa-fe-tester", prompt: "fe" },
+        { name: "qa-be-tester", prompt: "be" },
+      ]
+
+      const results = await dispatchParallel({
+        tasks,
+        agentRegistry: fourSubagents,
+        specialist,
+        pollIntervalMs: 10,
+        resultMaxBytes: cap,
+        aggregateMaxBytes: cap,
+      })
+
+      // The over-budget result keeps a clear, non-empty pointer (never ""),
+      // so @perun can route the reader to the child session for the full output.
+      expect(results[1]?.result).not.toBe("")
+      expect(results[1]?.result).toContain("child session")
+      // Pin the literal so a wording change is caught.
+      expect(AGGREGATE_TRUNCATION_MARKER).toBe(
+        "\n[…truncated: wave output budget reached — full result is in this task's child session…]",
+      )
+    })
+
+    it("leaves a wave under the aggregate budget untouched", async () => {
+      const { specialist } = makeSpecialistRecorder({
+        startTaskHandler: async (agentName: string) => agentName,
+        fetchMessagesHandler: async (sessionId: string) => [
+          finishedMessage(`${sessionId} done`),
+        ],
+      })
+
+      const tasks: DispatchTask[] = [
+        { name: "qa-fe-tester", prompt: "fe" },
+        { name: "qa-be-tester", prompt: "be" },
+      ]
+
+      const results = await dispatchParallel({
+        tasks,
+        agentRegistry: fourSubagents,
+        specialist,
+        pollIntervalMs: 10,
+        // Default 128KB budget; tiny bodies sit far under it.
+        aggregateMaxBytes: DEFAULT_AGGREGATE_MAX_BYTES,
+      })
+
+      expect(results.every((r) => r.status === "success")).toBe(true)
+      expect(
+        results.every((r) => !r.result.endsWith(AGGREGATE_TRUNCATION_MARKER)),
+      ).toBe(true)
+      expect(results[0]?.result).toBe("qa-fe-tester done")
+      expect(results[1]?.result).toBe("qa-be-tester done")
+    })
+
+    it("does not charge non-success (bodiless) results against the budget", async () => {
+      // Task 1 fails in startTask (status "error", empty body); task 2 succeeds.
+      // The error result must not consume budget, and the success body — which
+      // fits the remaining budget on its own — must be returned whole.
+      let startCallIndex = 0
+      const cap = 2048
+      const body = "z".repeat(cap)
+      const { specialist } = makeSpecialistRecorder({
+        startTaskHandler: async () => {
+          const index = startCallIndex++
+          if (index === 0) {
+            throw new Error("session creation failed")
+          }
+          return "s2"
+        },
+        fetchMessagesHandler: async () => [finishedMessage(body)],
+      })
+
+      const tasks: DispatchTask[] = [
+        { name: "qa-fe-tester", prompt: "fe" },
+        { name: "qa-be-tester", prompt: "be" },
+      ]
+
+      const results = await dispatchParallel({
+        tasks,
+        agentRegistry: fourSubagents,
+        specialist,
+        pollIntervalMs: 10,
+        resultMaxBytes: cap,
+        aggregateMaxBytes: cap,
+      })
+
+      expect(results[0]?.status).toBe("error")
+      expect(results[0]?.result).toBe("")
+      // The errored task consumed zero budget, so the whole `cap`-byte success
+      // body survives unmarked.
+      expect(results[1]?.status).toBe("success")
+      expect(bytesOf(results[1]?.result)).toBe(cap)
+      expect(results[1]?.result.endsWith(AGGREGATE_TRUNCATION_MARKER)).toBe(false)
     })
   })
 })

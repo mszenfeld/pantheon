@@ -103,7 +103,7 @@ describe("makeRunBash — timeout enforcement", () => {
   })
 })
 
-describe("makeRunBash — output byte ceiling (PERF-001 / CWE-400)", () => {
+describe("makeRunBash — output byte ceiling (CWE-400)", () => {
   it("caps high-volume stdout and kills the child early", async () => {
     // `yes` emits unbounded output far faster than the 5s timeout; with a
     // tiny cap the run must terminate on the output ceiling, NOT the clock.

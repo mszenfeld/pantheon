@@ -13,9 +13,12 @@ describe("stribogSpecialistInfo", () => {
     expect(stribogSpecialistInfo.mode).toBe("subagent")
   })
 
-  it("is a CHEAP specialist", () => {
-    expect(stribogSpecialistInfo.metadata.category).toBe("specialist")
-    expect(stribogSpecialistInfo.metadata.cost).toBe("CHEAP")
+  it("leaves the unrendered category/cost fields unset (no dead routing metadata)", () => {
+    // category/cost have no renderer in buildPerunPrompt; they are intentionally
+    // omitted so they cannot advertise a routing signal Perun never sees. The
+    // model tier is configured via pantheon.json, not this field.
+    expect(stribogSpecialistInfo.metadata.category).toBeUndefined()
+    expect(stribogSpecialistInfo.metadata.cost).toBeUndefined()
   })
 
   it("routes AWAY from secrets and feature work (avoid-when)", () => {

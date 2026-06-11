@@ -1,5 +1,6 @@
 import { tool, type Plugin } from "@opencode-ai/plugin"
-import { dispatchParallel } from "./dispatch.js"
+import { DISPATCH_TOOL_NAMES } from "./dispatch-tool-names.js"
+import { dispatchParallel, DISPATCHABLE_ALL_AGENTS } from "./dispatch.js"
 import { assignIssueIds } from "./assign-issue-ids.js"
 import { computeWaves } from "./compute-waves.js"
 import {
@@ -14,11 +15,16 @@ import {
 } from "./sdk-specialist.js"
 import {
   getLoadErrors,
-  loadPantheonConfig,
   pantheonConfigEmpty,
 } from "../pantheon-config/index.js"
 import { loadModuleAsset } from "../_shared/load-asset.js"
 import {
+  applyModelOverride,
+  captureUserModels,
+  getUnknownAgentDiagnostics,
+} from "../_shared/apply-model-override.js"
+import {
+  buildDispatchableAllowlistSentence,
   buildPerunPrompt,
   getAgentMetadataRegistry,
   registerAgentMetadata,
@@ -34,6 +40,13 @@ import { collectBackground, startBackgroundTask } from "./background.js"
 // `toPollerMessage` from `../../../src/modules/coordinator/index.js`).
 export { createSDKSpecialist, loadAgentRegistry, toPollerMessage }
 export { neutralizeUntrustedOutput, deriveReportPath, normalizeVariantSuffix }
+// Canonical dispatch-tool names. Re-exported here so the `plan` module imports
+// the coordinator's REAL tool names (allowed src/modules → src/modules
+// direction) instead of re-typing them — a rename on this side can no longer
+// silently un-wire Veles's opt-in map. The actual constant lives in the
+// dependency-free `dispatch-tool-names.ts` so importing it does not drag in the
+// whole coordinator tool graph.
+export { DISPATCH_TOOL_NAMES } from "./dispatch-tool-names.js"
 
 function loadAgentPrompt(name: string): string {
   return loadModuleAsset(import.meta.url, `../../agents/${name}.md`)
@@ -54,11 +67,34 @@ export const PERUN_TOOLS = [
   "wait_background",
 ] as const
 
+// Compile-time invariant: every canonical dispatch-tool name MUST be a member
+// of PERUN_TOOLS (which is itself sync-tested against perun.md). If a
+// dispatch tool is renamed in only one of the two lists this assignment stops
+// type-checking, so the drift surfaces at `bun run typecheck` rather than as a
+// silently disabled Veles dispatch. The runtime membership is also asserted in
+// `tests/modules/coordinator/perun-tools-sync.test.ts`.
+const _dispatchToolNamesAreInPerunTools: readonly (typeof PERUN_TOOLS)[number][] =
+  DISPATCH_TOOL_NAMES
+void _dispatchToolNamesAreInPerunTools
+
+/**
+ * The dispatchable `mode: all` allowlist as a stable, sorted array. Derived once
+ * from the live `DISPATCHABLE_ALL_AGENTS` set so the same value feeds both the
+ * Perun prompt's `{DISPATCHABLE_ALLOWLIST}` sentence and the dispatch-tool
+ * descriptions below — the constant is stated in one place, never copied into
+ * prose. Sorted for deterministic rendering.
+ */
+const DISPATCHABLE_ALLOWLIST_NAMES: readonly string[] = [
+  ...DISPATCHABLE_ALL_AGENTS,
+].sort((a, b) => a.localeCompare(b))
+
 let cachedPerunPrompt: string | undefined
 function getPerunPrompt(): string {
   if (cachedPerunPrompt === undefined) {
     const template = loadAgentPrompt("perun")
-    cachedPerunPrompt = buildPerunPrompt(template, getAgentMetadataRegistry())
+    cachedPerunPrompt = buildPerunPrompt(template, getAgentMetadataRegistry(), {
+      dispatchableAllowlist: DISPATCHABLE_ALLOWLIST_NAMES,
+    })
   }
   return cachedPerunPrompt
 }
@@ -75,6 +111,14 @@ export const AppVerkCoordinatorPlugin: Plugin = async (input) => {
   // keeps its row. Explicit src-side entry — see the renderer spec.
   registerAgentMetadata(fixAutoSpecialistInfo)
 
+  // Single source of truth for the "which mode:all agents are dispatchable"
+  // sentence, derived from DISPATCHABLE_ALL_AGENTS. Reused verbatim in both
+  // dispatch-tool descriptions below so the allowlist is never re-typed in
+  // prose (it is also rendered into perun.md via {DISPATCHABLE_ALLOWLIST}).
+  const dispatchableAllowlistSentence = buildDispatchableAllowlistSentence(
+    DISPATCHABLE_ALLOWLIST_NAMES,
+  )
+
   const dispatchParallelTool = tool({
     description:
       [
@@ -85,7 +129,10 @@ export const AppVerkCoordinatorPlugin: Plugin = async (input) => {
         "- A 4-worker pool runs every task in this call in parallel. `tasks.length ≤ 4` is enforced, so concurrency equals the call size. Result order is preserved.",
         "- Each task has a 5-minute hard timeout; on expiry the task is returned with status \"timeout\" and the partial result is discarded.",
         "- Each successful result is truncated at 100KB (UTF-8 bytes). Truncated results end with the marker \"[…truncated…]\" — synthesize what is present, do not retry.",
-        "- Anti-recursion pre-flight: every task is validated against the live agent registry BEFORE any session is created. Tasks targeting an unknown agent or a `mode: primary` agent are rejected. A `mode: all` agent is rejected UNLESS it is on the dispatch allowlist (currently only the planner, registered as `\"Veles - Planner\"`) AND the caller is a primary agent; this lets the coordinator dispatch the planner while blocking self/nested recursion. Rejections throw and dispatch nothing.",
+        "- A second, whole-wave aggregate cap (~128KB total across all successful results in this call) is applied on top of the per-task cap so one call can never flood the context. When a wave exceeds it, later results (in input order) are trimmed and end with a marker pointing to that task's child session for the full output — read the child session if you need the omitted tail; do not retry.",
+        "- Anti-recursion pre-flight: every task is validated against the live agent registry BEFORE any session is created. Tasks targeting an unknown agent or a `mode: primary` agent are rejected. A `mode: all` agent is rejected UNLESS it is on the dispatch allowlist AND the caller is a primary agent; this lets the coordinator dispatch the planner while blocking self/nested recursion. " +
+          dispatchableAllowlistSentence +
+          " Rejections throw and dispatch nothing.",
         "- Specialist output is treated as untrusted data: ANSI/control characters are stripped and HTML-like substrings are escaped before the result is returned.",
         "- Honors `ToolContext.abort`: when the parent session aborts, in-flight tasks terminate within ~one poll-interval with status \"aborted\" and the child session is cancelled server-side (best-effort).",
         "- Result shape: each entry has `{ name, status: \"success\" | \"error\" | \"timeout\" | \"aborted\", result, duration_ms, error? }`, in the same order as the input `tasks` array.",
@@ -173,7 +220,11 @@ export const AppVerkCoordinatorPlugin: Plugin = async (input) => {
         scrubberFactory: ext.scrubberFactory,
         preflight: ext.preflight,
       })
-      return JSON.stringify(results, null, 2)
+      // Compact (no `null, 2`) for the model-facing return: pretty-printing adds
+      // indentation on every line and is pure token overhead in-context. The
+      // wave's body bytes are already bounded by `dispatchParallel`'s aggregate
+      // budget; compact serialisation shaves a further ~10-20% off the framing.
+      return JSON.stringify(results)
     },
   })
 
@@ -261,7 +312,7 @@ export const AppVerkCoordinatorPlugin: Plugin = async (input) => {
         "- Returns: { id, agent, status: \"running\" }.",
       ].join("\n"),
     args: {
-      agent: tool.schema.string().min(1).max(60).describe("Specialist agent name (e.g. \"triglav\"). Must be a subagent, or an allowlisted mode:all agent (currently only \"Veles - Planner\") when the caller is a primary agent."),
+      agent: tool.schema.string().min(1).max(60).describe("Specialist agent name (e.g. \"triglav\"). Must be a subagent, or an allowlisted mode:all agent when the caller is a primary agent. " + dispatchableAllowlistSentence),
       summary: tool.schema.string().min(1).max(80).describe("One-line label for the TUI (no prompts/PII)."),
       prompt: tool.schema.string().describe("Prompt for the specialist."),
       context: tool.schema.string().optional().describe("Optional extra context appended to the prompt."),
@@ -299,6 +350,8 @@ export const AppVerkCoordinatorPlugin: Plugin = async (input) => {
       [
         "Check the status of background tasks WITHOUT blocking. Returns a snapshot per id.",
         "- Result per id: { id, agent, status: \"running\" | \"success\" | \"not_found\", result?, duration_ms? }.",
+        "- A \"success\" result is one-time retrieval: the task is collected and its slot freed, exactly like wait_background. Do NOT poll the same id again after success (it returns not_found).",
+        "- A \"running\" result is non-terminal: keep working, then poll/wait again.",
         "- Use to decide whether to keep working or to wait_background.",
       ].join("\n"),
     args: {
@@ -313,7 +366,13 @@ export const AppVerkCoordinatorPlugin: Plugin = async (input) => {
         specialist,
         ids: args.ids,
         block: false,
+        // Route background results through the QA secret scrubber. The plugin
+        // registers only `scrubberFactory` (legacy `scrubber` is permanently
+        // undefined), so passing `scrubber: ext.scrubber` alone silently
+        // skipped scrubbing entirely. `collectBackground` snapshot-pins the
+        // factory per poll and prefers it over the legacy field.
         scrubber: ext.scrubber,
+        scrubberFactory: ext.scrubberFactory,
         parentSessionId: context.sessionID,
       })
       return JSON.stringify(results, null, 2)
@@ -342,7 +401,10 @@ export const AppVerkCoordinatorPlugin: Plugin = async (input) => {
         block: true,
         timeoutMs: args.timeoutMs,
         signal: context.abort,
+        // Same fix as poll_background: thread the factory so background results
+        // actually pass through `scrubSecrets`. See the poll_background comment.
         scrubber: ext.scrubber,
+        scrubberFactory: ext.scrubberFactory,
         parentSessionId: context.sessionID,
       })
       return JSON.stringify(results, null, 2)
@@ -352,6 +414,12 @@ export const AppVerkCoordinatorPlugin: Plugin = async (input) => {
   return {
     config: async (config) => {
       config.agent = config.agent ?? {}
+      // Capture the user's opencode.json `agent["Perun - Coordinator"].model`
+      // before the wholesale replace below drops it, so applyModelOverride keeps
+      // it at the top of the documented precedence chain (opencode.json >
+      // pantheon.json). See docs/configuring-agents.md "Precedence vs.
+      // opencode.json".
+      const userModels = captureUserModels(config, COORDINATOR_AGENT)
       // Register under the display name (OMO convention: "Name - Role" with
       // space-dash-space — never parentheses, which break the x-opencode-agent-name
       // HTTP header). The display name is what OpenCode's TUI shows in the status
@@ -378,14 +446,13 @@ export const AppVerkCoordinatorPlugin: Plugin = async (input) => {
         // defense-in-depth.
         tools: { skill: false, load_appverk_skill: false },
       }
-      // Inject model AFTER registration so we don't have to merge it into the
-      // object literal above — the non-null assertion is safe because we just
-      // set the key on the line above. Model already validated by MODEL_REGEX
-      // — see src/modules/pantheon-config/schema.ts for the CWE-117 rationale.
-      const perunModel = loadPantheonConfig().agents.perun?.model
-      if (perunModel !== undefined) {
-        config.agent[COORDINATOR_AGENT]!.model = perunModel
-      }
+      // Inject model AFTER registration via the shared helper, which also
+      // registers the `perun` slug so unknown-slug typos in pantheon.json get
+      // flagged in `session.created` below, and applies the documented
+      // precedence (user opencode.json > `agents.perun.model`). Model already
+      // validated by MODEL_REGEX — see src/modules/pantheon-config/schema.ts
+      // (CWE-117).
+      applyModelOverride(config, "perun", COORDINATOR_AGENT, undefined, userModels)
       // Make Perun the session-open default. The roster policy hides the native
       // `build` (opencode's default primary), so default_agent must point to a
       // visible primary or the runtime throws at startup. Only set when unset so
@@ -450,7 +517,14 @@ export const AppVerkCoordinatorPlugin: Plugin = async (input) => {
         // could otherwise splice fake log lines into stderr or spoof the
         // toast body. Same primitive used by `dispatch.ts` and the
         // session-notification hook (CWE-117).
-        const errors = getLoadErrors().map(neutralizeUntrustedOutput)
+        // `getLoadErrors()` carries parse/schema diagnostics from the loader;
+        // `getUnknownAgentDiagnostics()` adds slug-typo diagnostics computed
+        // against the slug registry every module populated in its `config` hook
+        // (all of which ran before this `session.created`). Both are funneled
+        // through the same neutralize→console.error→toast sink.
+        const errors = [...getLoadErrors(), ...getUnknownAgentDiagnostics()].map(
+          neutralizeUntrustedOutput,
+        )
         // Honour the docs contract: "Check the OpenCode console output for
         // the specific parse error". Without this, the warning toast points
         // users at a console that has no diagnostic written to it.

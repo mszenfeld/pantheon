@@ -5,8 +5,6 @@ const velesSpecialistInfo = {
   mode: "all",
   description: VELES_DESCRIPTION,
   metadata: {
-    category: "specialist",
-    cost: "EXPENSIVE",
     keyTrigger: "QA run requested but no plan exists \u2192 dispatch `veles` to author one before attempting QA",
     useWhen: [
       "No QA plan exists and the user wants to run QA",

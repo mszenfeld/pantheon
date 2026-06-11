@@ -12,7 +12,7 @@ import { AppVerkSwiftDeveloperPlugin } from "../packages/swift-developer/dist/in
 import { AppVerkCoordinatorPlugin } from "./modules/coordinator/index.js"
 import { AppVerkCoordinatorPolicyPlugin } from "./modules/coordinator-policy/index.js"
 import { AppVerkPantheonPlugin } from "./hooks/session-notification/plugin.js"
-import { applyRosterPolicy } from "./modules/agent-roster/index.js"
+import { AppVerkAgentRosterPlugin, applyRosterPolicy } from "./modules/agent-roster/index.js"
 type PluginHooks = Awaited<ReturnType<Plugin>>
 type HookKey = Exclude<keyof PluginHooks, "config" | "tool">
 type MergedHook = (...args: unknown[]) => Promise<void>
@@ -33,6 +33,7 @@ const defaultPluginFactories: Plugin[] = [
   AppVerkSwiftDeveloperPlugin,
   AppVerkCoordinatorPlugin,
   AppVerkCoordinatorPolicyPlugin,
+  AppVerkAgentRosterPlugin,
   AppVerkPantheonPlugin,
 ]
 

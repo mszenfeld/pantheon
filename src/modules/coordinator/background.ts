@@ -49,9 +49,9 @@ export async function startBackgroundTask(
 
   validateDispatchable(agentRegistry, agent, callerMode)
 
-  if (store.countRunningByParent(parentSessionId) >= BACKGROUND_MAX_CONCURRENT) {
+  if (store.countActiveByParent(parentSessionId) >= BACKGROUND_MAX_CONCURRENT) {
     throw new Error(
-      `dispatch_background: max ${BACKGROUND_MAX_CONCURRENT} background tasks running for this session — collect one (wait_background / poll_background) before firing more`,
+      `dispatch_background: max ${BACKGROUND_MAX_CONCURRENT} background tasks (running or finished-but-uncollected) for this session — collect one (wait_background, or poll_background until it reports success) before firing more`,
     )
   }
 
@@ -90,8 +90,52 @@ export interface CollectBackgroundInput {
   pollIntervalMs?: number
   resultMaxBytes?: number
   signal?: AbortSignal
+  /**
+   * Legacy live-read scrubber applied to every collected result after the
+   * untrusted-output neutraliser, before truncation. Receives
+   * (text, parentSessionID). Used only when no `scrubberFactory` is provided —
+   * the factory is the race-safe path and takes precedence.
+   */
   scrubber?: (text: string, parentSessionID: string) => string
+  /**
+   * Factory that pins a per-collect scrubber session. Called ONCE per
+   * `collectBackground` call (i.e. per `poll_background` / `wait_background`),
+   * BEFORE any task is collected; the returned `scrub(text)` is applied to
+   * every result and `release()` is invoked in a `finally`. Takes precedence
+   * over `scrubber`. This is the only path that routes background results
+   * through the QA secret scrubber — the legacy `scrubber` field is permanently
+   * `undefined` because the QA plugin registers only `scrubberFactory`.
+   * Snapshotting per collect (rather than once at dispatch) keeps the redacted
+   * view coherent with whatever bindings exist when the result is read, even
+   * though the background turn itself injects no bindings.
+   */
+  scrubberFactory?: (
+    parentSessionID: string,
+  ) => { scrub: (text: string) => string; release: () => void } | undefined
+  /**
+   * The CALLER's session id (the poll_background / wait_background invoker),
+   * threaded from `context.sessionID`. Serves two purposes:
+   *   1. Pins the per-collect scrubber session (passed to `scrubberFactory`).
+   *   2. Parent-session ownership gate in `collectOne`: a task is only
+   *      collectable when `task.parentSessionId === parentSessionId`; a
+   *      foreign task is reported as `not_found` (it is never read, and on the
+   *      blocking path never removed). Caller identity is REQUIRED — when
+   *      `undefined` the gate fails CLOSED (every task reads as foreign →
+   *      `not_found`); see `collectOne`. Both production handlers always pass
+   *      `context.sessionID`, so this is never `undefined` in production.
+   */
   parentSessionId?: string
+  /**
+   * TEST-ONLY escape hatch. When `true`, an absent `parentSessionId` skips the
+   * ownership gate (the pre-fix fail-OPEN behaviour) so unit tests that don't
+   * model a specific caller can still collect a seeded task. Production
+   * handlers (`poll_background` / `wait_background`) MUST NEVER set this — they
+   * always thread `context.sessionID`, so they have no reason to. Keeping the
+   * fail-open path behind an explicit opt-in (rather than inferring it from a
+   * missing id) means a real handler that forgets to pass an id fails closed,
+   * not open. SEC-001.
+   */
+  allowUnscopedCollect?: boolean
 }
 
 export interface BackgroundCollectResult {
@@ -106,12 +150,54 @@ export interface BackgroundCollectResult {
 export async function collectBackground(
   input: CollectBackgroundInput,
 ): Promise<BackgroundCollectResult[]> {
-  return Promise.all(input.ids.map((id) => collectOne(id, input)))
+  // Materialise a per-collect scrubber session BEFORE any result is read so a
+  // single pinned binding snapshot covers every id in this call. The factory
+  // takes precedence over the legacy `scrubber` field — when both are set the
+  // factory wins because it is the race-safe (snapshot-pinned) path. Factory
+  // failures are absorbed (the contract is "never throw; return undefined"),
+  // falling back to the legacy `scrubber` (typically also undefined → no-op).
+  // Mirrors `dispatchParallel`'s scrubber-session lifecycle in dispatch.ts.
+  let scrubberSession: { scrub: (text: string) => string; release: () => void } | undefined
+  if (
+    input.scrubberFactory !== undefined &&
+    input.parentSessionId !== undefined &&
+    input.parentSessionId.length > 0
+  ) {
+    try {
+      scrubberSession = input.scrubberFactory(input.parentSessionId)
+    } catch {
+      scrubberSession = undefined
+    }
+  }
+  // Adapt the per-collect scrubber to the `(text, parentSessionID)` signature
+  // so `collectOne` stays agnostic of which path produced it. The session's
+  // `scrub` already closes over the pinned snapshot.
+  const effectiveScrubber: ((text: string, parentSessionID: string) => string) | undefined =
+    scrubberSession !== undefined
+      ? (text) => scrubberSession!.scrub(text)
+      : input.scrubber
+
+  try {
+    return await Promise.all(
+      input.ids.map((id) => collectOne(id, input, effectiveScrubber)),
+    )
+  } finally {
+    // Release the pinned snapshot regardless of how collection terminated.
+    // Swallow release failures so a buggy plugin can't corrupt the return value.
+    if (scrubberSession !== undefined) {
+      try {
+        scrubberSession.release()
+      } catch {
+        /* swallow: release is best-effort cleanup */
+      }
+    }
+  }
 }
 
 async function collectOne(
   id: string,
   input: CollectBackgroundInput,
+  scrubber: ((text: string, parentSessionID: string) => string) | undefined,
 ): Promise<BackgroundCollectResult> {
   const {
     store,
@@ -121,12 +207,37 @@ async function collectOne(
     pollIntervalMs = DEFAULT_POLL_INTERVAL_MS,
     resultMaxBytes = DEFAULT_RESULT_MAX_BYTES,
     signal,
-    scrubber,
     parentSessionId,
+    allowUnscopedCollect = false,
   } = input
 
   const task = store.get(id)
   if (task === undefined) {
+    return { id, agent: "", status: "not_found" }
+  }
+  // Parent-session ownership gate: a session may only poll/wait its OWN
+  // background tasks. The store is a single per-process map shared by every
+  // session, so `store.get(id)` alone lets ANY session in the process collect
+  // another session's task by id — and on the blocking path `wait_background`
+  // would then REMOVE it, denying the rightful owner its result. We reuse the
+  // caller's session id (`parentSessionId`, threaded from `context.sessionID`
+  // by the poll_background/wait_background handlers) and refuse to disclose a
+  // foreign task: returning `not_found` (rather than a distinct "forbidden")
+  // also avoids leaking that the id exists at all.
+  //
+  // Caller identity is REQUIRED: `parentSessionId === undefined` is a
+  // programming error (a handler that forgot to thread `context.sessionID`),
+  // NOT a license to collect anything. We therefore fail CLOSED — an absent
+  // caller id matches no owner, so every task reads as foreign → `not_found`.
+  // Both production handlers (`index.ts` poll_background / wait_background) pass
+  // a length-guarded `context.sessionID`, so production is always scoped and
+  // never hits the closed path. The single, explicit exception is the
+  // test-only `allowUnscopedCollect` opt-in (SEC-001), which unit tests set to
+  // collect a seeded task without modelling a caller; production never sets it.
+  const callerIsUnknown = parentSessionId === undefined
+  const callerOwnsTask = !callerIsUnknown && task.parentSessionId === parentSessionId
+  const skipGate = callerIsUnknown && allowUnscopedCollect
+  if (!callerOwnsTask && !skipGate) {
     return { id, agent: "", status: "not_found" }
   }
   const agent = normalizeVariantSuffix(task.agent)
@@ -143,6 +254,16 @@ async function collectOne(
     const messages = await specialist.fetchMessages(task.childSessionId)
     const last = messages[messages.length - 1]
     if (last !== undefined && last.role === "assistant" && last.finish_reason) {
+      // A successful poll is TERMINAL — it returns the full result AND removes
+      // the task, exactly like `wait_background` (one-time retrieval). This is
+      // what frees the per-parent slot and stops every subsequent poll from
+      // re-fetching the transcript over HTTP and re-running neutralise + scrub
+      // + truncate on up to RESULT_MAX_BYTES. Without this remove(), a finished
+      // task that the model already "collected" via poll would pin the cap of 4
+      // until `wait_background`/`session.deleted`, so Perun could hit "max 4
+      // background tasks" with zero tasks actually running (review M7). Done
+      // BEFORE finalize so the slot frees even if scrubbing/truncation throws.
+      store.remove(id)
       return {
         id,
         agent,
@@ -165,14 +286,23 @@ async function collectOne(
     store.remove(id)
     return { id, agent, status: "success", result: finalize(raw), duration_ms: Date.now() - task.startedAt }
   } catch (err) {
-    store.remove(id)
-    if (err instanceof PollerAbortError) {
-      // Abort discards the result → kill the child (same as dispatch_parallel).
+    // Cancel the still-running child server-side BEFORE removing the task from
+    // the store, on BOTH abort AND timeout. The background turn was fired
+    // fire-and-forget (`promptAsync`), so on either path the child's LLM turn
+    // is still running autonomously — discarding our wait does not stop it.
+    // Cancelling must happen before `store.remove(id)`: once the task is gone
+    // from the store the `session.deleted` recovery path (which iterates
+    // `listByParent` → `abortTask`) can no longer reach it, so a remove-first
+    // ordering would orphan a timed-out child's compute (and accrue charges).
+    if (err instanceof PollerAbortError || err instanceof PollerTimeoutError) {
       try {
         await specialist.abortTask(task.childSessionId)
       } catch {
-        /* best-effort */
+        /* best-effort: must not mask the abort/timeout result */
       }
+    }
+    store.remove(id)
+    if (err instanceof PollerAbortError) {
       return { id, agent, status: "aborted", result: "", duration_ms: Date.now() - task.startedAt, error: "aborted" }
     }
     if (err instanceof PollerTimeoutError) {

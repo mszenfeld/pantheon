@@ -23,6 +23,7 @@ interface FakeClient {
   calls: {
     sessionCreate: Array<Record<string, unknown>>
     sessionPrompt: Array<Record<string, unknown>>
+    sessionPromptAsync: Array<Record<string, unknown>>
     sessionMessages: Array<Record<string, unknown>>
     sessionAbort: Array<Record<string, unknown>>
     appAgents: Array<Record<string, unknown> | undefined>
@@ -43,6 +44,7 @@ function makeFakeClient(config: FakeClientConfig = {}): FakeClient {
   const calls: FakeClient["calls"] = {
     sessionCreate: [],
     sessionPrompt: [],
+    sessionPromptAsync: [],
     sessionMessages: [],
     sessionAbort: [],
     appAgents: [],
@@ -62,6 +64,10 @@ function makeFakeClient(config: FakeClientConfig = {}): FakeClient {
       async prompt(options: Record<string, unknown>) {
         calls.sessionPrompt.push(options)
         return config.promptResponse ?? { data: {} }
+      },
+      async promptAsync(options: Record<string, unknown>) {
+        calls.sessionPromptAsync.push(options)
+        return config.promptResponse ?? { data: undefined }
       },
       async messages(options: { path: { id: string } } & Record<string, unknown>) {
         calls.sessionMessages.push(options)
@@ -134,7 +140,7 @@ function makeAgent(overrides: Partial<Agent> & Pick<Agent, "name" | "mode">): Ag
 }
 
 describe("createSDKSpecialist.startTask", () => {
-  it("creates a child session with parentID/title, then prompts with agent + text part, returns the created session id", async () => {
+  it("creates a child session with parentID/title, then fires promptAsync (not the blocking prompt) with agent + text part, returns the created session id", async () => {
     const fake = makeFakeClient({
       createResponses: [{ data: { id: "sess-child-1" } }],
     })
@@ -153,25 +159,32 @@ describe("createSDKSpecialist.startTask", () => {
       },
     })
 
-    // session.prompt must use the freshly-created id and bind the target agent.
-    expect(fake.calls.sessionPrompt).toHaveLength(1)
-    expect(fake.calls.sessionPrompt[0]).toEqual({
+    // The foreground turn is fired via the async (fire-and-forget) endpoint so
+    // `pollUntilIdle` (with taskTimeoutMs + abort signal) governs the whole
+    // turn — NOT the blocking `session.prompt`, which would park the worker for
+    // an un-timed, un-abortable turn. It must use the freshly-created id and
+    // bind the target agent.
+    expect(fake.calls.sessionPromptAsync).toHaveLength(1)
+    expect(fake.calls.sessionPromptAsync[0]).toEqual({
       path: { id: "sess-child-1" },
       body: {
         agent: "qa-fe-tester",
         parts: [{ type: "text", text: "run the smoke tests" }],
       },
     })
+    // The blocking endpoint must NOT be used by the foreground path.
+    expect(fake.calls.sessionPrompt).toHaveLength(0)
   })
 
-  it("invokes onSessionCreated with the new session id BEFORE session.prompt runs", async () => {
-    // Regression for the binding-propagation bug: `session.prompt` blocks for
-    // the entire subagent turn — including the bash calls that fire the
-    // `shell.env` hook. So the child→agent registration MUST happen between
-    // `session.create` and `session.prompt`; doing it after `startTask`
-    // resolves is too late (the hook already ran with no agent mapping and
-    // injected no bindings). This asserts the callback fires while
-    // `session.prompt` has NOT yet been called.
+  it("invokes onSessionCreated with the new session id BEFORE the turn is fired", async () => {
+    // Regression for the binding-propagation bug: the subagent turn — including
+    // the bash calls that fire the `shell.env` hook — starts as soon as
+    // `session.promptAsync` is acknowledged and then runs autonomously
+    // server-side. So the child→agent registration MUST happen between
+    // `session.create` and `session.promptAsync`; doing it after `startTask`
+    // resolves races the hook (it could run with no agent mapping and inject no
+    // bindings). This asserts the callback fires while `session.promptAsync`
+    // has NOT yet been called.
     const fake = makeFakeClient({
       createResponses: [{ data: { id: "sess-child-7" } }],
     })
@@ -179,13 +192,13 @@ describe("createSDKSpecialist.startTask", () => {
 
     const observed: Array<{ id: string; promptCallsAtCallback: number }> = []
     const returnedId = await specialist.startTask("zmora-be", "run BE-01", (id) => {
-      observed.push({ id, promptCallsAtCallback: fake.calls.sessionPrompt.length })
+      observed.push({ id, promptCallsAtCallback: fake.calls.sessionPromptAsync.length })
     })
 
     expect(returnedId).toBe("sess-child-7")
     expect(observed).toEqual([{ id: "sess-child-7", promptCallsAtCallback: 0 }])
-    // The prompt still runs afterwards.
-    expect(fake.calls.sessionPrompt).toHaveLength(1)
+    // The async prompt still runs afterwards.
+    expect(fake.calls.sessionPromptAsync).toHaveLength(1)
   })
 
   it("does not invoke onSessionCreated when session.create returns no id", async () => {
@@ -201,7 +214,7 @@ describe("createSDKSpecialist.startTask", () => {
     expect(called).toBe(false)
   })
 
-  it("throws when session.create returns no session id and does not call session.prompt", async () => {
+  it("throws when session.create returns no session id and does not fire the turn", async () => {
     const fake = makeFakeClient({
       createResponses: [{ data: { id: "" } }],
     })
@@ -211,7 +224,7 @@ describe("createSDKSpecialist.startTask", () => {
       "createSession returned no session id for agent qa-be-tester",
     )
 
-    expect(fake.calls.sessionPrompt).toHaveLength(0)
+    expect(fake.calls.sessionPromptAsync).toHaveLength(0)
   })
 
   it("throws when session.create returns no data at all", async () => {
@@ -224,15 +237,15 @@ describe("createSDKSpecialist.startTask", () => {
       "createSession returned no session id for agent qa-fe-tester",
     )
 
-    expect(fake.calls.sessionPrompt).toHaveLength(0)
+    expect(fake.calls.sessionPromptAsync).toHaveLength(0)
   })
 
   it("emits a client warning breadcrumb but still completes the dispatch when onSessionCreated throws", async () => {
-    // MAINT-001: a callback fault must NOT abort the dispatch (swallow
-    // semantics), but it must leave an observability breadcrumb — otherwise a
-    // failed binding registration silently stops `shell.env` injection with no
-    // trace. Assert: the warning is logged via the client mechanism AND the
-    // turn still proceeds (prompt runs, session id returned).
+    // A callback fault must NOT abort the dispatch (swallow semantics), but it
+    // must leave an observability breadcrumb — otherwise a failed binding
+    // registration silently stops `shell.env` injection with no trace. Assert:
+    // the warning is logged via the client mechanism AND the turn still
+    // proceeds (promptAsync fires, session id returned).
     const fake = makeFakeClient({
       createResponses: [{ data: { id: "sess-child-9" } }],
     })
@@ -242,9 +255,9 @@ describe("createSDKSpecialist.startTask", () => {
       throw new Error("registry Map.set blew up")
     })
 
-    // Dispatch is NOT aborted: id returned and prompt fired afterwards.
+    // Dispatch is NOT aborted: id returned and the turn fired afterwards.
     expect(returnedId).toBe("sess-child-9")
-    expect(fake.calls.sessionPrompt).toHaveLength(1)
+    expect(fake.calls.sessionPromptAsync).toHaveLength(1)
 
     // A single warn-level breadcrumb was logged via the client mechanism,
     // naming the agent and carrying the underlying error in `extra`.
@@ -276,7 +289,7 @@ describe("createSDKSpecialist.startTask", () => {
     })
 
     expect(returnedId).toBe("sess-child-10")
-    expect(fake.calls.sessionPrompt).toHaveLength(1)
+    expect(fake.calls.sessionPromptAsync).toHaveLength(1)
     expect(fake.calls.appLog).toHaveLength(1)
   })
 })

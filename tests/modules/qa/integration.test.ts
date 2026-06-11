@@ -12,6 +12,11 @@ import {
 } from "../../../src/modules/_shared/dispatch-extensions.js"
 import { AppVerkQAPlugin } from "../../../src/modules/qa/index.js"
 import { dispatchParallel } from "../../../src/modules/coordinator/dispatch.js"
+import {
+  collectBackground,
+  startBackgroundTask,
+} from "../../../src/modules/coordinator/background.js"
+import { BackgroundTaskStore } from "../../../src/modules/coordinator/background-store.js"
 import type { PollerMessage } from "../../../src/modules/coordinator/poller.js"
 
 describe("end-to-end happy path", () => {
@@ -210,7 +215,7 @@ describe("adversarial — shell.env hook scoping", () => {
 })
 
 /**
- * Wire-up regression for COMP-001: the previous integration test directly
+ * Wire-up regression: the previous integration test directly
  * called `state.storePlan(...)` and `registry.register(...)`, masking the
  * fact that production never invoked either. This suite proves the QA
  * plugin's factory + the coordinator's `dispatchParallel` wire those calls
@@ -241,7 +246,7 @@ function makeToolContext(sessionID: string): never {
   } as never
 }
 
-describe("COMP-001 wire-up: parse_plan + dispatch + shell.env + scrub", () => {
+describe("wire-up: parse_plan + dispatch + shell.env + scrub", () => {
   afterEach(() => {
     // Plugin-process singletons live for the OpenCode lifetime; tests must
     // explicitly reset to avoid cross-test contamination.
@@ -261,9 +266,9 @@ describe("COMP-001 wire-up: parse_plan + dispatch + shell.env + scrub", () => {
     } as never
     const pluginResult = await AppVerkQAPlugin(pluginInput)
 
-    // 2. Verify the plugin registered dispatch extensions. After ARCH-004 the
-    // plugin exposes a `scrubberFactory` (snapshot-pinned, race-safe) instead
-    // of a live-read `scrubber`.
+    // 2. Verify the plugin registered dispatch extensions. The plugin exposes
+    // a `scrubberFactory` (snapshot-pinned, race-safe) instead of a live-read
+    // `scrubber`.
     const ext = getDispatchExtensions()
     expect(ext.sessionAgentRegistry).toBeDefined()
     expect(ext.scrubberFactory).toBeDefined()
@@ -362,8 +367,8 @@ describe("COMP-001 wire-up: parse_plan + dispatch + shell.env + scrub", () => {
     expect(dispatchResult[0]?.status).toBe("success")
 
     // Assertion 2: registry.register was invoked by dispatch — the child
-    // session is now resolvable to its agent name. This is the gap COMP-001
-    // identified: previously this never happened in production.
+    // session is now resolvable to its agent name. This closes the wire-up
+    // gap: previously this never happened in production.
     expect(ext.sessionAgentRegistry!.lookup(childSessionID)).toBe("zmora-be")
 
     // Assertion 3: scrubber replaced the token in the result before it
@@ -371,6 +376,102 @@ describe("COMP-001 wire-up: parse_plan + dispatch + shell.env + scrub", () => {
     // but never invoked because parentSessionID was not threaded.
     expect(dispatchResult[0]?.result).toContain("[REDACTED:")
     expect(dispatchResult[0]?.result).not.toContain(tokenValue)
+  })
+
+  // M1 regression: background dispatch (poll_background / wait_background)
+  // previously bypassed scrubbing entirely — the QA plugin registers only
+  // `scrubberFactory`, but `collectBackground` consumed only the (permanently
+  // undefined) legacy `scrubber`. This drives the REAL plugin factory through
+  // the REAL background collect path and proves a known secret is redacted.
+  it("background poll + wait redact a known secret via the REAL plugin scrubberFactory", async () => {
+    const pluginInput = {
+      client: {
+        session: { get: async () => ({ data: { parentID: undefined } }) },
+      },
+    } as never
+    const pluginResult = await AppVerkQAPlugin(pluginInput)
+    const ext = getDispatchExtensions()
+    expect(ext.scrubberFactory).toBeDefined()
+
+    const parentSessionID = "perun-bg-session-1"
+    const tokenValue = "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0.signatureLongAndEntropicXYZ"
+
+    // Seed the live BindingsStore via the real record_input tool path (Perun).
+    await pluginResult.tool!.record_input!.execute(
+      { name: "QA_BIND_LEAKED", value: tokenValue },
+      makeToolContext(parentSessionID),
+    )
+
+    const childSessionID = "triglav-bg-child-1"
+    const fakeSpecialist = {
+      async startTask(): Promise<string> {
+        return childSessionID
+      },
+      async fetchMessages(): Promise<PollerMessage[]> {
+        return [
+          {
+            role: "assistant",
+            content: `background result with token=${tokenValue}`,
+            finish_reason: "end_turn",
+          },
+        ]
+      },
+      async abortTask(): Promise<void> {
+        /* no-op */
+      },
+      async startBackground(): Promise<string> {
+        return childSessionID
+      },
+    }
+
+    const store = new BackgroundTaskStore()
+    const { id } = await startBackgroundTask({
+      store,
+      specialist: fakeSpecialist,
+      agentRegistry: { triglav: { mode: "subagent" } },
+      parentSessionId: parentSessionID,
+      agent: "triglav",
+      prompt: "explore",
+      sessionAgentRegistry: ext.sessionAgentRegistry,
+    })
+
+    // poll_background path (non-blocking).
+    const polled = await collectBackground({
+      store,
+      specialist: fakeSpecialist,
+      ids: [id],
+      block: false,
+      scrubber: ext.scrubber, // permanently undefined — proves the factory does the work
+      scrubberFactory: ext.scrubberFactory,
+      parentSessionId: parentSessionID,
+    })
+    expect(polled[0]?.status).toBe("success")
+    expect(polled[0]?.result).toContain("[REDACTED:")
+    expect(polled[0]?.result).not.toContain(tokenValue)
+
+    // wait_background path (blocking). Re-seed since wait removes on collect.
+    const { id: id2 } = await startBackgroundTask({
+      store,
+      specialist: fakeSpecialist,
+      agentRegistry: { triglav: { mode: "subagent" } },
+      parentSessionId: parentSessionID,
+      agent: "triglav",
+      prompt: "explore",
+      sessionAgentRegistry: ext.sessionAgentRegistry,
+    })
+    const waited = await collectBackground({
+      store,
+      specialist: fakeSpecialist,
+      ids: [id2],
+      block: true,
+      pollIntervalMs: 1,
+      scrubber: ext.scrubber,
+      scrubberFactory: ext.scrubberFactory,
+      parentSessionId: parentSessionID,
+    })
+    expect(waited[0]?.status).toBe("success")
+    expect(waited[0]?.result).toContain("[REDACTED:")
+    expect(waited[0]?.result).not.toContain(tokenValue)
   })
 
   it("parse_plan returns error for malformed plan and does NOT populate state", async () => {

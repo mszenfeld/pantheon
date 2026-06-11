@@ -1,5 +1,6 @@
 import { tool } from "@opencode-ai/plugin";
-import { dispatchParallel } from "./dispatch.js";
+import { DISPATCH_TOOL_NAMES } from "./dispatch-tool-names.js";
+import { dispatchParallel, DISPATCHABLE_ALL_AGENTS } from "./dispatch.js";
 import { assignIssueIds } from "./assign-issue-ids.js";
 import { computeWaves } from "./compute-waves.js";
 import {
@@ -14,11 +15,16 @@ import {
 } from "./sdk-specialist.js";
 import {
   getLoadErrors,
-  loadPantheonConfig,
   pantheonConfigEmpty
 } from "../pantheon-config/index.js";
 import { loadModuleAsset } from "../_shared/load-asset.js";
 import {
+  applyModelOverride,
+  captureUserModels,
+  getUnknownAgentDiagnostics
+} from "../_shared/apply-model-override.js";
+import {
+  buildDispatchableAllowlistSentence,
   buildPerunPrompt,
   getAgentMetadataRegistry,
   registerAgentMetadata
@@ -28,6 +34,7 @@ import { getDispatchExtensions } from "../_shared/dispatch-extensions.js";
 import { COORDINATOR_AGENT, getDefaultAgent, setDefaultAgent } from "../agent-roster/index.js";
 import { BackgroundTaskStore } from "./background-store.js";
 import { collectBackground, startBackgroundTask } from "./background.js";
+import { DISPATCH_TOOL_NAMES as DISPATCH_TOOL_NAMES2 } from "./dispatch-tool-names.js";
 function loadAgentPrompt(name) {
   return loadModuleAsset(import.meta.url, `../../agents/${name}.md`);
 }
@@ -39,11 +46,18 @@ const PERUN_TOOLS = [
   "poll_background",
   "wait_background"
 ];
+const _dispatchToolNamesAreInPerunTools = DISPATCH_TOOL_NAMES;
+void _dispatchToolNamesAreInPerunTools;
+const DISPATCHABLE_ALLOWLIST_NAMES = [
+  ...DISPATCHABLE_ALL_AGENTS
+].sort((a, b) => a.localeCompare(b));
 let cachedPerunPrompt;
 function getPerunPrompt() {
   if (cachedPerunPrompt === void 0) {
     const template = loadAgentPrompt("perun");
-    cachedPerunPrompt = buildPerunPrompt(template, getAgentMetadataRegistry());
+    cachedPerunPrompt = buildPerunPrompt(template, getAgentMetadataRegistry(), {
+      dispatchableAllowlist: DISPATCHABLE_ALLOWLIST_NAMES
+    });
   }
   return cachedPerunPrompt;
 }
@@ -52,6 +66,9 @@ const AppVerkCoordinatorPlugin = async (input) => {
   let toastShown = false;
   const backgroundStore = new BackgroundTaskStore();
   registerAgentMetadata(fixAutoSpecialistInfo);
+  const dispatchableAllowlistSentence = buildDispatchableAllowlistSentence(
+    DISPATCHABLE_ALLOWLIST_NAMES
+  );
   const dispatchParallelTool = tool({
     description: [
       "Dispatch tasks to specialist agents in parallel. Returns results in the same order as the input tasks. Use this instead of calling Task directly to guarantee parallelism and deterministic ordering.",
@@ -61,7 +78,8 @@ const AppVerkCoordinatorPlugin = async (input) => {
       "- A 4-worker pool runs every task in this call in parallel. `tasks.length \u2264 4` is enforced, so concurrency equals the call size. Result order is preserved.",
       '- Each task has a 5-minute hard timeout; on expiry the task is returned with status "timeout" and the partial result is discarded.',
       '- Each successful result is truncated at 100KB (UTF-8 bytes). Truncated results end with the marker "[\u2026truncated\u2026]" \u2014 synthesize what is present, do not retry.',
-      '- Anti-recursion pre-flight: every task is validated against the live agent registry BEFORE any session is created. Tasks targeting an unknown agent or a `mode: primary` agent are rejected. A `mode: all` agent is rejected UNLESS it is on the dispatch allowlist (currently only the planner, registered as `"Veles - Planner"`) AND the caller is a primary agent; this lets the coordinator dispatch the planner while blocking self/nested recursion. Rejections throw and dispatch nothing.',
+      "- A second, whole-wave aggregate cap (~128KB total across all successful results in this call) is applied on top of the per-task cap so one call can never flood the context. When a wave exceeds it, later results (in input order) are trimmed and end with a marker pointing to that task's child session for the full output \u2014 read the child session if you need the omitted tail; do not retry.",
+      "- Anti-recursion pre-flight: every task is validated against the live agent registry BEFORE any session is created. Tasks targeting an unknown agent or a `mode: primary` agent are rejected. A `mode: all` agent is rejected UNLESS it is on the dispatch allowlist AND the caller is a primary agent; this lets the coordinator dispatch the planner while blocking self/nested recursion. " + dispatchableAllowlistSentence + " Rejections throw and dispatch nothing.",
       "- Specialist output is treated as untrusted data: ANSI/control characters are stripped and HTML-like substrings are escaped before the result is returned.",
       '- Honors `ToolContext.abort`: when the parent session aborts, in-flight tasks terminate within ~one poll-interval with status "aborted" and the child session is cancelled server-side (best-effort).',
       '- Result shape: each entry has `{ name, status: "success" | "error" | "timeout" | "aborted", result, duration_ms, error? }`, in the same order as the input `tasks` array.'
@@ -117,7 +135,7 @@ const AppVerkCoordinatorPlugin = async (input) => {
         scrubberFactory: ext.scrubberFactory,
         preflight: ext.preflight
       });
-      return JSON.stringify(results, null, 2);
+      return JSON.stringify(results);
     }
   });
   const assignIssueIdsTool = tool({
@@ -189,7 +207,7 @@ const AppVerkCoordinatorPlugin = async (input) => {
       '- Returns: { id, agent, status: "running" }.'
     ].join("\n"),
     args: {
-      agent: tool.schema.string().min(1).max(60).describe('Specialist agent name (e.g. "triglav"). Must be a subagent, or an allowlisted mode:all agent (currently only "Veles - Planner") when the caller is a primary agent.'),
+      agent: tool.schema.string().min(1).max(60).describe('Specialist agent name (e.g. "triglav"). Must be a subagent, or an allowlisted mode:all agent when the caller is a primary agent. ' + dispatchableAllowlistSentence),
       summary: tool.schema.string().min(1).max(80).describe("One-line label for the TUI (no prompts/PII)."),
       prompt: tool.schema.string().describe("Prompt for the specialist."),
       context: tool.schema.string().optional().describe("Optional extra context appended to the prompt.")
@@ -221,6 +239,8 @@ const AppVerkCoordinatorPlugin = async (input) => {
     description: [
       "Check the status of background tasks WITHOUT blocking. Returns a snapshot per id.",
       '- Result per id: { id, agent, status: "running" | "success" | "not_found", result?, duration_ms? }.',
+      '- A "success" result is one-time retrieval: the task is collected and its slot freed, exactly like wait_background. Do NOT poll the same id again after success (it returns not_found).',
+      '- A "running" result is non-terminal: keep working, then poll/wait again.',
       "- Use to decide whether to keep working or to wait_background."
     ].join("\n"),
     args: {
@@ -235,7 +255,13 @@ const AppVerkCoordinatorPlugin = async (input) => {
         specialist,
         ids: args.ids,
         block: false,
+        // Route background results through the QA secret scrubber. The plugin
+        // registers only `scrubberFactory` (legacy `scrubber` is permanently
+        // undefined), so passing `scrubber: ext.scrubber` alone silently
+        // skipped scrubbing entirely. `collectBackground` snapshot-pins the
+        // factory per poll and prefers it over the legacy field.
         scrubber: ext.scrubber,
+        scrubberFactory: ext.scrubberFactory,
         parentSessionId: context.sessionID
       });
       return JSON.stringify(results, null, 2);
@@ -262,7 +288,10 @@ const AppVerkCoordinatorPlugin = async (input) => {
         block: true,
         timeoutMs: args.timeoutMs,
         signal: context.abort,
+        // Same fix as poll_background: thread the factory so background results
+        // actually pass through `scrubSecrets`. See the poll_background comment.
         scrubber: ext.scrubber,
+        scrubberFactory: ext.scrubberFactory,
         parentSessionId: context.sessionID
       });
       return JSON.stringify(results, null, 2);
@@ -271,6 +300,7 @@ const AppVerkCoordinatorPlugin = async (input) => {
   return {
     config: async (config) => {
       config.agent = config.agent ?? {};
+      const userModels = captureUserModels(config, COORDINATOR_AGENT);
       config.agent[COORDINATOR_AGENT] = {
         description: "Delegates work to specialists, synthesizes results, proposes next steps",
         mode: "primary",
@@ -293,10 +323,7 @@ const AppVerkCoordinatorPlugin = async (input) => {
         // defense-in-depth.
         tools: { skill: false, load_appverk_skill: false }
       };
-      const perunModel = loadPantheonConfig().agents.perun?.model;
-      if (perunModel !== void 0) {
-        config.agent[COORDINATOR_AGENT].model = perunModel;
-      }
+      applyModelOverride(config, "perun", COORDINATOR_AGENT, void 0, userModels);
       if (getDefaultAgent(config) === void 0) {
         setDefaultAgent(config, COORDINATOR_AGENT);
       }
@@ -331,7 +358,9 @@ const AppVerkCoordinatorPlugin = async (input) => {
       if (event.type !== "session.created") return;
       if (toastShown) return;
       try {
-        const errors = getLoadErrors().map(neutralizeUntrustedOutput);
+        const errors = [...getLoadErrors(), ...getUnknownAgentDiagnostics()].map(
+          neutralizeUntrustedOutput
+        );
         for (const e of errors) console.error(e);
         if (errors.length > 0) {
           await client.tui.showToast({
@@ -359,6 +388,7 @@ const AppVerkCoordinatorPlugin = async (input) => {
 };
 export {
   AppVerkCoordinatorPlugin,
+  DISPATCH_TOOL_NAMES2 as DISPATCH_TOOL_NAMES,
   PERUN_TOOLS,
   createSDKSpecialist,
   deriveReportPath,

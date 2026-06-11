@@ -17,8 +17,6 @@ export const triglavSpecialistInfo: SpecialistInfo = {
   mode: "subagent",
   description: TRIGLAV_DESCRIPTION,
   metadata: {
-    category: "exploration",
-    cost: "FREE",
     keyTrigger: "2+ modules / unfamiliar area involved → fire `triglav` before planning",
     useWhen: [
       "Multiple search angles needed",

@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process"
-import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync } from "node:fs"
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync } from "node:fs"
 import { tmpdir } from "node:os"
 import path from "node:path"
 import { fileURLToPath, pathToFileURL } from "node:url"
@@ -197,6 +197,83 @@ describe("AppVerkPlugins", () => {
       // any new path added to `files` is auto-asserted without test maintenance.
       const expectedFiles = deriveExpectedFilesFromPackageJson(packageJson, rootDirectory)
       expect(packedFiles).toEqual(expect.arrayContaining(expectedFiles))
+
+      // Regression guard (H4): the shipped artifact must carry a resolvable
+      // `@appverk/opencode-skill-utils` package, not just its `dist/`. The
+      // root-dist modules (stribog, coordinator-policy) and skill-registry
+      // import it by bare specifier under `bundle: false`, so the tarball must
+      // ship `packages/skill-utils/package.json` (its name + exports manifest)
+      // alongside the `dist/`. Asserting the manifest is packed catches a
+      // `files[]` regression that would otherwise only surface as a runtime
+      // `Cannot find module` on a fresh install.
+      expect(packedFiles).toContain("packages/skill-utils/package.json")
+    } finally {
+      rmSync(tmpDir, { recursive: true, force: true })
+    }
+  })
+
+  it("installs the packed tarball and loads the entrypoint with all skill-utils consumers", () => {
+    // End-to-end packaging proof (H4): rather than only listing the tarball,
+    // this extracts it, runs a real `bun install` (which links the declared
+    // `@appverk/opencode-skill-utils` dependency from the shipped subdir), then
+    // `import()`s the entrypoint and runs its `config` hook in a child process.
+    // That hook instantiates stribog, coordinator-policy, and skill-registry —
+    // the three modules that import skill-utils by bare specifier — so an
+    // unresolvable specifier surfaces as a thrown `Cannot find module` here
+    // instead of silently at runtime on a real install.
+    const tmpDir = mkdtempSync(path.join(tmpdir(), "bun-install-"))
+    try {
+      const packOutput = execFileSync(
+        "bun",
+        ["pm", "pack", "--quiet", "--destination", tmpDir],
+        { cwd: rootDirectory, encoding: "utf8" },
+      ).trim()
+      const tarballPath = path.join(tmpDir, path.basename(packOutput))
+
+      // Extract the tarball into a clean directory (strips the leading
+      // `package/` path component that npm/bun tarballs use).
+      const extractDir = path.join(tmpDir, "extracted")
+      mkdirSync(extractDir, { recursive: true })
+      execFileSync("tar", ["-xzf", tarballPath, "-C", extractDir, "--strip-components=1"], {
+        encoding: "utf8",
+      })
+
+      // Install the extracted package's own dependencies. This must link
+      // `@appverk/opencode-skill-utils` from the shipped `packages/skill-utils`
+      // subdir (the root manifest declares it `workspace:*`, which bun rewrites
+      // to a concrete version on pack, resolved here against the shipped
+      // package's own `package.json`). Without the declaration + shipped
+      // manifest, install leaves the bare specifier unresolvable and the import
+      // below throws. `--ignore-scripts` skips the `preinstall` package-manager
+      // guard (explicitly "not a security control") — we only need dependency
+      // linking, not the dev-ergonomics hint.
+      execFileSync("bun", ["install", "--no-save", "--ignore-scripts"], {
+        cwd: extractDir,
+        encoding: "utf8",
+      })
+
+      // Import + run the config hook in a child process so module resolution
+      // happens from the INSTALLED package root, not this repo's node_modules.
+      const probe = [
+        "const { AppVerkPlugins } = await import('./dist/index.js');",
+        "const plugin = await AppVerkPlugins({});",
+        "const config = {};",
+        "await plugin.config?.(config);",
+        // Touch outputs that only exist if the skill-utils consumers loaded:
+        // skill-registry registers load_appverk_skill; coordinator-policy +
+        // stribog register their hooks via the same plugin graph.
+        "if (!plugin.tool?.load_appverk_skill) throw new Error('skill-registry tool missing');",
+        "if (typeof plugin['tool.execute.before'] !== 'function') throw new Error('bash gate missing');",
+        "if (!config.agent?.['Perun - Coordinator']) throw new Error('coordinator agent missing');",
+        "console.log('OK');",
+      ].join("\n")
+
+      const result = execFileSync("bun", ["-e", probe], {
+        cwd: extractDir,
+        encoding: "utf8",
+      }).trim()
+
+      expect(result).toContain("OK")
     } finally {
       rmSync(tmpDir, { recursive: true, force: true })
     }
