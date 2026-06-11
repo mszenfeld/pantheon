@@ -23,7 +23,7 @@ function loadCommandMarkdown(name: string): string {
   return loadModuleAsset(import.meta.url, `../../commands/${name}`)
 }
 
-const VARIANTS = ["fe", "be", "setup"] as const
+export const VARIANTS = ["fe", "be", "setup"] as const
 
 const TTL_MS = 60 * 60 * 1000  // 1 hour
 const SWEEP_INTERVAL_MS = 5 * 60 * 1000  // 5 minutes

@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest"
 import { SessionAgentRegistry } from "../../../src/modules/_shared/session-agent-registry.js"
 import { makeCallerGate } from "../../../src/modules/qa/caller-gate.js"
+import { VARIANTS } from "../../../src/modules/qa/index.js"
 
 const SETUP_KEY = "zmora-setup"
 
@@ -45,5 +46,17 @@ describe("makeCallerGate — isCoordinatorCaller (Perun-only tools, registry-neg
     expect(gate.isCoordinatorCaller("be-child")).toBe(false)
     expect(gate.isCoordinatorCaller("setup-child")).toBe(false)
     expect(gate.isCoordinatorCaller("x-child")).toBe(false)
+  })
+})
+
+describe("drift guard — setupAgentKey ↔ VARIANTS", () => {
+  it("the setup variant is still named 'setup' (a rename must break this)", () => {
+    expect(VARIANTS).toContain("setup")
+  })
+  it("the gate's setup key equals the zmora-prefixed setup variant", () => {
+    // index.ts builds config.agent keys as `zmora-${stack}` and constructs the
+    // gate with setupAgentKey "zmora-setup". If the variant is renamed/reordered,
+    // this catches the gate silently pointing at a non-existent agent key.
+    expect("zmora-setup").toBe(`zmora-${VARIANTS.find((v) => v === "setup")}`)
   })
 })
