@@ -69,6 +69,21 @@ enforces. The gate is correct either way, so the question is moot for security
   this is a **real** backstop (verified Task 1a) and is **not** the inert
   plugin-tool path. `load_appverk_skill: false` on the same line is a **plugin**
   tool and **is** on the inert path.
+- **Tool ownership (precise):** `execute_recipe` is a **zmora-setup-only** tool —
+  it lives in `SETUP_TOOLS` (`src/modules/qa/allowed-tools.ts:66`) and is **not**
+  in Perun's frontmatter (`src/agents/perun.md:5` lists `preflight, record_input,
+  parse_plan` but not `execute_recipe`). `record_input`/`parse_plan`/`preflight`
+  are **Perun-only**. Neither set appears in any *other* agent's frontmatter.
+- **Two different maps, only one probed.** stribog's 2026-06-10 probe found the
+  `config.agent[].tools` deny-map INERT; it did **not** test the markdown
+  frontmatter `allowed-tools` *allowlist*. `plan/index.ts:23-26` asserts the
+  markdown allowlist is a no-op for plugin tools, but that is **asserted, not
+  probed**. Since `execute_recipe` is in `zmora-setup`'s markdown allowlist but
+  not `zmora-fe`/`zmora-be`'s, the "`zmora-fe` calls `execute_recipe`" threat is
+  only live if the markdown allowlist is *also* inert for plugin tools. The
+  caller gate is load-bearing regardless — unprobed enforcement cannot be relied
+  on — but the AGENTS.md note must list **both** directions as "re-verify on
+  opencode bump."
 
 ## Design
 
@@ -96,18 +111,42 @@ specialist calling a Perun-only tool), where a positive `getSessionAgent` match
 would be both too strict (turn-1) and too loose (children inherit the parent's
 first-message agent).
 
-**Residual (documented, not fixed here):** a session that is neither Perun nor a
-dispatched specialist (e.g. a user's own custom primary agent) is not denied by
-the registry-negative check. This is acceptable: the Perun-only tools are in no
-other agent's frontmatter, the realistic injection threat is a dispatched
-specialist (covered), and a non-dispatched caller writes only to its own
-session's state.
+**Residual (documented, not fixed here):** the registry-negative check allows
+any caller that is not a *foreground-dispatched* specialist. Two concrete
+pass-through cases:
+1. A **background-dispatched** subagent — `background.ts:54-62` deliberately does
+   NOT register background children (today only the read-only `triglav`) in the
+   `SessionAgentRegistry`, so `registry.lookup` returns `undefined` and the
+   session reads as the coordinator for `record_input`/`parse_plan`/`preflight`.
+   It still fails **closed** for `execute_recipe` (`undefined !== "zmora-setup"`),
+   so the minter is unaffected.
+2. A user's own custom primary agent (not dispatched at all).
+
+Both are acceptable for this change: `record_input`/`parse_plan`/`preflight`
+appear in no agent's frontmatter except Perun's, `triglav` is read-only with no
+workflow that calls them, and a non-dispatched caller writes only to its own
+session's keyed state. Recorded in the AGENTS.md canonical note and as a tracked
+follow-up (same treatment as the `load_appverk_skill` follow-up in §6) so it is
+not silently forgotten — a future tightening could pass an allowlist of
+coordinator-eligible session shapes.
+
+The check is **registry-negative rather than a positive "is Perun" match** for a
+structural reason: Perun is *never* placed in the registry (the only writer is
+`dispatch.ts:422`, which registers dispatched children, and the anti-recursion
+guard at `dispatch.ts:221` blocks Perun from being dispatched at all), so
+"not a registered specialist" is a sound, turn-1-safe proxy for "is the
+coordinator" — whereas a positive transcript match mis-resolves children to the
+parent's agent (see Key code facts).
 
 ### 2. Gate location — per-`execute()` guard, not a hook
 
 A single factory `makeCallerGate({ registry, setupAgentKey })` is constructed
-**once** in the plugin body (alongside `store`/`state`/`registry` at
-`index.ts:64-66`) and returns predicates:
+**once** in the plugin body, immediately after `const registry = new
+SessionAgentRegistry()` (`index.ts:66`). `setupAgentKey` is `"zmora-setup"` — the
+only variant permitted to mint via `execute_recipe` — supplied at construction
+and pinned by the drift-guard test (Testing). The factory returns two
+**synchronous** predicates (`registry.lookup` is a plain `Map.get`, so no
+`async`/`await` and no transcript fetch):
 
 - `isSetupCaller(sessionID): boolean` → `registry.lookup(sessionID) === setupAgentKey`
 - `isCoordinatorCaller(sessionID): boolean` → `registry.lookup(sessionID) === undefined`
@@ -121,19 +160,29 @@ The gate holds **no per-session state** (it only reads the registry, whose
 lifecycle `session.deleted` already manages at `index.ts:354`), so it needs no
 cleanup wiring.
 
-### 3. Deny mechanism — asymmetric
+### 3. Deny mechanism — uniform JSON `forbidden`
 
-- **`execute_recipe` (minter): throw a marker-error** (mirroring stribog's
-  `tool-budget-hook.ts:69-73`) so a jailbroken retry loop cannot ignore a JSON
-  status and re-call. The throw surfaces as a tool-error part.
-  *Implementation checkpoint:* confirm opencode treats a thrown error from a
-  tool `execute()` as a tool-error (hard block), not a host crash. If it does
-  not, fall back to the JSON-`forbidden` form for this tool too.
-- **`record_input` / `parse_plan` / `preflight`: return
-  `JSON.stringify({ status: "forbidden", reason })`.** Add `forbidden` to the
-  relevant result unions (`ExecuteRecipeResult` stays unaffected since the
-  minter throws; `RecordInputResult` and the inline `parse_plan`/`preflight`
-  shapes gain the `forbidden` status).
+All four tools return `JSON.stringify({ status: "forbidden", reason })` on deny.
+
+This **changed from** an earlier asymmetric "throw a marker-error for the
+minter" plan. The spec-review pass found the cited mirror is mechanically
+different: stribog's `tool-budget-hook.ts:69-73` throws inside a
+`tool.execute.before` **hook**, re-thrown past an internal-error guard so it
+surfaces as a tool-error part — *not* a throw from a tool's own `execute()` body,
+for which the codebase has **no evidence** of graceful handling (it could crash
+the turn). A JSON `forbidden` status is equally un-bypassable for security: on
+deny the handler never runs, so no secret is minted regardless of how the model
+reacts. Uniform JSON removes the only unverified binary in the design at zero
+security cost; the anti-retry argument for throwing was weak (the handler is
+unreachable either way).
+
+Add a `forbidden` status to all four result shapes: `ExecuteRecipeResult`
+(`execute-recipe.ts:25-29`), `RecordInputResult` (`record-input.ts`), and the
+inline `parse_plan`/`preflight` result objects in `index.ts` (parse_plan's shape
+is an **unnamed inline literal** at `index.ts:266-269` — extend it inline; no
+named alias required). The `reason` is developer-facing, e.g.
+`"execute_recipe is restricted to the dispatched zmora-setup variant"` /
+`"<tool> is restricted to the coordinator (Perun)"`.
 
 ### 4. Keep the inert maps as declarative defense-in-depth
 
@@ -152,8 +201,16 @@ stating:
    — a separate, real path. Do not conflate.
 3. Load-bearing enforcement for plugin tools = handler-wrapper caller gates
    (`src/modules/qa/caller-gate.ts`) + `tool.execute.before` hooks (stribog).
-4. Re-verify the plugin-map's actual runtime behavior on every opencode bump
-   (alongside the `NATIVE_BUILTINS` re-verify note).
+4. Re-verify **both** the plugin deny-map (`config.agent[].tools`) **and** the
+   markdown `allowed-tools` allowlist behavior for plugin tools on every opencode
+   bump (alongside the `NATIVE_BUILTINS` re-verify note) — only the deny-map was
+   probed on 1.15.10; the allowlist direction is asserted-not-probed.
+
+A short **§5.1 (residual gaps)** under the same note records: (a) the
+registry-negative coordinator gate does not deny background-dispatched
+subagents (`triglav`) or non-dispatched custom agents — accepted, tracked; (b)
+`load_appverk_skill` disable for Perun is plugin-map-only/inert — tracked
+follow-up (§6).
 
 Then, pointing at that section:
 - **Rewrite** `src/modules/qa/index.ts:175-183` (drop "opt-in per agent" implying
@@ -164,6 +221,13 @@ Then, pointing at that section:
   `skill: false` (native, real) claim; note that `load_appverk_skill: false`
   (plugin) is on the inert map path and is a tracked follow-up. **Do not** flatten
   the native-skill claim into "contradictory" — that would be a factual error.
+- **Correct the legacy doc** `docs/plugins/qa.md:94,96` — it carries the strongest
+  form of the misconception this change kills ("The tool-availability matrix is
+  enforced per-variant in `AgentConfig.tools`"; "fails at the allowlist check, not
+  at a prompt-level guard") and mislabels `execute_recipe` as a "Perun-only tool".
+  That tree is **legacy** (slated for removal per AGENTS.md), so the minimal fix
+  is to correct the two enforcement claims (or accelerate the file's removal) and
+  point at the canonical note — do not invest in polishing it.
 
 ### 6. Out of scope — tracked follow-up
 
@@ -181,33 +245,55 @@ dispatched only for the `## Setup` block.
 
 ## Testing (TDD)
 
-New `tests/modules/qa/caller-gate.test.ts`:
+**New `tests/modules/qa/caller-gate.test.ts`** (pure predicate tests over a
+fake `SessionAgentRegistry`):
 - `isSetupCaller`: true when registry maps the session to `"zmora-setup"`;
   false for `"zmora-fe"`, `"zmora-be"`, and a registry miss (fail-closed).
 - `isCoordinatorCaller`: true for a registry miss (Perun, incl. turn-1); false
   for any registered specialist (`"zmora-fe"`, `"zmora-be"`, `"zmora-setup"`,
   a non-zmora dispatched name).
 
-Plugin/integration coverage:
-- A session registered as `zmora-fe` calling `execute_recipe` is denied
-  (throws / never reaches the handler); same for `zmora-be`.
-- A session registered as `zmora-setup` reaches the `execute_recipe` handler.
-- A registry-miss session (Perun, incl. **turn-1**) calling `parse_plan` is
+**New execute()-wrapper gate coverage — `execute_recipe` has ZERO execute()-level
+tests today** (existing coverage is the bare handler via `makeExecuteRecipeHandler`
+at `execute-recipe.test.ts:23` and `integration.test.ts:48`, which bypass the
+gate). So this is **added**, not updated. Drive the registered `execute_recipe`
+tool's `.execute()` with each identity:
+- registered `"zmora-setup"` → reaches the handler (assert via a fake handler /
+  observed side effect).
+- registered `"zmora-fe"` → returns `{status:"forbidden"}`, handler never runs.
+- registered `"zmora-be"` → `{status:"forbidden"}`, handler never runs.
+- registry-miss (Perun / unregistered) → `{status:"forbidden"}` (only
+  `"zmora-setup"` is allowed; everything else is denied for the minter).
+
+**Coordinator-gate coverage** (mostly already exercised by existing allow-path
+tests — see below; add the deny path):
+- registry-miss session (Perun, incl. **turn-1**) calling `parse_plan` →
   **allowed** — guards against re-introducing a fail-closed turn-1 regression.
-- A `zmora-*` session calling `record_input`/`parse_plan`/`preflight` gets
-  `forbidden`.
+- registered `"zmora-fe"`/`"zmora-be"` calling `record_input`/`parse_plan`/
+  `preflight` → `{status:"forbidden"}`.
 
-Sync test (drift guard):
-- Pin `setupAgentKey === "zmora-setup"` against the `VARIANTS` constant /
-  `config.agent` keys in `index.ts`, so a `task.name` typo or a renamed variant
-  cannot silently break the gate.
+**Drift-guard sync test** — *prerequisite:* export `VARIANTS` from `index.ts`
+(change `const VARIANTS` at `index.ts:25` to `export const VARIANTS`). Then
+assert `VARIANTS[2] === "setup"` **and** the gate's `setupAgentKey ===
+` `` `zmora-${VARIANTS[2]}` `` so a renamed/reordered variant fails the test
+(closes the typo-silently-disables-the-gate hole).
 
-Unchanged: the bare-handler unit tests (`execute-recipe.test.ts`,
-`record-input.test.ts`, `preflight.test.ts`) construct handlers directly and
-**intentionally bypass** the gate (the gate lives in the `execute()` wrapper) —
-documented in `caller-gate.ts`. Update only the few existing **execute()-level**
-tests (`plugin.test.ts`, `integration.test.ts`) that drive the registered tool
-to register the expected identity in the registry first.
+**Existing tests — precise impact (verified):**
+- *Stay green, no change:* the bare-handler unit tests
+  (`execute-recipe.test.ts`, `record-input.test.ts`, `preflight.test.ts`)
+  construct handlers directly and **intentionally bypass** the gate (it lives in
+  the `execute()` wrapper) — documented in `caller-gate.ts`. The existing
+  execute()-level coordinator-tool calls also stay green **because the gate is
+  registry-negative**: `integration.test.ts:345` (`record_input`) and the
+  `parse_plan` calls at `integration.test.ts:283/385/415` /
+  `plugin.test.ts:271/292/341` run on **unregistered** ("perun-…") sessions →
+  `registry.lookup === undefined` → coordinator → allowed. No `execute_recipe`
+  test goes through the wrapper, so nothing breaks there either.
+- *Need registry setup:* **only NEW deny-path cases** (a registered specialist
+  calling a Perun-only tool, or a non-setup specialist calling `execute_recipe`)
+  must `registry.register(sessionID, "<variant>")` before driving `.execute()`.
+  No existing test requires modification — a strict improvement over the prior
+  draft's "update the few existing tests" instruction.
 
 ## Verification
 
