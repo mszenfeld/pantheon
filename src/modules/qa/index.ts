@@ -179,9 +179,10 @@ export const AppVerkQAPlugin: Plugin = async ({ client }) => {
             return cached
           },
           mode: "subagent",
-          // Plugin-provided tools are opt-in per agent. Only zmora-setup may
-          // execute recipes; record_input and parse_plan are Perun-only
-          // (registered in Perun's frontmatter, not in any zmora variant).
+          // DECLARATIVE-ONLY defense-in-depth. This plugin-tool map is INERT on
+          // opencode 1.15.10 (see AGENTS.md "Plugin-tool enforcement model") — the
+          // load-bearing gate is caller-gate.ts at each tool's execute(). Kept so
+          // it becomes free enforcement if a future opencode honors the map.
           tools: {
             execute_recipe: stack === "setup",
             record_input: false,
