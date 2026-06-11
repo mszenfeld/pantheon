@@ -38,77 +38,77 @@ describe("QA tool execute() gate wiring", () => {
   it("denies execute_recipe from a zmora-fe session with status forbidden", async () => {
     const plugin = await AppVerkQAPlugin(fakeInput)
     getDispatchExtensions().sessionAgentRegistry!.register("fe-child", "zmora-fe")
-    const out = await plugin.tool!.execute_recipe.execute({ binding_name: "QA_BIND_X" }, ctx("fe-child"))
-    expect(JSON.parse(out).status).toBe("forbidden")
+    const out = await plugin.tool!.execute_recipe!.execute({ binding_name: "QA_BIND_X" }, ctx("fe-child"))
+    expect(out).toContain('"status":"forbidden"')
   })
 
   it("denies execute_recipe from a zmora-be session", async () => {
     const plugin = await AppVerkQAPlugin(fakeInput)
     getDispatchExtensions().sessionAgentRegistry!.register("be-child", "zmora-be")
-    const out = await plugin.tool!.execute_recipe.execute({ binding_name: "QA_BIND_X" }, ctx("be-child"))
-    expect(JSON.parse(out).status).toBe("forbidden")
+    const out = await plugin.tool!.execute_recipe!.execute({ binding_name: "QA_BIND_X" }, ctx("be-child"))
+    expect(out).toContain('"status":"forbidden"')
   })
 
   it("denies execute_recipe from an unregistered (Perun/unknown) session — minter is fail-closed", async () => {
     const plugin = await AppVerkQAPlugin(fakeInput)
-    const out = await plugin.tool!.execute_recipe.execute({ binding_name: "QA_BIND_X" }, ctx("perun-session"))
-    expect(JSON.parse(out).status).toBe("forbidden")
+    const out = await plugin.tool!.execute_recipe!.execute({ binding_name: "QA_BIND_X" }, ctx("perun-session"))
+    expect(out).toContain('"status":"forbidden"')
   })
 
   it("allows execute_recipe from a zmora-setup session (reaches the handler)", async () => {
     const plugin = await AppVerkQAPlugin(fakeInput)
     getDispatchExtensions().sessionAgentRegistry!.register("setup-child", "zmora-setup")
-    const out = await plugin.tool!.execute_recipe.execute({ binding_name: "QA_BIND_X" }, ctx("setup-child"))
+    const out = await plugin.tool!.execute_recipe!.execute({ binding_name: "QA_BIND_X" }, ctx("setup-child"))
     // No plan parsed, so the handler returns unknown_binding — NOT forbidden.
     // That proves the gate let the call through to the handler.
-    expect(JSON.parse(out).status).toBe("unknown_binding")
+    expect(out).toContain('"status":"unknown_binding"')
   })
 
   it("denies parse_plan from a registered specialist (zmora-fe)", async () => {
     const plugin = await AppVerkQAPlugin(fakeInput)
     getDispatchExtensions().sessionAgentRegistry!.register("fe-child", "zmora-fe")
-    const out = await plugin.tool!.parse_plan.execute({ plan: "## Setup" }, ctx("fe-child"))
-    expect(JSON.parse(out).status).toBe("forbidden")
+    const out = await plugin.tool!.parse_plan!.execute({ plan: "## Setup" }, ctx("fe-child"))
+    expect(out).toContain('"status":"forbidden"')
   })
 
   it("allows parse_plan from an unregistered (Perun, incl. turn-1) session", async () => {
     const plugin = await AppVerkQAPlugin(fakeInput)
     // Empty plan parses to ok with no bindings — proves the gate allowed it.
-    const out = await plugin.tool!.parse_plan.execute({ plan: "no setup section here" }, ctx("perun-session"))
-    expect(JSON.parse(out).status).toBe("ok")
+    const out = await plugin.tool!.parse_plan!.execute({ plan: "no setup section here" }, ctx("perun-session"))
+    expect(out).toContain('"status":"ok"')
   })
 
   it("denies record_input from a registered specialist (zmora-be)", async () => {
     const plugin = await AppVerkQAPlugin(fakeInput)
     getDispatchExtensions().sessionAgentRegistry!.register("be-child", "zmora-be")
-    const out = await plugin.tool!.record_input.execute(
+    const out = await plugin.tool!.record_input!.execute(
       { name: "TEST_USER_EMAIL", value: "a@b.com" },
       ctx("be-child"),
     )
-    expect(JSON.parse(out).status).toBe("forbidden")
+    expect(out).toContain('"status":"forbidden"')
   })
 
   it("denies preflight from a registered specialist (zmora-fe)", async () => {
     const plugin = await AppVerkQAPlugin(fakeInput)
     getDispatchExtensions().sessionAgentRegistry!.register("fe-child", "zmora-fe")
-    const out = await plugin.tool!.preflight.execute({ env: [] }, ctx("fe-child"))
-    expect(JSON.parse(out).status).toBe("forbidden")
+    const out = await plugin.tool!.preflight!.execute({ env: [] }, ctx("fe-child"))
+    expect(out).toContain('"status":"forbidden"')
   })
 
   it("allows record_input from an unregistered (Perun) session (reaches the handler)", async () => {
     const plugin = await AppVerkQAPlugin(fakeInput)
-    const out = await plugin.tool!.record_input.execute(
+    const out = await plugin.tool!.record_input!.execute(
       { name: "TEST_USER_EMAIL", value: "a@b.com" },
       ctx("perun-session"),
     )
     // Handler runs; valid name/value → ok. Proves the gate let the call through.
-    expect(JSON.parse(out).status).toBe("ok")
+    expect(out).toContain('"status":"ok"')
   })
 
   it("allows preflight from an unregistered (Perun) session (reaches the handler)", async () => {
     const plugin = await AppVerkQAPlugin(fakeInput)
-    const out = await plugin.tool!.preflight.execute({ env: [] }, ctx("perun-session"))
+    const out = await plugin.tool!.preflight!.execute({ env: [] }, ctx("perun-session"))
     // Empty env list → nothing missing → ok. Proves the gate let the call through.
-    expect(JSON.parse(out).status).toBe("ok")
+    expect(out).toContain('"status":"ok"')
   })
 })
