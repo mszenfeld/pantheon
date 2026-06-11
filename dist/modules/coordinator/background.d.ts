@@ -1,6 +1,6 @@
 import { DispatchSpecialist, AgentInfo } from './dispatch.js';
 import { BackgroundTaskStore } from './background-store.js';
-import '../_shared/session-agent-registry.js';
+import { SessionAgentRegistry } from '../_shared/session-agent-registry.js';
 import './poller.js';
 
 /** Per-parent cap on concurrent background tasks. Mirrors DISPATCH_CONCURRENCY;
@@ -16,6 +16,13 @@ interface StartBackgroundInput {
     context?: string;
     /** Caller's mode — see dispatch.ts DispatchParallelInput.callerMode. */
     callerMode?: AgentInfo["mode"];
+    /**
+     * QA `sessionAgentRegistry`. When set, the background child is registered
+     * (childSessionID → agent name) so it no longer reads as the coordinator in
+     * the caller gate. `undefined` is a no-op (e.g. unit tests). Mirrors the
+     * foreground path's `dispatch.ts` `options.sessionAgentRegistry?.register`.
+     */
+    sessionAgentRegistry?: SessionAgentRegistry;
 }
 interface StartBackgroundResult {
     id: string;

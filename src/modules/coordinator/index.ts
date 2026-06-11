@@ -274,6 +274,11 @@ export const AppVerkCoordinatorPlugin: Plugin = async (input) => {
       const specialist = createSDKSpecialist(client, context.sessionID)
       const agentRegistry = await loadAgentRegistry(client)
       const callerMode = agentRegistry[context.agent]?.mode
+      // Same plugin-supplied extensions the foreground path reads. Threading
+      // the registry here makes the background child resolve as its own agent
+      // (not the coordinator) in the QA caller gate; cleanup is the QA module's
+      // generic `session.deleted` unregister.
+      const ext = getDispatchExtensions()
       const result = await startBackgroundTask({
         store: backgroundStore,
         specialist,
@@ -283,6 +288,7 @@ export const AppVerkCoordinatorPlugin: Plugin = async (input) => {
         agent: args.agent,
         prompt: args.prompt,
         context: args.context,
+        sessionAgentRegistry: ext.sessionAgentRegistry,
       })
       return JSON.stringify(result, null, 2)
     },
@@ -364,8 +370,12 @@ export const AppVerkCoordinatorPlugin: Plugin = async (input) => {
         // installed opencode 1.15.x runtime (verified in Task 1a): the runtime's
         // permission engine is string-keyed/PermissionV2, so the v1-SDK type
         // lacking a `skill` key is cosmetic — `skill: false` filters the tool out
-        // of the toolset AND denies it at execute time. `load_appverk_skill: false`
-        // gates the separate plugin skill-loader.
+        // of the toolset AND denies it at execute time.
+        // `load_appverk_skill` is a PLUGIN tool, NOT native — its deny here is on
+        // the INERT plugin-tool-map path (see AGENTS.md "Plugin-tool enforcement
+        // model"), so this line does not actually prevent Perun loading skills.
+        // Tracked follow-up: enforce it in skill-registry. Kept as declarative
+        // defense-in-depth.
         tools: { skill: false, load_appverk_skill: false },
       }
       // Inject model AFTER registration so we don't have to merge it into the

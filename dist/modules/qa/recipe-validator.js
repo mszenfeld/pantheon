@@ -93,6 +93,27 @@ function splitOnUnquotedSeparators(text) {
   if (current.trim().length > 0) out.push(current);
   return out.map((s) => s.trim()).filter((s) => s.length > 0);
 }
+function hasUnquotedBackgroundOperator(text) {
+  let sq = false;
+  let dq = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (c === void 0) continue;
+    if (c === "'" && !dq) {
+      sq = !sq;
+      continue;
+    }
+    if (c === '"' && !sq) {
+      dq = !dq;
+      continue;
+    }
+    if (sq || dq || c !== "&") continue;
+    if (text[i + 1] === "&" || text[i - 1] === "&") continue;
+    if (text[i + 1] === ">" || text[i - 1] === ">") continue;
+    return true;
+  }
+  return false;
+}
 function tokenizePipeline(text) {
   const out = [];
   let current = "";
@@ -138,8 +159,15 @@ function extractCurlURL(cmd) {
   return null;
 }
 function hostOfURL(urlOrTemplate) {
-  const varMatch = urlOrTemplate.match(/^(?:[a-zA-Z][a-zA-Z0-9+.-]*:\/\/)?(\$\{?[A-Z_][A-Z0-9_]*\}?)/);
-  if (varMatch) return varMatch[1] ?? null;
+  const varMatch = urlOrTemplate.match(
+    /^(?:[a-zA-Z][a-zA-Z0-9+.-]*:\/\/)?(\$\{?[A-Z_][A-Z0-9_]*\}?)(.*)$/s
+  );
+  if (varMatch) {
+    const rest = varMatch[2] ?? "";
+    const authorityTail = rest.match(/^[^/?#]*/)?.[0] ?? "";
+    if (/[\n@]/.test(rest) || authorityTail.length > 0) return null;
+    return varMatch[1] ?? null;
+  }
   try {
     const u = new URL(urlOrTemplate.includes("://") ? urlOrTemplate : `scheme://${urlOrTemplate}`);
     if (u.username !== "" || u.password !== "") return null;
@@ -203,8 +231,8 @@ function validateRecipe(recipe, egress) {
   if (/(?:^|\s)(?:>|>>|&>|2>>?)(?!\s*\/dev\/null\b)/.test(stmt)) {
     return { status: "error", reason: "recipe contains redirect to non-/dev/null path" };
   }
-  if (/(?:^|\s)&\s*$/.test(stmt)) {
-    return { status: "error", reason: "recipe contains & (background)" };
+  if (hasUnquotedBackgroundOperator(stmt)) {
+    return { status: "error", reason: "recipe contains & (background/job-control operator)" };
   }
   const cmds = tokenizePipeline(stmt);
   for (const cmd of cmds) {

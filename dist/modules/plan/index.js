@@ -20,6 +20,9 @@ const AppVerkPlanPlugin = async ({ client }) => {
         // helpers (triglav now), so it needs the dispatch tools. These are
         // the coordinator's process-wide tools — enabling here, not in the
         // markdown allow-list (which is a no-op for plugin tools).
+        // NOTE: the enable direction of this map is also asserted-not-probed for
+        // plugin tools on opencode 1.15.10 — see AGENTS.md "Plugin-tool
+        // enforcement model". Do not treat it as a security boundary.
         tools: {
           dispatch_parallel: true,
           dispatch_background: true,

@@ -330,6 +330,43 @@ Conventions:
 - **Keep "Fixed" status in the report**, not in commit messages — the report itself is the audit trail for which findings shipped on which branch.
 - **Do not link to `docs/reviews/*.md` from source or other docs.** Like superpowers artefacts, individual reports are point-in-time records; references to them rot once the branch is merged or the file is archived. Inline anything load-bearing into the permanent doc that needs it.
 
+## Plugin-tool enforcement model
+
+Per-agent `config.agent[<name>].tools` has TWO distinct meanings; do not conflate them:
+
+- **Plugin tools** (registered by a plugin's `tool: {...}`, e.g. `execute_recipe`,
+  `load_appverk_skill`): the `config.agent[].tools` deny-map is **declarative-only /
+  INERT** on opencode 1.15.10 — a 2026-06-10 live probe found a denied plugin tool
+  still executes. The markdown frontmatter `allowed-tools` *allowlist* direction was
+  **not** probed and must be treated as asserted-not-enforced for plugin tools.
+- **Native tools** (e.g. `skill`): `config.agent[].tools` DOES enforce, via opencode's
+  string-keyed PermissionV2 engine. The coordinator's `skill: false`
+  (`src/modules/coordinator/index.ts:369`) is a real backstop on this path.
+
+**Load-bearing enforcement for plugin tools is in code, not the map:**
+- QA's four tools are gated by `src/modules/qa/caller-gate.ts` at each tool's
+  `execute()` (registry-only: `execute_recipe` → `zmora-setup`;
+  `record_input`/`parse_plan`/`preflight` → the coordinator via registry-negative).
+- stribog's tool allow-list + edit budget are enforced by a `tool.execute.before`
+  hook (`src/modules/stribog/tool-budget-hook.ts`).
+
+Keep the (inert) maps in place as declarative defense-in-depth — they become free
+enforcement if a future opencode honors them. **On every opencode bump, re-verify
+BOTH the plugin deny-map AND the markdown allowlist behavior for plugin tools**
+(alongside the `NATIVE_BUILTINS` re-verify note).
+
+### Residual gaps (tracked)
+
+- The registry-negative coordinator gate does NOT deny background-dispatched
+  subagents (`triglav` is not registered in `SessionAgentRegistry`; see
+  `src/modules/coordinator/background.ts:54-62`) or non-dispatched custom agents.
+  Accepted: those tools are in no agent's frontmatter except Perun's, and `triglav`
+  is read-only. The minter (`execute_recipe`) is unaffected — it requires a positive
+  `zmora-setup`.
+- `load_appverk_skill: false` on the coordinator is plugin-map-only (inert). Truly
+  preventing Perun from loading skills needs a handler/hook gate in `skill-registry`
+  — tracked follow-up, not done here.
+
 ## Common Pitfalls
 
 - Do not run `git commit` or `git push` via the bash tool in this repo — the commit plugin blocks direct commits and pushes at runtime (`tool.execute.before` hook). Use `/commit` instead. This bash gate (`classifyBashCommand` in `src/modules/commit/bash-policy.ts`) is **defense-in-depth / a workflow rail, not a security boundary** — it keeps the `/commit` workflow consistent but is bypassable by shapes the literal `git` token-match misses (`/usr/bin/git …`, `bash -c "git …"`, `hub commit`, `command git …`, alias indirection, `$(echo git) commit`, plumbing subcommands like `commit-tree` / `fast-import` / `update-ref`). Per project doctrine ([`docs/plugins/coordinator.md`](docs/plugins/coordinator.md): *"Treat code-enforced rules as the security boundary. The LLM-requested rules are defense in depth — they raise the cost of a successful prompt-injection escalation but are not the last line of defense."*), real shell-execution boundaries live outside this plugin. See [`docs/plugins/commit.md`](docs/plugins/commit.md#classifybashcommand-is-defense-in-depth-not-a-security-boundary) for the full bypass list.

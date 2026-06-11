@@ -14,6 +14,7 @@ import { makePreflightHandler } from "./preflight.js";
 import { parseBindings } from "./binding-parser.js";
 import { scrubSecrets } from "./scrubber.js";
 import { makeRunBash } from "./run-bash.js";
+import { makeCallerGate, SETUP_AGENT_KEY } from "./caller-gate.js";
 import { FE_TOOLS, BE_TOOLS, SETUP_TOOLS, SHARED_TOOLS, toolsForVariant } from "./allowed-tools.js";
 function loadCommandMarkdown(name) {
   return loadModuleAsset(import.meta.url, `../../commands/${name}`);
@@ -52,6 +53,7 @@ const AppVerkQAPlugin = async ({ client }) => {
   const store = new BindingsStore();
   const state = new QaRunState();
   const registry = new SessionAgentRegistry();
+  const gate = makeCallerGate({ registry, setupAgentKey: SETUP_AGENT_KEY });
   const parentIDCache = /* @__PURE__ */ new Map();
   async function resolveParentID(sessionID) {
     const cached = parentIDCache.get(sessionID);
@@ -115,9 +117,10 @@ const AppVerkQAPlugin = async ({ client }) => {
             return cached;
           },
           mode: "subagent",
-          // Plugin-provided tools are opt-in per agent. Only zmora-setup may
-          // execute recipes; record_input and parse_plan are Perun-only
-          // (registered in Perun's frontmatter, not in any zmora variant).
+          // DECLARATIVE-ONLY defense-in-depth. This plugin-tool map is INERT on
+          // opencode 1.15.10 (see AGENTS.md "Plugin-tool enforcement model") — the
+          // load-bearing gate is caller-gate.ts at each tool's execute(). Kept so
+          // it becomes free enforcement if a future opencode honors the map.
           tools: {
             execute_recipe: stack === "setup",
             record_input: false,
@@ -169,6 +172,12 @@ const AppVerkQAPlugin = async ({ client }) => {
           )
         },
         async execute(args, ctx) {
+          if (!gate.isCoordinatorCaller(ctx.sessionID)) {
+            return JSON.stringify({
+              status: "forbidden",
+              reason: "preflight is restricted to the coordinator (Perun)"
+            });
+          }
           const result = await preflightHandler({ env: args.env }, { sessionID: ctx.sessionID });
           return JSON.stringify(result);
         }
@@ -191,6 +200,12 @@ const AppVerkQAPlugin = async ({ client }) => {
           )
         },
         async execute(args, ctx) {
+          if (!gate.isCoordinatorCaller(ctx.sessionID)) {
+            return JSON.stringify({
+              status: "forbidden",
+              reason: "parse_plan is restricted to the coordinator (Perun)"
+            });
+          }
           const parentID = await resolveParentID(ctx.sessionID) ?? ctx.sessionID;
           const parsed = parseBindings(args.plan);
           if (parsed.status !== "ok") {
@@ -207,7 +222,7 @@ const AppVerkQAPlugin = async ({ client }) => {
         description: [
           "Execute a single binding recipe declared in the plan's **Bindings:** section. Atomically: validates recipe AST, runs via bash with composed env (host env + previously-bound inputs), validates output, registers the value in the bindings store. Returns status only \u2014 the value never appears in the LLM context.",
           "",
-          "Available only to zmora-setup. Other zmora variants see the tool disabled in their AgentConfig.",
+          "Available only to the dispatched zmora-setup variant \u2014 enforced at execute() by the caller gate (the per-agent AgentConfig tools map is declarative-only on opencode 1.15.10).",
           "",
           "Result shape (JSON-stringified):",
           '- `{ status: "ok" }` \u2014 binding minted and stored.',
@@ -221,6 +236,12 @@ const AppVerkQAPlugin = async ({ client }) => {
           )
         },
         async execute(args, ctx) {
+          if (!gate.isSetupCaller(ctx.sessionID)) {
+            return JSON.stringify({
+              status: "forbidden",
+              reason: "execute_recipe is restricted to the zmora-setup specialist \u2014 only a dispatched zmora-setup task may mint bindings"
+            });
+          }
           const result = await executeRecipeHandler(
             { binding_name: args.binding_name },
             { sessionID: ctx.sessionID }
@@ -247,6 +268,12 @@ const AppVerkQAPlugin = async ({ client }) => {
           )
         },
         async execute(args, ctx) {
+          if (!gate.isCoordinatorCaller(ctx.sessionID)) {
+            return JSON.stringify({
+              status: "forbidden",
+              reason: "record_input is restricted to the coordinator (Perun)"
+            });
+          }
           const result = await recordInputHandler(
             { name: args.name, value: args.value },
             { sessionID: ctx.sessionID }
@@ -277,6 +304,7 @@ export {
   FE_TOOLS,
   SETUP_TOOLS,
   SHARED_TOOLS,
+  VARIANTS,
   buildQATesterAgent,
   qa_default as default,
   toolsForVariant

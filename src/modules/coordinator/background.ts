@@ -10,6 +10,7 @@ import { PollerAbortError, PollerTimeoutError, pollUntilIdle } from "./poller.js
 import { neutralizeUntrustedOutput, normalizeVariantSuffix } from "./sanitize.js"
 import { truncateBytes } from "./truncate-bytes.js"
 import type { BackgroundTaskStore } from "./background-store.js"
+import type { SessionAgentRegistry } from "../_shared/session-agent-registry.js"
 
 /** Per-parent cap on concurrent background tasks. Mirrors DISPATCH_CONCURRENCY;
  *  bounds spawn count (cost-DoS). Separate from the synchronous worker pool. */
@@ -25,6 +26,13 @@ export interface StartBackgroundInput {
   context?: string
   /** Caller's mode — see dispatch.ts DispatchParallelInput.callerMode. */
   callerMode?: AgentInfo["mode"]
+  /**
+   * QA `sessionAgentRegistry`. When set, the background child is registered
+   * (childSessionID → agent name) so it no longer reads as the coordinator in
+   * the caller gate. `undefined` is a no-op (e.g. unit tests). Mirrors the
+   * foreground path's `dispatch.ts` `options.sessionAgentRegistry?.register`.
+   */
+  sessionAgentRegistry?: SessionAgentRegistry
 }
 
 export interface StartBackgroundResult {
@@ -36,7 +44,8 @@ export interface StartBackgroundResult {
 export async function startBackgroundTask(
   input: StartBackgroundInput,
 ): Promise<StartBackgroundResult> {
-  const { store, specialist, agentRegistry, parentSessionId, agent, prompt, context, callerMode } = input
+  const { store, specialist, agentRegistry, parentSessionId, agent, prompt, context, callerMode, sessionAgentRegistry } =
+    input
 
   validateDispatchable(agentRegistry, agent, callerMode)
 
@@ -51,14 +60,23 @@ export async function startBackgroundTask(
   const childSessionId = await specialist.startBackground(agent, fullPrompt)
 
   const id = `bg_${randomUUID().slice(0, 8)}`
-  // Background tasks register ONLY in the BackgroundTaskStore — intentionally
-  // NOT in the QA `sessionAgentRegistry` (the foreground `dispatch_parallel`
-  // path does the latter via `onSessionCreated`). The asymmetry is deliberate:
-  // background dispatch is reserved for read-only `triglav` exploration, which
-  // needs no per-session QA bindings injected by the `shell.env` hook. Wiring
-  // registration here would also require unregistering on `session.deleted`
-  // (in the QA module) to avoid a stale cross-session mapping for a child that
-  // outlives the parent turn. See `sdk-specialist.ts` `startBackground`.
+  // Register the child in BOTH the BackgroundTaskStore AND the QA
+  // `sessionAgentRegistry` (childSessionID → agent name), mirroring the
+  // foreground `dispatch_parallel` path (`dispatch.ts` `register(createdId,
+  // task.name)`). The registry entry is what flips the child OUT of the
+  // caller gate's registry-negative "is the coordinator" bucket, denying it
+  // the coordinator-only QA tools (`parse_plan`/`record_input`/`preflight`).
+  // Background dispatch still injects NO `shell.env` bindings — registration
+  // here is purely identity, not a bindings grant; the gate reads agent name,
+  // the hook reads bindings, and only the latter is withheld for background.
+  // Cleanup needs nothing extra here: the QA module's `session.deleted`
+  // handler calls `registry.unregister(deletedID)` for ANY id, so a child
+  // that outlives the parent turn is cleaned up generically. Registering AFTER
+  // `startBackground` resolves is sufficient — unlike the foreground path,
+  // the background turn is fire-and-forget (`promptAsync`) and consults no
+  // bindings, so there is no before-the-turn ordering constraint to satisfy.
+  // See `sdk-specialist.ts` `startBackground`.
+  sessionAgentRegistry?.register(childSessionId, agent)
   store.register({ id, childSessionId, parentSessionId, agent, startedAt: Date.now() })
   return { id, agent, status: "running" }
 }

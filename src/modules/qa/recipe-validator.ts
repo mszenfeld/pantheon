@@ -123,6 +123,36 @@ function splitOnUnquotedSeparators(text: string): string[] {
   return out.map((s) => s.trim()).filter((s) => s.length > 0)
 }
 
+// Detect an unquoted `&` job-control / background operator anywhere in a
+// statement. `a & b` backgrounds `a` and runs `b`, so a lone `&` is a second
+// command the single-statement split (`&&`/`||`/`;`/`\n` only) never sees and
+// the egress check never validates. Excludes: `&&` (logical AND, already a
+// separator), the fd-redirect forms `&>`/`>&`/`2>&1` where `&` binds to a
+// redirect, and any `&` inside quotes (e.g. a quoted URL query `?a=1&b=2`).
+function hasUnquotedBackgroundOperator(text: string): boolean {
+  let sq = false
+  let dq = false
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i]
+    if (c === undefined) continue
+    if (c === "'" && !dq) {
+      sq = !sq
+      continue
+    }
+    if (c === '"' && !sq) {
+      dq = !dq
+      continue
+    }
+    if (sq || dq || c !== "&") continue
+    // `&&` (either position): logical AND, not a background operator.
+    if (text[i + 1] === "&" || text[i - 1] === "&") continue
+    // fd-redirect binding: `&>`/`&>>` (next is `>`) or `>&`/`2>&1` (prev is `>`).
+    if (text[i + 1] === ">" || text[i - 1] === ">") continue
+    return true
+  }
+  return false
+}
+
 function tokenizePipeline(text: string): string[] {
   const out: string[] = []
   let current = ""
@@ -177,8 +207,22 @@ function hostOfURL(urlOrTemplate: string): string | null {
   // Fast-path: `${VAR}` / `$VAR` templates are resolved later from authorised
   // inputs, so we return the template token verbatim for the egress equality
   // check. Accept an optional scheme — any scheme://, not just http(s).
-  const varMatch = urlOrTemplate.match(/^(?:[a-zA-Z][a-zA-Z0-9+.-]*:\/\/)?(\$\{?[A-Z_][A-Z0-9_]*\}?)/)
-  if (varMatch) return varMatch[1] ?? null
+  const varMatch = urlOrTemplate.match(
+    /^(?:[a-zA-Z][a-zA-Z0-9+.-]*:\/\/)?(\$\{?[A-Z_][A-Z0-9_]*\}?)(.*)$/s,
+  )
+  if (varMatch) {
+    const rest = varMatch[2] ?? ""
+    // The variable must be the whole authority. A suffix in the same token
+    // collapses to the same template on both egress and recipe sides, so the
+    // raw equality check passes while bash/curl expand it to a DIFFERENT host.
+    // Reject anything before the first path/query/fragment that could change
+    // the host — a '@' (turns the egress host into userinfo), an extra host
+    // segment (api.host.com.evil), or an embedded newline (smuggles a second
+    // URL).
+    const authorityTail = rest.match(/^[^/?#]*/)?.[0] ?? ""
+    if (/[\n@]/.test(rest) || authorityTail.length > 0) return null
+    return varMatch[1] ?? null
+  }
   // Parse the authority with the platform URL API and reject any
   // embedded userinfo (`user[:pass]@host`). A bare-regex host class such as
   // `[\w.-]+` excludes `@`, so it would capture the userinfo segment as the
@@ -282,8 +326,8 @@ export function validateRecipe(recipe: string, egress: string): ValidateRecipeRe
     return { status: "error", reason: "recipe contains redirect to non-/dev/null path" }
   }
 
-  if (/(?:^|\s)&\s*$/.test(stmt)) {
-    return { status: "error", reason: "recipe contains & (background)" }
+  if (hasUnquotedBackgroundOperator(stmt)) {
+    return { status: "error", reason: "recipe contains & (background/job-control operator)" }
   }
 
   const cmds = tokenizePipeline(stmt)
