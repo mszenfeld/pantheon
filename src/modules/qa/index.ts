@@ -14,6 +14,7 @@ import { makePreflightHandler } from "./preflight.js"
 import { parseBindings } from "./binding-parser.js"
 import { scrubSecrets } from "./scrubber.js"
 import { makeRunBash } from "./run-bash.js"
+import { makeCallerGate } from "./caller-gate.js"
 
 export { buildQATesterAgent }
 export { FE_TOOLS, BE_TOOLS, SETUP_TOOLS, SHARED_TOOLS, toolsForVariant } from "./allowed-tools.js"
@@ -64,6 +65,12 @@ export const AppVerkQAPlugin: Plugin = async ({ client }) => {
   const store = new BindingsStore()
   const state = new QaRunState()
   const registry = new SessionAgentRegistry()
+  // Load-bearing security boundary. The per-agent config.agent[].tools map is
+  // declarative-only / inert for plugin tools on opencode 1.15.10 (see
+  // AGENTS.md "Plugin-tool enforcement model"), so the real gate is here:
+  // execute_recipe → zmora-setup only; record_input/parse_plan/preflight → the
+  // coordinator (a registry miss; Perun is never a dispatched child).
+  const gate = makeCallerGate({ registry, setupAgentKey: "zmora-setup" })
 
   // Cache child→parent lookups positively: once resolved, the mapping never
   // changes for the life of a session (sessions don't re-parent). Skipping the
@@ -233,6 +240,12 @@ export const AppVerkQAPlugin: Plugin = async ({ client }) => {
             ),
         },
         async execute(args, ctx) {
+          if (!gate.isCoordinatorCaller(ctx.sessionID)) {
+            return JSON.stringify({
+              status: "forbidden",
+              reason: "preflight is restricted to the coordinator (Perun)",
+            })
+          }
           const result = await preflightHandler({ env: args.env }, { sessionID: ctx.sessionID })
           return JSON.stringify(result)
         },
@@ -257,6 +270,12 @@ export const AppVerkQAPlugin: Plugin = async ({ client }) => {
             ),
         },
         async execute(args, ctx) {
+          if (!gate.isCoordinatorCaller(ctx.sessionID)) {
+            return JSON.stringify({
+              status: "forbidden",
+              reason: "parse_plan is restricted to the coordinator (Perun)",
+            })
+          }
           const parentID = (await resolveParentID(ctx.sessionID)) ?? ctx.sessionID
           const parsed = parseBindings(args.plan)
           if (parsed.status !== "ok") {
@@ -289,6 +308,12 @@ export const AppVerkQAPlugin: Plugin = async ({ client }) => {
             ),
         },
         async execute(args, ctx) {
+          if (!gate.isSetupCaller(ctx.sessionID)) {
+            return JSON.stringify({
+              status: "forbidden",
+              reason: "execute_recipe is restricted to the zmora-setup specialist — only a dispatched zmora-setup task may mint bindings",
+            })
+          }
           const result = await executeRecipeHandler(
             { binding_name: args.binding_name },
             { sessionID: ctx.sessionID },
@@ -319,6 +344,12 @@ export const AppVerkQAPlugin: Plugin = async ({ client }) => {
             ),
         },
         async execute(args, ctx) {
+          if (!gate.isCoordinatorCaller(ctx.sessionID)) {
+            return JSON.stringify({
+              status: "forbidden",
+              reason: "record_input is restricted to the coordinator (Perun)",
+            })
+          }
           const result = await recordInputHandler(
             { name: args.name, value: args.value },
             { sessionID: ctx.sessionID },
