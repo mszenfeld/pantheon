@@ -13,7 +13,14 @@ function makeRecordInputHandler(deps) {
       (deps.state.getBindings(parentID) ?? []).flatMap((b) => b.inputs)
     );
     const declaredInput = declaredInputs.has(args.name);
-    const write = deps.store.writeBinding(parentID, args.name, args.value, "secret", "user-paste", { declaredInput });
+    const write = deps.store.writeBinding(
+      parentID,
+      args.name,
+      args.value,
+      "secret",
+      "user-paste",
+      { declaredInput }
+    );
     if (write.status === "ok") return { status: "ok" };
     if (write.status === "duplicate") return { status: "ok" };
     return { status: "rejected", reason: write.reason };

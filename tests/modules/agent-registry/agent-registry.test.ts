@@ -3,6 +3,7 @@ import {
   clearAgentMetadataRegistry,
   getAgentMetadataRegistry,
   registerAgentMetadata,
+  snapshotAgentMetadataRegistry,
 } from "../../../src/modules/agent-registry/index.js"
 import type { SpecialistInfo } from "../../../src/modules/agent-registry/agent-metadata.js"
 
@@ -56,6 +57,41 @@ describe("agent metadata registry", () => {
   it("returns a copy that cannot mutate internal state", () => {
     registerAgentMetadata(info("zmora"))
     getAgentMetadataRegistry().push(info("hacker"))
+    expect(getAgentMetadataRegistry().map((a) => a.name)).toEqual(["zmora"])
+  })
+})
+
+describe("registry freeze (ordering invariant enforcement)", () => {
+  beforeEach(() => clearAgentMetadataRegistry())
+
+  it("snapshot returns the name-sorted registry contents", () => {
+    registerAgentMetadata(info("zmora"))
+    registerAgentMetadata(info("fix-auto"))
+    expect(snapshotAgentMetadataRegistry().map((a) => a.name)).toEqual([
+      "fix-auto",
+      "zmora",
+    ])
+  })
+
+  it("throws on a NEW registration after the registry is snapshotted", () => {
+    registerAgentMetadata(info("zmora"))
+    snapshotAgentMetadataRegistry()
+    expect(() => registerAgentMetadata(info("late-agent"))).toThrow(
+      /Late agent registration after Perun prompt snapshot: late-agent/,
+    )
+  })
+
+  it("still allows IDENTICAL re-registration after snapshot (factory re-construction is a no-op)", () => {
+    registerAgentMetadata(info("zmora"))
+    snapshotAgentMetadataRegistry()
+    expect(() => registerAgentMetadata(info("zmora"))).not.toThrow()
+    expect(getAgentMetadataRegistry().map((a) => a.name)).toEqual(["zmora"])
+  })
+
+  it("clearAgentMetadataRegistry un-freezes so a later registration succeeds", () => {
+    snapshotAgentMetadataRegistry()
+    clearAgentMetadataRegistry()
+    expect(() => registerAgentMetadata(info("zmora"))).not.toThrow()
     expect(getAgentMetadataRegistry().map((a) => a.name)).toEqual(["zmora"])
   })
 })

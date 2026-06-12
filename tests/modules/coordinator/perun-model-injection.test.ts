@@ -37,11 +37,15 @@ describe("AppVerkCoordinatorPlugin model injection", () => {
   }
 
   it("sets model on 'Perun - Coordinator' when pantheon.json provides perun.model", async () => {
-    writeUserGlobal(`{ "agents": { "perun": { "model": "anthropic/claude-opus-4-7" } } }`)
+    writeUserGlobal(
+      `{ "agents": { "perun": { "model": "anthropic/claude-opus-4-7" } } }`,
+    )
     const plugin = await AppVerkCoordinatorPlugin({ client: {} } as never)
     const config: Config = { agent: {} }
     await plugin.config?.(config)
-    expect(config.agent!["Perun - Coordinator"]!.model).toBe("anthropic/claude-opus-4-7")
+    expect(config.agent!["Perun - Coordinator"]!.model).toBe(
+      "anthropic/claude-opus-4-7",
+    )
   })
 
   it("leaves model unset when no pantheon.json exists", async () => {
@@ -52,7 +56,9 @@ describe("AppVerkCoordinatorPlugin model injection", () => {
   })
 
   it("leaves model unset when perun key is absent", async () => {
-    writeUserGlobal(`{ "agents": { "zmora": { "model": "anthropic/claude-sonnet-4-6" } } }`)
+    writeUserGlobal(
+      `{ "agents": { "zmora": { "model": "anthropic/claude-sonnet-4-6" } } }`,
+    )
     const plugin = await AppVerkCoordinatorPlugin({ client: {} } as never)
     const config: Config = { agent: {} }
     await plugin.config?.(config)
@@ -63,12 +69,16 @@ describe("AppVerkCoordinatorPlugin model injection", () => {
   // Coordinator"].model` survives the wholesale replace and wins over the
   // pantheon.json override.
   it("preserves the user's opencode.json model over a pantheon.json override", async () => {
-    writeUserGlobal(`{ "agents": { "perun": { "model": "anthropic/claude-sonnet-4-6" } } }`)
+    writeUserGlobal(
+      `{ "agents": { "perun": { "model": "anthropic/claude-sonnet-4-6" } } }`,
+    )
     const plugin = await AppVerkCoordinatorPlugin({ client: {} } as never)
     const config: Config = {
       agent: { "Perun - Coordinator": { model: "anthropic/claude-opus-4-7" } },
     }
     await plugin.config?.(config)
-    expect(config.agent!["Perun - Coordinator"]!.model).toBe("anthropic/claude-opus-4-7")
+    expect(config.agent!["Perun - Coordinator"]!.model).toBe(
+      "anthropic/claude-opus-4-7",
+    )
   })
 })

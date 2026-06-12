@@ -35,13 +35,16 @@ describe("build output", () => {
     "skills/standards-discovery/SKILL.md",
   ]
 
-  it.each(EXPECTED_FILES)("dist/$path exists and has structural content", (p) => {
-    const fullPath = path.resolve(distDir, p)
-    expect(existsSync(fullPath)).toBe(true)
-    const content = readFileSync(fullPath, "utf8")
-    expect(content).toMatch(/^---/m)
-    expect(content).toMatch(/^#/m)
-  })
+  it.each(EXPECTED_FILES)(
+    "dist/$path exists and has structural content",
+    (p) => {
+      const fullPath = path.resolve(distDir, p)
+      expect(existsSync(fullPath)).toBe(true)
+      const content = readFileSync(fullPath, "utf8")
+      expect(content).toMatch(/^---/m)
+      expect(content).toMatch(/^#/m)
+    },
+  )
 })
 
 describe("fix-report.md multiple selection", () => {
@@ -72,7 +75,9 @@ describe("review.md verification tracking", () => {
   })
 
   it("includes verification tasks in progress tracking", () => {
-    const step3Match = content.match(/## Step 3: Track Progress.*?(?=## Step \d+:|$)/is)
+    const step3Match = content.match(
+      /## Step 3: Track Progress.*?(?=## Step \d+:|$)/is,
+    )
     expect(step3Match).toBeDefined()
     expect(step3Match![0]).toMatch(/verification|cross-verifier|challenger/is)
   })

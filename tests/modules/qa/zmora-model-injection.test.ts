@@ -37,7 +37,9 @@ describe("AppVerkQAPlugin Zmora model injection", () => {
   }
 
   it("sets model on BOTH zmora-fe and zmora-be when zmora.model is configured", async () => {
-    writeUserGlobal(`{ "agents": { "zmora": { "model": "anthropic/claude-sonnet-4-6" } } }`)
+    writeUserGlobal(
+      `{ "agents": { "zmora": { "model": "anthropic/claude-sonnet-4-6" } } }`,
+    )
     const plugin = await AppVerkQAPlugin({} as never)
     const config: Config = { agent: {} }
     await plugin.config?.(config)
@@ -58,7 +60,9 @@ describe("AppVerkQAPlugin Zmora model injection", () => {
   // pantheon.json `zmora` override. A user pinning ONLY one variant must not
   // clobber the override on the others.
   it("preserves a per-variant opencode.json model and leaves other variants on the override", async () => {
-    writeUserGlobal(`{ "agents": { "zmora": { "model": "anthropic/claude-sonnet-4-6" } } }`)
+    writeUserGlobal(
+      `{ "agents": { "zmora": { "model": "anthropic/claude-sonnet-4-6" } } }`,
+    )
     const plugin = await AppVerkQAPlugin({} as never)
     const config: Config = {
       agent: { "zmora-be": { model: "anthropic/claude-opus-4-7" } },
@@ -66,6 +70,8 @@ describe("AppVerkQAPlugin Zmora model injection", () => {
     await plugin.config?.(config)
     expect(config.agent!["zmora-be"]!.model).toBe("anthropic/claude-opus-4-7")
     expect(config.agent!["zmora-fe"]!.model).toBe("anthropic/claude-sonnet-4-6")
-    expect(config.agent!["zmora-setup"]!.model).toBe("anthropic/claude-sonnet-4-6")
+    expect(config.agent!["zmora-setup"]!.model).toBe(
+      "anthropic/claude-sonnet-4-6",
+    )
   })
 })

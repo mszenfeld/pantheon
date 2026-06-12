@@ -2,7 +2,10 @@
 import path2 from "path";
 import { fileURLToPath } from "url";
 import { tool } from "@opencode-ai/plugin";
-import { forgetSessionAgent, isCoordinatorSession } from "@appverk/opencode-skill-utils";
+import {
+  forgetSessionAgent,
+  isCoordinatorSession
+} from "@appverk/opencode-skill-utils";
 
 // src/skill-catalog.ts
 import { existsSync, readFileSync, readdirSync } from "fs";
@@ -29,7 +32,9 @@ function parseSkillFrontmatter(content, fileName) {
     fields[key] = value;
   }
   if (!fields.name) {
-    throw new Error(`Skill file ${fileName} is missing required 'name' in frontmatter`);
+    throw new Error(
+      `Skill file ${fileName} is missing required 'name' in frontmatter`
+    );
   }
   const allowedTools = fields["allowed-tools"] ? fields["allowed-tools"].split(",").map((t) => t.trim()).filter(Boolean) : void 0;
   return {
@@ -94,7 +99,9 @@ function createSkillLoader(catalog) {
 
 // src/prompt-injector.ts
 function generateActivationRules(catalog) {
-  const entries = Array.from(catalog.values()).sort((a, b) => a.name.localeCompare(b.name));
+  const entries = Array.from(catalog.values()).sort(
+    (a, b) => a.name.localeCompare(b.name)
+  );
   const rows = entries.map((skill) => `| \`${skill.name}\` | ${skill.activation} |`).join("\n");
   return `## AppVerk Skills \u2014 Mandatory Activation Rules
 
@@ -143,6 +150,12 @@ ${rows}
 
 // src/index.ts
 var moduleDirectory = path2.dirname(fileURLToPath(import.meta.url));
+function getSkillPaths(config) {
+  const skills = config.skills ?? {};
+  skills.paths ??= [];
+  config.skills = skills;
+  return skills.paths;
+}
 var skillDirectories = [
   path2.resolve(moduleDirectory, "../../python-developer/dist/skills"),
   path2.resolve(moduleDirectory, "../../frontend-developer/dist/skills"),
@@ -156,11 +169,10 @@ var AppVerkSkillRegistryPlugin = async ({ client }) => {
   const activationRules = generateActivationRules(catalog);
   return {
     config: async (config) => {
-      config.skills = config.skills || {};
-      config.skills.paths = config.skills.paths || [];
+      const paths = getSkillPaths(config);
       for (const dir of skillDirectories) {
-        if (!config.skills.paths.includes(dir)) {
-          config.skills.paths.push(dir);
+        if (!paths.includes(dir)) {
+          paths.push(dir);
         }
       }
     },
@@ -168,7 +180,9 @@ var AppVerkSkillRegistryPlugin = async ({ client }) => {
       load_appverk_skill: tool({
         description: "Load an AppVerk development skill by name. Returns the full markdown content of the skill's rules and patterns. Available skills include python-coding-standards, frontend-coding-standards, python-tdd-workflow, frontend-tdd-workflow, fastapi-patterns, sqlalchemy-patterns, tailwind-patterns, and more.",
         args: {
-          name: tool.schema.string().describe("Skill name (e.g., python-coding-standards, fastapi-patterns)")
+          name: tool.schema.string().describe(
+            "Skill name (e.g., python-coding-standards, fastapi-patterns)"
+          )
         },
         async execute(args) {
           try {

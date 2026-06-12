@@ -44,6 +44,8 @@ describe("buildStribogPrompt", () => {
 
   it("preserves the secret rule (minter != actuator)", () => {
     const prompt = buildStribogPrompt()
-    expect(prompt).toContain("Producing or refreshing a SECRET / credential value is NOT your job")
+    expect(prompt).toContain(
+      "Producing or refreshing a SECRET / credential value is NOT your job",
+    )
   })
 })

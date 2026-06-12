@@ -1,8 +1,17 @@
 import type { Plugin } from "@opencode-ai/plugin"
-import { forgetSessionAgent, getSessionAgentCached } from "@appverk/opencode-skill-utils"
+import {
+  forgetSessionAgent,
+  getSessionAgentCached,
+} from "@appverk/opencode-skill-utils"
 import { registerAgentMetadata } from "../agent-registry/index.js"
-import { applyModelOverride, captureUserModels } from "../_shared/apply-model-override.js"
-import { isProviderConfigured, providerIdOf } from "../_shared/provider-detect.js"
+import {
+  applyModelOverride,
+  captureUserModels,
+} from "../_shared/apply-model-override.js"
+import {
+  isProviderConfigured,
+  providerIdOf,
+} from "../_shared/provider-detect.js"
 import { loadPantheonConfig } from "../pantheon-config/index.js"
 import {
   STRIBOG_AGENT_KEY,

@@ -1,4 +1,4 @@
-import { neutralizeUntrustedOutput } from "../coordinator/sanitize.js";
+import { neutralizeUntrustedOutput } from "../_shared/sanitize.js";
 const MODEL_REGEX = /^[A-Za-z0-9._-]+(\/[A-Za-z0-9._-]+)+$/;
 const MAX_SHOWN_LEN = 120;
 const KNOWN_AGENT_FIELDS = /* @__PURE__ */ new Set(["model"]);
@@ -21,16 +21,22 @@ function validateConfigFile(raw, sourcePath) {
     errors.push(`${prefix(sourcePath)}agents must be object \u2014 ignoring`);
     return { config: result, errors };
   }
-  for (const [rawName, agentRaw] of Object.entries(agents)) {
+  for (const [rawName, agentRaw] of Object.entries(
+    agents
+  )) {
     const safeName = neutralizeUntrustedOutput(rawName);
     if (agentRaw === null || typeof agentRaw !== "object" || Array.isArray(agentRaw)) {
-      errors.push(`${prefix(sourcePath)}agents.${safeName} must be object \u2014 ignoring`);
+      errors.push(
+        `${prefix(sourcePath)}agents.${safeName} must be object \u2014 ignoring`
+      );
       continue;
     }
     const agent = agentRaw;
     for (const rawField of Object.keys(agent)) {
       if (!KNOWN_AGENT_FIELDS.has(rawField)) {
-        errors.push(`${prefix(sourcePath)}unknown field "agents.${safeName}.${neutralizeUntrustedOutput(rawField)}"`);
+        errors.push(
+          `${prefix(sourcePath)}unknown field "agents.${safeName}.${neutralizeUntrustedOutput(rawField)}"`
+        );
       }
     }
     const model = agent.model;

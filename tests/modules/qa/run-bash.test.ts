@@ -140,7 +140,10 @@ describe("makeRunBash — output byte ceiling (CWE-400)", () => {
   it("does NOT cap or kill a normal small-output recipe", async () => {
     // Default cap is 1 MiB; a small recipe stays well under it and must
     // return its real stdout and exit code untouched.
-    const runBash = makeRunBash({ timeoutMs: 5_000, maxOutputBytes: 1024 * 1024 })
+    const runBash = makeRunBash({
+      timeoutMs: 5_000,
+      maxOutputBytes: 1024 * 1024,
+    })
     const result = await runBash("printf 'small output'", {})
 
     expect(result.exitCode).toBe(0)
@@ -150,7 +153,10 @@ describe("makeRunBash — output byte ceiling (CWE-400)", () => {
   })
 
   it("preserves a non-zero exit code for output well under the cap", async () => {
-    const runBash = makeRunBash({ timeoutMs: 5_000, maxOutputBytes: 1024 * 1024 })
+    const runBash = makeRunBash({
+      timeoutMs: 5_000,
+      maxOutputBytes: 1024 * 1024,
+    })
     const result = await runBash("printf 'partial'; exit 3", {})
 
     expect(result.exitCode).toBe(3)

@@ -1,5 +1,7 @@
 import { IdleScheduler } from "./idle-scheduler.js";
-import { NotificationSender } from "./notification-sender.js";
+import {
+  NotificationSender
+} from "./notification-sender.js";
 import { SessionTracker } from "./session-tracker.js";
 const QUESTION_TOOL_PATTERN = /^(question|ask_user_question|askuserquestion)$/i;
 const PERMISSION_EVENT_TYPES = /* @__PURE__ */ new Set([
@@ -36,12 +38,20 @@ function readToolName(properties) {
 const handleSessionCreated = async ({ sessionId, tracker }) => {
   if (sessionId !== void 0) tracker.registerSession(sessionId);
 };
-const handleSessionDeleted = async ({ sessionId, tracker, scheduler }) => {
+const handleSessionDeleted = async ({
+  sessionId,
+  tracker,
+  scheduler
+}) => {
   if (sessionId === void 0) return;
   tracker.deleteSession(sessionId);
   scheduler.cancel(sessionId);
 };
-const handleSessionIdle = async ({ sessionId, tracker, scheduler }) => {
+const handleSessionIdle = async ({
+  sessionId,
+  tracker,
+  scheduler
+}) => {
   if (sessionId === void 0) return;
   if (tracker.isMain(sessionId)) scheduler.schedule(sessionId);
 };
@@ -49,22 +59,40 @@ const handleActivity = async ({ sessionId, scheduler }) => {
   if (sessionId === void 0) return;
   scheduler.markActivity(sessionId);
 };
-const handleToolExecuteBefore = async ({ event, sessionId, tracker, scheduler, sender, config }) => {
+const handleToolExecuteBefore = async ({
+  event,
+  sessionId,
+  tracker,
+  scheduler,
+  sender,
+  config
+}) => {
   if (sessionId === void 0) return;
   const toolName = readToolName(event.properties);
   if (toolName !== void 0 && QUESTION_TOOL_PATTERN.test(toolName)) {
     if (tracker.isMain(sessionId)) {
-      await sender.send({ title: config.title, message: config.questionMessage });
+      await sender.send({
+        title: config.title,
+        message: config.questionMessage
+      });
       if (config.playSound) await sender.playSound(config.soundPath);
     }
     return;
   }
   scheduler.markActivity(sessionId);
 };
-const handlePermission = async ({ sessionId, tracker, sender, config }) => {
+const handlePermission = async ({
+  sessionId,
+  tracker,
+  sender,
+  config
+}) => {
   if (sessionId === void 0) return;
   if (tracker.isMain(sessionId)) {
-    await sender.send({ title: config.title, message: config.permissionMessage });
+    await sender.send({
+      title: config.title,
+      message: config.permissionMessage
+    });
     if (config.playSound) await sender.playSound(config.soundPath);
   }
 };

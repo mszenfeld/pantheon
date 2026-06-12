@@ -37,28 +37,36 @@ describe("readConfigFromEnv", () => {
   it("falls back to the default and warns on a non-numeric delay", () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined)
     const c = readConfigFromEnv({ AV_PANTHEON_NOTIFY_DELAY_MS: "abc" })
-    expect(c.idleConfirmationDelayMs).toBe(DEFAULT_SESSION_NOTIFICATION_CONFIG.idleConfirmationDelayMs)
+    expect(c.idleConfirmationDelayMs).toBe(
+      DEFAULT_SESSION_NOTIFICATION_CONFIG.idleConfirmationDelayMs,
+    )
     expect(warn).toHaveBeenCalledTimes(1)
   })
 
   it("falls back to the default and warns on a negative delay", () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined)
     const c = readConfigFromEnv({ AV_PANTHEON_NOTIFY_DELAY_MS: "-100" })
-    expect(c.idleConfirmationDelayMs).toBe(DEFAULT_SESSION_NOTIFICATION_CONFIG.idleConfirmationDelayMs)
+    expect(c.idleConfirmationDelayMs).toBe(
+      DEFAULT_SESSION_NOTIFICATION_CONFIG.idleConfirmationDelayMs,
+    )
     expect(warn).toHaveBeenCalledTimes(1)
   })
 
   it("falls back to the default and warns on a numeric value with a unit suffix", () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined)
     const c = readConfigFromEnv({ AV_PANTHEON_NOTIFY_DELAY_MS: "1500ms" })
-    expect(c.idleConfirmationDelayMs).toBe(DEFAULT_SESSION_NOTIFICATION_CONFIG.idleConfirmationDelayMs)
+    expect(c.idleConfirmationDelayMs).toBe(
+      DEFAULT_SESSION_NOTIFICATION_CONFIG.idleConfirmationDelayMs,
+    )
     expect(warn).toHaveBeenCalledTimes(1)
   })
 
   it("falls back to the default and warns on a fractional delay", () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined)
     const c = readConfigFromEnv({ AV_PANTHEON_NOTIFY_DELAY_MS: "1.5" })
-    expect(c.idleConfirmationDelayMs).toBe(DEFAULT_SESSION_NOTIFICATION_CONFIG.idleConfirmationDelayMs)
+    expect(c.idleConfirmationDelayMs).toBe(
+      DEFAULT_SESSION_NOTIFICATION_CONFIG.idleConfirmationDelayMs,
+    )
     expect(warn).toHaveBeenCalledTimes(1)
   })
 
@@ -105,7 +113,9 @@ describe("readConfigFromEnv", () => {
   })
 
   it("applies a sound path override", () => {
-    const c = readConfigFromEnv({ AV_PANTHEON_NOTIFY_SOUND_PATH: "/tmp/ding.aiff" })
+    const c = readConfigFromEnv({
+      AV_PANTHEON_NOTIFY_SOUND_PATH: "/tmp/ding.aiff",
+    })
     expect(c.soundPath).toBe("/tmp/ding.aiff")
   })
 
@@ -135,7 +145,9 @@ describe("readConfigFromEnv", () => {
   // canonical log-forging vector that safeForLog exists to prevent.
   it("strips newlines from the warning to prevent log line-splitting (CWE-117)", () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined)
-    readConfigFromEnv({ AV_PANTHEON_NOTIFY_DELAY_MS: "bad\n[FAKE_LOG] critical" })
+    readConfigFromEnv({
+      AV_PANTHEON_NOTIFY_DELAY_MS: "bad\n[FAKE_LOG] critical",
+    })
     expect(warn).toHaveBeenCalledTimes(1)
     const msg = String(warn.mock.calls[0]?.[0] ?? "")
     expect(msg).not.toContain("\n")

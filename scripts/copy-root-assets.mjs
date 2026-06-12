@@ -3,11 +3,20 @@
  * Copies markdown assets from src/ to dist/ preserving relative paths.
  * Used by the root build pipeline after tsup runs.
  */
-import { existsSync, mkdirSync, readdirSync, lstatSync, copyFileSync } from "node:fs"
+import {
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  lstatSync,
+  copyFileSync,
+} from "node:fs"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
 
-const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..")
+const repoRoot = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  "..",
+)
 const sourceRoots = ["commands", "agents", "skills"]
 let copiedCount = 0
 

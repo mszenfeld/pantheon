@@ -17,7 +17,8 @@ export const triglavSpecialistInfo: SpecialistInfo = {
   mode: "subagent",
   description: TRIGLAV_DESCRIPTION,
   metadata: {
-    keyTrigger: "2+ modules / unfamiliar area involved → fire `triglav` before planning",
+    keyTrigger:
+      "2+ modules / unfamiliar area involved → fire `triglav` before planning",
     useWhen: [
       "Multiple search angles needed",
       "Unfamiliar module structure",
@@ -32,7 +33,8 @@ export const triglavSpecialistInfo: SpecialistInfo = {
     triggers: [
       {
         domain: "Code exploration",
-        trigger: "Find definitions, references, structure, and patterns in the local codebase",
+        trigger:
+          "Find definitions, references, structure, and patterns in the local codebase",
       },
     ],
   },

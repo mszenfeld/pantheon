@@ -31,15 +31,20 @@ function fakeClient(opts: {
 
 describe("getSessionAgent", () => {
   it("returns the first user message's agent", async () => {
-    expect(await getSessionAgent("s1", fakeClient({ agent: COORDINATOR_AGENT_NAME }))).toBe(
-      COORDINATOR_AGENT_NAME,
-    )
+    expect(
+      await getSessionAgent(
+        "s1",
+        fakeClient({ agent: COORDINATOR_AGENT_NAME }),
+      ),
+    ).toBe(COORDINATOR_AGENT_NAME)
   })
   it("returns undefined when no messages yet (turn 1)", async () => {
     expect(await getSessionAgent("s1", fakeClient({}))).toBeUndefined()
   })
   it("returns undefined (not throw) on client error", async () => {
-    expect(await getSessionAgent("s1", fakeClient({ throwOn: "messages" }))).toBeUndefined()
+    expect(
+      await getSessionAgent("s1", fakeClient({ throwOn: "messages" })),
+    ).toBeUndefined()
   })
 })
 
@@ -48,11 +53,21 @@ describe("isCoordinatorSession", () => {
   // getSessionAgentCached, whose cache is module-global and persists across tests.
   it("true when the resolved agent is the coordinator", async () => {
     const sessionID = `coord-${Math.random()}`
-    expect(await isCoordinatorSession(sessionID, fakeClient({ agent: COORDINATOR_AGENT_NAME }))).toBe(true)
+    expect(
+      await isCoordinatorSession(
+        sessionID,
+        fakeClient({ agent: COORDINATOR_AGENT_NAME }),
+      ),
+    ).toBe(true)
   })
   it("false for a dispatched specialist", async () => {
     const sessionID = `spec-${Math.random()}`
-    expect(await isCoordinatorSession(sessionID, fakeClient({ agent: "zmora-be", parentID: "p" }))).toBe(false)
+    expect(
+      await isCoordinatorSession(
+        sessionID,
+        fakeClient({ agent: "zmora-be", parentID: "p" }),
+      ),
+    ).toBe(false)
   })
   it("memoizes via getSessionAgentCached: fetches the transcript once across repeated calls", async () => {
     const { client, state } = countingClient(COORDINATOR_AGENT_NAME)
@@ -121,11 +136,15 @@ describe("getSessionAgentCached", () => {
 
     // The identity becomes resolvable on a later turn — re-attempted (still under threshold).
     state.agent = COORDINATOR_AGENT_NAME
-    expect(await getSessionAgentCached(sessionID, client)).toBe(COORDINATOR_AGENT_NAME)
+    expect(await getSessionAgentCached(sessionID, client)).toBe(
+      COORDINATOR_AGENT_NAME,
+    )
     expect(state.messageCalls).toBe(3)
 
     // Now resolved and cached: no further transcript fetches.
-    expect(await getSessionAgentCached(sessionID, client)).toBe(COORDINATOR_AGENT_NAME)
+    expect(await getSessionAgentCached(sessionID, client)).toBe(
+      COORDINATOR_AGENT_NAME,
+    )
     expect(state.messageCalls).toBe(3)
   })
 
@@ -183,7 +202,9 @@ describe("getSessionAgentCached", () => {
       // After the TTL window, the identity (now resolvable) is re-attempted and resolves.
       state.agent = COORDINATOR_AGENT_NAME
       vi.advanceTimersByTime(6_000)
-      expect(await getSessionAgentCached(sessionID, client)).toBe(COORDINATOR_AGENT_NAME)
+      expect(await getSessionAgentCached(sessionID, client)).toBe(
+        COORDINATOR_AGENT_NAME,
+      )
       expect(state.messageCalls).toBe(4)
     } finally {
       vi.useRealTimers()
@@ -197,14 +218,20 @@ describe("forgetSessionAgent", () => {
     const sessionID = `forget-resolved-${Math.random()}`
 
     // Resolve once and confirm it is served from cache (no second fetch).
-    expect(await getSessionAgentCached(sessionID, client)).toBe(COORDINATOR_AGENT_NAME)
-    expect(await getSessionAgentCached(sessionID, client)).toBe(COORDINATOR_AGENT_NAME)
+    expect(await getSessionAgentCached(sessionID, client)).toBe(
+      COORDINATOR_AGENT_NAME,
+    )
+    expect(await getSessionAgentCached(sessionID, client)).toBe(
+      COORDINATOR_AGENT_NAME,
+    )
     expect(state.messageCalls).toBe(1)
 
     // Evicting (what a consumer's session.deleted handler does) drops the cached entry,
     // so the next resolve must hit the transcript again rather than serve a stale value.
     forgetSessionAgent(sessionID)
-    expect(await getSessionAgentCached(sessionID, client)).toBe(COORDINATOR_AGENT_NAME)
+    expect(await getSessionAgentCached(sessionID, client)).toBe(
+      COORDINATOR_AGENT_NAME,
+    )
     expect(state.messageCalls).toBe(2)
   })
 
@@ -227,6 +254,8 @@ describe("forgetSessionAgent", () => {
   })
 
   it("is a no-op for an id that was never cached", () => {
-    expect(() => forgetSessionAgent(`never-seen-${Math.random()}`)).not.toThrow()
+    expect(() =>
+      forgetSessionAgent(`never-seen-${Math.random()}`),
+    ).not.toThrow()
   })
 })

@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest"
 import type { AssistantMessage, Message, UserMessage } from "@opencode-ai/sdk"
 import { toPollerMessage } from "../../../src/modules/coordinator/index.js"
 
-function makeAssistant(overrides: Partial<AssistantMessage> = {}): AssistantMessage {
+function makeAssistant(
+  overrides: Partial<AssistantMessage> = {},
+): AssistantMessage {
   return {
     id: "msg-1",
     sessionID: "sess-1",
@@ -36,7 +38,10 @@ function makeUser(overrides: Partial<UserMessage> = {}): UserMessage {
 
 describe("toPollerMessage (SDK adapter)", () => {
   it("maps assistant message with finish to finish_reason", () => {
-    const raw: { info: Message; parts: Array<{ type: string; text?: string }> } = {
+    const raw: {
+      info: Message
+      parts: Array<{ type: string; text?: string }>
+    } = {
       info: makeAssistant({ finish: "end_turn" }),
       parts: [
         { type: "text", text: "Hello" },
@@ -52,7 +57,10 @@ describe("toPollerMessage (SDK adapter)", () => {
   })
 
   it("returns null finish_reason when assistant has no finish field", () => {
-    const raw: { info: Message; parts: Array<{ type: string; text?: string }> } = {
+    const raw: {
+      info: Message
+      parts: Array<{ type: string; text?: string }>
+    } = {
       info: makeAssistant({ finish: undefined }),
       parts: [{ type: "text", text: "partial" }],
     }
@@ -65,7 +73,10 @@ describe("toPollerMessage (SDK adapter)", () => {
   })
 
   it("returns null finish_reason for non-assistant roles", () => {
-    const raw: { info: Message; parts: Array<{ type: string; text?: string }> } = {
+    const raw: {
+      info: Message
+      parts: Array<{ type: string; text?: string }>
+    } = {
       info: makeUser(),
       parts: [{ type: "text", text: "user input" }],
     }
@@ -78,7 +89,10 @@ describe("toPollerMessage (SDK adapter)", () => {
   })
 
   it("ignores non-text parts when assembling content", () => {
-    const raw: { info: Message; parts: Array<{ type: string; text?: string }> } = {
+    const raw: {
+      info: Message
+      parts: Array<{ type: string; text?: string }>
+    } = {
       info: makeAssistant({ finish: "end_turn" }),
       parts: [
         { type: "text", text: "answer" },
@@ -94,7 +108,10 @@ describe("toPollerMessage (SDK adapter)", () => {
   })
 
   it("handles missing part text safely", () => {
-    const raw: { info: Message; parts: Array<{ type: string; text?: string }> } = {
+    const raw: {
+      info: Message
+      parts: Array<{ type: string; text?: string }>
+    } = {
       info: makeAssistant({ finish: "end_turn" }),
       parts: [{ type: "text" }, { type: "text", text: "ok" }],
     }

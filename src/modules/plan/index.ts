@@ -1,6 +1,9 @@
 import type { Plugin } from "@opencode-ai/plugin"
 import { registerAgentMetadata } from "../agent-registry/index.js"
-import { applyModelOverride, captureUserModels } from "../_shared/apply-model-override.js"
+import {
+  applyModelOverride,
+  captureUserModels,
+} from "../_shared/apply-model-override.js"
 import { VELES_AGENT_KEY, velesSpecialistInfo } from "./veles.metadata.js"
 import { buildVelesPrompt } from "./prompt.js"
 import { isSerenaAvailable } from "../_shared/serena-detect.js"
@@ -59,7 +62,13 @@ export const AppVerkPlanPlugin: Plugin = async ({ client }) => {
       // helper registers the `veles` slug so a typo there is flagged and applies
       // the documented precedence (user opencode.json > `agents.veles.model`).
       // Model already validated by MODEL_REGEX — see pantheon-config/schema.ts.
-      applyModelOverride(config, "veles", VELES_AGENT_KEY, undefined, userModels)
+      applyModelOverride(
+        config,
+        "veles",
+        VELES_AGENT_KEY,
+        undefined,
+        userModels,
+      )
       serenaNotifier.markSerenaMissing(!isSerenaAvailable(config))
     },
     event: serenaNotifier.onEvent,

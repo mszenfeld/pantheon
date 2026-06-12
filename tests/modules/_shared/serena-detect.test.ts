@@ -6,7 +6,9 @@ import {
 
 describe("isSerenaAvailable", () => {
   it("returns true when an mcp.serena entry is present", () => {
-    const config: ConfigLike = { mcp: { serena: { type: "local" }, context7: {} } }
+    const config: ConfigLike = {
+      mcp: { serena: { type: "local" }, context7: {} },
+    }
     expect(isSerenaAvailable(config)).toBe(true)
   })
 
@@ -19,7 +21,9 @@ describe("isSerenaAvailable", () => {
   })
 
   it("returns false when serena is explicitly disabled", () => {
-    expect(isSerenaAvailable({ mcp: { serena: { enabled: false } } })).toBe(false)
+    expect(isSerenaAvailable({ mcp: { serena: { enabled: false } } })).toBe(
+      false,
+    )
   })
 
   it("returns false for a null serena entry (malformed config)", () => {

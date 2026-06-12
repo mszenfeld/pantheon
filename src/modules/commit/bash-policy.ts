@@ -30,10 +30,7 @@
  * is defense-in-depth, not a security boundary" for the canonical bypass
  * enumeration and rationale.
  */
-export type BashPolicyDecision =
-  | "allow"
-  | "block-direct-commit"
-  | "block-push"
+export type BashPolicyDecision = "allow" | "block-direct-commit" | "block-push"
 
 const GIT_GLOBAL_OPTIONS_WITH_VALUES = new Set([
   "-C",
@@ -47,7 +44,9 @@ const GIT_GLOBAL_OPTIONS_WITH_VALUES = new Set([
 ])
 
 function tokenizeShellCommand(command: string): string[] {
-  const matches = command.match(/"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|&&|\|\||[;|()]|[^\s;|()]+/g)
+  const matches = command.match(
+    /"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|&&|\|\||[;|()]|[^\s;|()]+/g,
+  )
   return matches ?? []
 }
 

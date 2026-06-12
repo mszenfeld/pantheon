@@ -20,12 +20,19 @@ describe("AppVerkExplorePlugin", () => {
 
   it("registers the triglav agent with mode subagent and the allow-list in its prompt", async () => {
     const hooks = await AppVerkExplorePlugin(fakeInput())
-    const config: { agent?: Record<string, { mode?: string; prompt?: string; description?: string }> } = {}
+    const config: {
+      agent?: Record<
+        string,
+        { mode?: string; prompt?: string; description?: string }
+      >
+    } = {}
     await hooks.config?.(config as never)
     const agent = config.agent?.["triglav"]
     expect(agent?.mode).toBe("subagent")
     expect(agent?.description).toContain("Read-only codebase explorer")
-    expect(agent?.prompt).toContain(`allowed-tools: ${TRIGLAV_TOOLS.join(", ")}`)
+    expect(agent?.prompt).toContain(
+      `allowed-tools: ${TRIGLAV_TOOLS.join(", ")}`,
+    )
   })
 
   it("warns exactly once on session.created when serena is absent", async () => {

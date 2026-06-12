@@ -2,9 +2,7 @@ const COMMIT_HEADER = /^(feat|fix|docs|style|refactor|perf|test|chore|build|ci|r
 const DISALLOWED_FOOTERS = [/^co-authored-by:/i];
 function sanitizeTaskId(taskId) {
   if (/[\r\n]/.test(taskId)) {
-    throw new Error(
-      "Task ID must not contain newlines or carriage returns."
-    );
+    throw new Error("Task ID must not contain newlines or carriage returns.");
   }
   return taskId.trim();
 }

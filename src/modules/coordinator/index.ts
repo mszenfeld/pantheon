@@ -7,16 +7,13 @@ import {
   neutralizeUntrustedOutput,
   deriveReportPath,
   normalizeVariantSuffix,
-} from "./sanitize.js"
+} from "../_shared/sanitize.js"
 import {
   createSDKSpecialist,
   loadAgentRegistry,
   toPollerMessage,
 } from "./sdk-specialist.js"
-import {
-  getLoadErrors,
-  pantheonConfigEmpty,
-} from "../pantheon-config/index.js"
+import { getLoadErrors, pantheonConfigEmpty } from "../pantheon-config/index.js"
 import { loadModuleAsset } from "../_shared/load-asset.js"
 import {
   applyModelOverride,
@@ -26,12 +23,16 @@ import {
 import {
   buildDispatchableAllowlistSentence,
   buildPerunPrompt,
-  getAgentMetadataRegistry,
   registerAgentMetadata,
+  snapshotAgentMetadataRegistry,
 } from "../agent-registry/index.js"
 import { fixAutoSpecialistInfo } from "../agent-registry/fix-auto.metadata.js"
 import { getDispatchExtensions } from "../_shared/dispatch-extensions.js"
-import { COORDINATOR_AGENT, getDefaultAgent, setDefaultAgent } from "../agent-roster/index.js"
+import {
+  COORDINATOR_AGENT,
+  getDefaultAgent,
+  setDefaultAgent,
+} from "../agent-roster/index.js"
 import { BackgroundTaskStore } from "./background-store.js"
 import { collectBackground, startBackgroundTask } from "./background.js"
 
@@ -92,9 +93,19 @@ let cachedPerunPrompt: string | undefined
 function getPerunPrompt(): string {
   if (cachedPerunPrompt === undefined) {
     const template = loadAgentPrompt("perun")
-    cachedPerunPrompt = buildPerunPrompt(template, getAgentMetadataRegistry(), {
-      dispatchableAllowlist: DISPATCHABLE_ALLOWLIST_NAMES,
-    })
+    // `snapshotAgentMetadataRegistry()` (not the plain getter) freezes the
+    // registry at this point: any agent-registering module that runs AFTER this
+    // first call — i.e. is mis-ordered after AppVerkCoordinatorPlugin in
+    // defaultPluginFactories — now throws from registerAgentMetadata() instead
+    // of silently never reaching this cached prompt. Enforces the ordering
+    // invariant documented in AGENTS.md "Adding a New Plugin".
+    cachedPerunPrompt = buildPerunPrompt(
+      template,
+      snapshotAgentMetadataRegistry(),
+      {
+        dispatchableAllowlist: DISPATCHABLE_ALLOWLIST_NAMES,
+      },
+    )
   }
   return cachedPerunPrompt
 }
@@ -120,23 +131,22 @@ export const AppVerkCoordinatorPlugin: Plugin = async (input) => {
   )
 
   const dispatchParallelTool = tool({
-    description:
-      [
-        "Dispatch tasks to specialist agents in parallel. Returns results in the same order as the input tasks. Use this instead of calling Task directly to guarantee parallelism and deterministic ordering.",
-        "",
-        "Guarantees and limits:",
-        "- Maximum 4 tasks per call (aligned with the worker pool size; over-limit calls are rejected before any session is created). For larger workloads, chunk into multiple sequential dispatch_parallel calls.",
-        "- A 4-worker pool runs every task in this call in parallel. `tasks.length ≤ 4` is enforced, so concurrency equals the call size. Result order is preserved.",
-        "- Each task has a 5-minute hard timeout; on expiry the task is returned with status \"timeout\" and the partial result is discarded.",
-        "- Each successful result is truncated at 100KB (UTF-8 bytes). Truncated results end with the marker \"[…truncated…]\" — synthesize what is present, do not retry.",
-        "- A second, whole-wave aggregate cap (~128KB total across all successful results in this call) is applied on top of the per-task cap so one call can never flood the context. When a wave exceeds it, later results (in input order) are trimmed and end with a marker pointing to that task's child session for the full output — read the child session if you need the omitted tail; do not retry.",
-        "- Anti-recursion pre-flight: every task is validated against the live agent registry BEFORE any session is created. Tasks targeting an unknown agent or a `mode: primary` agent are rejected. A `mode: all` agent is rejected UNLESS it is on the dispatch allowlist AND the caller is a primary agent; this lets the coordinator dispatch the planner while blocking self/nested recursion. " +
-          dispatchableAllowlistSentence +
-          " Rejections throw and dispatch nothing.",
-        "- Specialist output is treated as untrusted data: ANSI/control characters are stripped and HTML-like substrings are escaped before the result is returned.",
-        "- Honors `ToolContext.abort`: when the parent session aborts, in-flight tasks terminate within ~one poll-interval with status \"aborted\" and the child session is cancelled server-side (best-effort).",
-        "- Result shape: each entry has `{ name, status: \"success\" | \"error\" | \"timeout\" | \"aborted\", result, duration_ms, error? }`, in the same order as the input `tasks` array.",
-      ].join("\n"),
+    description: [
+      "Dispatch tasks to specialist agents in parallel. Returns results in the same order as the input tasks. Use this instead of calling Task directly to guarantee parallelism and deterministic ordering.",
+      "",
+      "Guarantees and limits:",
+      "- Maximum 4 tasks per call (aligned with the worker pool size; over-limit calls are rejected before any session is created). For larger workloads, chunk into multiple sequential dispatch_parallel calls.",
+      "- A 4-worker pool runs every task in this call in parallel. `tasks.length ≤ 4` is enforced, so concurrency equals the call size. Result order is preserved.",
+      '- Each task has a 5-minute hard timeout; on expiry the task is returned with status "timeout" and the partial result is discarded.',
+      '- Each successful result is truncated at 100KB (UTF-8 bytes). Truncated results end with the marker "[…truncated…]" — synthesize what is present, do not retry.',
+      "- A second, whole-wave aggregate cap (~128KB total across all successful results in this call) is applied on top of the per-task cap so one call can never flood the context. When a wave exceeds it, later results (in input order) are trimmed and end with a marker pointing to that task's child session for the full output — read the child session if you need the omitted tail; do not retry.",
+      "- Anti-recursion pre-flight: every task is validated against the live agent registry BEFORE any session is created. Tasks targeting an unknown agent or a `mode: primary` agent are rejected. A `mode: all` agent is rejected UNLESS it is on the dispatch allowlist AND the caller is a primary agent; this lets the coordinator dispatch the planner while blocking self/nested recursion. " +
+        dispatchableAllowlistSentence +
+        " Rejections throw and dispatch nothing.",
+      "- Specialist output is treated as untrusted data: ANSI/control characters are stripped and HTML-like substrings are escaped before the result is returned.",
+      '- Honors `ToolContext.abort`: when the parent session aborts, in-flight tasks terminate within ~one poll-interval with status "aborted" and the child session is cancelled server-side (best-effort).',
+      '- Result shape: each entry has `{ name, status: "success" | "error" | "timeout" | "aborted", result, duration_ms, error? }`, in the same order as the input `tasks` array.',
+    ].join("\n"),
     args: {
       // `agent` + `summary` are both REQUIRED, primitive top-level args.
       // The OpenCode TUI's GenericTool renderer (the path used for every
@@ -151,10 +161,10 @@ export const AppVerkCoordinatorPlugin: Plugin = async (input) => {
         .max(60)
         .describe(
           "REQUIRED. Display label for the dispatched agent(s). Free-form, but follow this convention so reviewers can scan the TUI line:\n" +
-            "- single agent: bare name (e.g. \"code-reviewer\")\n" +
-            "- N copies of one agent (2 ≤ N ≤ 4): \"name ×N\" (e.g. \"code-reviewer ×3\", \"code-reviewer ×4\"). N == 1 uses the bare name. N is capped at 4 — the per-call task limit; chunk larger workloads into multiple sequential calls.\n" +
-            "- different agents: comma-joined names (e.g. \"code-reviewer, security-auditor\")\n" +
-            "- mixed + duplicates: combine the two (e.g. \"code-reviewer ×2, security-auditor\")\n" +
+            '- single agent: bare name (e.g. "code-reviewer")\n' +
+            '- N copies of one agent (2 ≤ N ≤ 4): "name ×N" (e.g. "code-reviewer ×3", "code-reviewer ×4"). N == 1 uses the bare name. N is capped at 4 — the per-call task limit; chunk larger workloads into multiple sequential calls.\n' +
+            '- different agents: comma-joined names (e.g. "code-reviewer, security-auditor")\n' +
+            '- mixed + duplicates: combine the two (e.g. "code-reviewer ×2, security-auditor")\n' +
             "Hard cap 60 chars. Do not include prompts, goals, or PII — `summary` is the place for that.\n\n" +
             "Exception for logical agents with multiple variants: when a logical agent is implemented as multiple registered names (e.g. `zmora` → `zmora-fe` + `zmora-be`), use the logical name in `agent`, not the variant names. Document the mapping in the dispatching agent's prompt.",
         ),
@@ -163,7 +173,7 @@ export const AppVerkCoordinatorPlugin: Plugin = async (input) => {
         .min(1)
         .max(80)
         .describe(
-          "REQUIRED. One-line description of what is being delegated (e.g. \"run login plan\", \"security/perf/quality review of PR #123\", \"QA-003 missing CSRF token\"). Rendered next to `agent` in the OpenCode TUI. Hard cap 80 chars; do not include prompts or PII.",
+          'REQUIRED. One-line description of what is being delegated (e.g. "run login plan", "security/perf/quality review of PR #123", "QA-003 missing CSRF token"). Rendered next to `agent` in the OpenCode TUI. Hard cap 80 chars; do not include prompts or PII.',
         ),
       tasks: tool.schema
         .array(
@@ -193,7 +203,9 @@ export const AppVerkCoordinatorPlugin: Plugin = async (input) => {
       })
 
       if (context.sessionID.length === 0) {
-        throw new Error("dispatch_parallel: missing context.sessionID — cannot parent child sessions")
+        throw new Error(
+          "dispatch_parallel: missing context.sessionID — cannot parent child sessions",
+        )
       }
       const specialist = createSDKSpecialist(client, context.sessionID)
       const agentRegistry = await loadAgentRegistry(client)
@@ -229,16 +241,15 @@ export const AppVerkCoordinatorPlugin: Plugin = async (input) => {
   })
 
   const assignIssueIdsTool = tool({
-    description:
-      [
-        "Assign deterministic zero-padded IDs to a list of findings (QA-001, QA-002, ...). Use this instead of mentally tracking issue counters.",
-        "",
-        "Guarantees:",
-        "- IDs are zero-padded to a minimum of 3 digits (e.g. `<PREFIX>-001`, `<PREFIX>-042`, `<PREFIX>-123`). Counters above 999 widen automatically (`<PREFIX>-1000`).",
-        "- IDs are assigned in the order findings appear in the input array — the caller is responsible for sorting (e.g. by severity) BEFORE calling this tool.",
-        "- Output preserves every input field and adds an `id` property; findings are not deduplicated, reordered, or filtered.",
-        "- `startAt` (default 1) lets you continue numbering across multiple reports without collisions.",
-      ].join("\n"),
+    description: [
+      "Assign deterministic zero-padded IDs to a list of findings (QA-001, QA-002, ...). Use this instead of mentally tracking issue counters.",
+      "",
+      "Guarantees:",
+      "- IDs are zero-padded to a minimum of 3 digits (e.g. `<PREFIX>-001`, `<PREFIX>-042`, `<PREFIX>-123`). Counters above 999 widen automatically (`<PREFIX>-1000`).",
+      "- IDs are assigned in the order findings appear in the input array — the caller is responsible for sorting (e.g. by severity) BEFORE calling this tool.",
+      "- Output preserves every input field and adds an `id` property; findings are not deduplicated, reordered, or filtered.",
+      "- `startAt` (default 1) lets you continue numbering across multiple reports without collisions.",
+    ].join("\n"),
     args: {
       findings: tool.schema
         .array(
@@ -251,7 +262,10 @@ export const AppVerkCoordinatorPlugin: Plugin = async (input) => {
         )
         .describe("Findings to assign IDs to"),
       prefix: tool.schema.string().describe('ID prefix, e.g. "QA"'),
-      startAt: tool.schema.number().optional().describe("Starting number (default 1)"),
+      startAt: tool.schema
+        .number()
+        .optional()
+        .describe("Starting number (default 1)"),
     },
     async execute(args) {
       const result = assignIssueIds({
@@ -264,33 +278,36 @@ export const AppVerkCoordinatorPlugin: Plugin = async (input) => {
   })
 
   const computeWavesTool = tool({
-    description:
-      [
-        "Compute dependency-aware dispatch waves from a flat scenario list (Kahn's topological sort). Use this when a QA plan declares `**Depends-on:**` between scenarios — call BEFORE `dispatch_parallel` to decide what to run when.",
-        "",
-        "Inputs:",
-        '- `scenarios`: array of `{ id: string, dependsOn: string[], sourceOrder: number }`. `id` is the scenario heading (e.g. "BE-02"), `dependsOn` is the parsed `**Depends-on:**` list (empty array if absent), `sourceOrder` is the scenario\'s position in the plan (used as the tie-breaker within a wave).',
-        "",
-        "Output (JSON-stringified):",
-        "- `{ waves: string[][] }` on success. `waves[0]` is the first dispatch wave; within each wave the IDs are emitted in source order.",
-        '- `{ waves: [], error: { kind, details } }` on validation failure. `kind` is one of `"self-ref"`, `"dangling"`, `"cycle"`. The caller (Perun) MUST NOT call `dispatch_parallel` when `error` is present — surface `details` verbatim to the user and abort the run.',
-        "- Empty input returns `{ waves: [] }` with no error.",
-        "",
-        "Guarantees:",
-        '- Deterministic: same input → same output. Within a wave, source order is the tie-breaker.',
-        '- Pure: no I/O, no globals, no clock dependence.',
-      ].join("\n"),
+    description: [
+      "Compute dependency-aware dispatch waves from a flat scenario list (Kahn's topological sort). Use this when a QA plan declares `**Depends-on:**` between scenarios — call BEFORE `dispatch_parallel` to decide what to run when.",
+      "",
+      "Inputs:",
+      '- `scenarios`: array of `{ id: string, dependsOn: string[], sourceOrder: number }`. `id` is the scenario heading (e.g. "BE-02"), `dependsOn` is the parsed `**Depends-on:**` list (empty array if absent), `sourceOrder` is the scenario\'s position in the plan (used as the tie-breaker within a wave).',
+      "",
+      "Output (JSON-stringified):",
+      "- `{ waves: string[][] }` on success. `waves[0]` is the first dispatch wave; within each wave the IDs are emitted in source order.",
+      '- `{ waves: [], error: { kind, details } }` on validation failure. `kind` is one of `"self-ref"`, `"dangling"`, `"cycle"`. The caller (Perun) MUST NOT call `dispatch_parallel` when `error` is present — surface `details` verbatim to the user and abort the run.',
+      "- Empty input returns `{ waves: [] }` with no error.",
+      "",
+      "Guarantees:",
+      "- Deterministic: same input → same output. Within a wave, source order is the tie-breaker.",
+      "- Pure: no I/O, no globals, no clock dependence.",
+    ].join("\n"),
     args: {
       scenarios: tool.schema
         .array(
           tool.schema.object({
-            id: tool.schema.string().describe("Scenario id, e.g. \"BE-02\""),
+            id: tool.schema.string().describe('Scenario id, e.g. "BE-02"'),
             dependsOn: tool.schema
               .array(tool.schema.string())
-              .describe("Scenario ids this scenario depends on (empty array if none)"),
+              .describe(
+                "Scenario ids this scenario depends on (empty array if none)",
+              ),
             sourceOrder: tool.schema
               .number()
-              .describe("Scenario position in the plan (used as tie-breaker within a wave)"),
+              .describe(
+                "Scenario position in the plan (used as tie-breaker within a wave)",
+              ),
           }),
         )
         .describe("Flat scenario list with parsed dependencies"),
@@ -302,20 +319,33 @@ export const AppVerkCoordinatorPlugin: Plugin = async (input) => {
   })
 
   const dispatchBackgroundTool = tool({
-    description:
-      [
-        "Start a specialist task in the BACKGROUND and return immediately with a task id (bg_...). The task runs while you do other work in THIS turn; collect it later with wait_background / poll_background.",
-        "",
-        "- Single task per call. Max 4 background tasks running per session — collect one before firing more.",
-        "- Use for read-only work you can overlap with your own (especially `triglav` exploration). Use blocking `dispatch_parallel` when you need the result immediately or need ordered QA waves.",
-        "- ALWAYS collect (wait_background/poll_background) what you start before ending the turn — uncollected tasks are wasted.",
-        "- Returns: { id, agent, status: \"running\" }.",
-      ].join("\n"),
+    description: [
+      "Start a specialist task in the BACKGROUND and return immediately with a task id (bg_...). The task runs while you do other work in THIS turn; collect it later with wait_background / poll_background.",
+      "",
+      "- Single task per call. Max 4 background tasks running per session — collect one before firing more.",
+      "- Use for read-only work you can overlap with your own (especially `triglav` exploration). Use blocking `dispatch_parallel` when you need the result immediately or need ordered QA waves.",
+      "- ALWAYS collect (wait_background/poll_background) what you start before ending the turn — uncollected tasks are wasted.",
+      '- Returns: { id, agent, status: "running" }.',
+    ].join("\n"),
     args: {
-      agent: tool.schema.string().min(1).max(60).describe("Specialist agent name (e.g. \"triglav\"). Must be a subagent, or an allowlisted mode:all agent when the caller is a primary agent. " + dispatchableAllowlistSentence),
-      summary: tool.schema.string().min(1).max(80).describe("One-line label for the TUI (no prompts/PII)."),
+      agent: tool.schema
+        .string()
+        .min(1)
+        .max(60)
+        .describe(
+          'Specialist agent name (e.g. "triglav"). Must be a subagent, or an allowlisted mode:all agent when the caller is a primary agent. ' +
+            dispatchableAllowlistSentence,
+        ),
+      summary: tool.schema
+        .string()
+        .min(1)
+        .max(80)
+        .describe("One-line label for the TUI (no prompts/PII)."),
       prompt: tool.schema.string().describe("Prompt for the specialist."),
-      context: tool.schema.string().optional().describe("Optional extra context appended to the prompt."),
+      context: tool.schema
+        .string()
+        .optional()
+        .describe("Optional extra context appended to the prompt."),
     },
     async execute(args, context) {
       context.metadata({ title: `${args.agent} — ${args.summary}` })
@@ -346,16 +376,17 @@ export const AppVerkCoordinatorPlugin: Plugin = async (input) => {
   })
 
   const pollBackgroundTool = tool({
-    description:
-      [
-        "Check the status of background tasks WITHOUT blocking. Returns a snapshot per id.",
-        "- Result per id: { id, agent, status: \"running\" | \"success\" | \"not_found\", result?, duration_ms? }.",
-        "- A \"success\" result is one-time retrieval: the task is collected and its slot freed, exactly like wait_background. Do NOT poll the same id again after success (it returns not_found).",
-        "- A \"running\" result is non-terminal: keep working, then poll/wait again.",
-        "- Use to decide whether to keep working or to wait_background.",
-      ].join("\n"),
+    description: [
+      "Check the status of background tasks WITHOUT blocking. Returns a snapshot per id.",
+      '- Result per id: { id, agent, status: "running" | "success" | "not_found", result?, duration_ms? }.',
+      '- A "success" result is one-time retrieval: the task is collected and its slot freed, exactly like wait_background. Do NOT poll the same id again after success (it returns not_found).',
+      '- A "running" result is non-terminal: keep working, then poll/wait again.',
+      "- Use to decide whether to keep working or to wait_background.",
+    ].join("\n"),
     args: {
-      ids: tool.schema.array(tool.schema.string()).describe("Background task ids (bg_...) to check."),
+      ids: tool.schema
+        .array(tool.schema.string())
+        .describe("Background task ids (bg_...) to check."),
     },
     async execute(args, context) {
       context.metadata({ title: `poll ${args.ids.length} task(s)` })
@@ -380,15 +411,19 @@ export const AppVerkCoordinatorPlugin: Plugin = async (input) => {
   })
 
   const waitBackgroundTool = tool({
-    description:
-      [
-        "BLOCK until the given background tasks are idle (or time out), then return their results. Collected tasks are removed (one-time retrieval), freeing background slots.",
-        "- Result per id: { id, agent, status: \"success\" | \"error\" | \"timeout\" | \"aborted\" | \"not_found\", result, duration_ms, error? }.",
-        "- Honors abort: aborting cancels the wait AND kills the waited child sessions.",
-      ].join("\n"),
+    description: [
+      "BLOCK until the given background tasks are idle (or time out), then return their results. Collected tasks are removed (one-time retrieval), freeing background slots.",
+      '- Result per id: { id, agent, status: "success" | "error" | "timeout" | "aborted" | "not_found", result, duration_ms, error? }.',
+      "- Honors abort: aborting cancels the wait AND kills the waited child sessions.",
+    ].join("\n"),
     args: {
-      ids: tool.schema.array(tool.schema.string()).describe("Background task ids (bg_...) to wait for."),
-      timeoutMs: tool.schema.number().optional().describe("Per-task timeout in ms (default 5 min)."),
+      ids: tool.schema
+        .array(tool.schema.string())
+        .describe("Background task ids (bg_...) to wait for."),
+      timeoutMs: tool.schema
+        .number()
+        .optional()
+        .describe("Per-task timeout in ms (default 5 min)."),
     },
     async execute(args, context) {
       context.metadata({ title: `wait ${args.ids.length} task(s)` })
@@ -425,7 +460,8 @@ export const AppVerkCoordinatorPlugin: Plugin = async (input) => {
       // HTTP header). The display name is what OpenCode's TUI shows in the status
       // bar, /agents picker, and session label.
       config.agent[COORDINATOR_AGENT] = {
-        description: "Delegates work to specialists, synthesizes results, proposes next steps",
+        description:
+          "Delegates work to specialists, synthesizes results, proposes next steps",
         mode: "primary",
         get prompt() {
           return getPerunPrompt()
@@ -452,7 +488,13 @@ export const AppVerkCoordinatorPlugin: Plugin = async (input) => {
       // precedence (user opencode.json > `agents.perun.model`). Model already
       // validated by MODEL_REGEX — see src/modules/pantheon-config/schema.ts
       // (CWE-117).
-      applyModelOverride(config, "perun", COORDINATOR_AGENT, undefined, userModels)
+      applyModelOverride(
+        config,
+        "perun",
+        COORDINATOR_AGENT,
+        undefined,
+        userModels,
+      )
       // Make Perun the session-open default. The roster policy hides the native
       // `build` (opencode's default primary), so default_agent must point to a
       // visible primary or the runtime throws at startup. Only set when unset so
@@ -484,7 +526,9 @@ export const AppVerkCoordinatorPlugin: Plugin = async (input) => {
         if (typeof deletedID === "string" && deletedID.length > 0) {
           for (const t of backgroundStore.listByParent(deletedID)) {
             try {
-              await createSDKSpecialist(client, deletedID).abortTask(t.childSessionId)
+              await createSDKSpecialist(client, deletedID).abortTask(
+                t.childSessionId,
+              )
             } catch {
               /* best-effort */
             }
@@ -522,9 +566,10 @@ export const AppVerkCoordinatorPlugin: Plugin = async (input) => {
         // against the slug registry every module populated in its `config` hook
         // (all of which ran before this `session.created`). Both are funneled
         // through the same neutralize→console.error→toast sink.
-        const errors = [...getLoadErrors(), ...getUnknownAgentDiagnostics()].map(
-          neutralizeUntrustedOutput,
-        )
+        const errors = [
+          ...getLoadErrors(),
+          ...getUnknownAgentDiagnostics(),
+        ].map(neutralizeUntrustedOutput)
         // Honour the docs contract: "Check the OpenCode console output for
         // the specific parse error". Without this, the warning toast points
         // users at a console that has no diagnostic written to it.
@@ -537,7 +582,9 @@ export const AppVerkCoordinatorPlugin: Plugin = async (input) => {
             body: {
               variant: "warning",
               title: "Pantheon",
-              message: errors[0] ?? "pantheon.json parse error — check console for details",
+              message:
+                errors[0] ??
+                "pantheon.json parse error — check console for details",
             },
           })
         } else if (pantheonConfigEmpty()) {
@@ -558,4 +605,3 @@ export const AppVerkCoordinatorPlugin: Plugin = async (input) => {
     },
   }
 }
-

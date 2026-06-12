@@ -65,7 +65,9 @@ describe("validateConfigFile", () => {
         agents: { perun: { model } },
       })
       expect(result.config.agents, `should reject ${model}`).toEqual({})
-      expect(result.errors[0], `should reject ${model}`).toMatch(/invalid model/)
+      expect(result.errors[0], `should reject ${model}`).toMatch(
+        /invalid model/,
+      )
     }
   })
 
@@ -85,8 +87,14 @@ describe("validateConfigFile", () => {
       const result = validateConfigFile({
         agents: { perun: { model } },
       })
-      expect(result.config.agents, `should reject ${JSON.stringify(model)}`).toEqual({})
-      expect(result.errors[0], `should reject ${JSON.stringify(model)}`).toMatch(/invalid model/)
+      expect(
+        result.config.agents,
+        `should reject ${JSON.stringify(model)}`,
+      ).toEqual({})
+      expect(
+        result.errors[0],
+        `should reject ${JSON.stringify(model)}`,
+      ).toMatch(/invalid model/)
     }
   })
 
@@ -134,12 +142,18 @@ describe("validateConfigFile", () => {
 
   it("warns on unknown field under agent but keeps model", () => {
     const result = validateConfigFile({
-      agents: { perun: { model: "anthropic/claude-opus-4-7", temperature: 0.5 } },
+      agents: {
+        perun: { model: "anthropic/claude-opus-4-7", temperature: 0.5 },
+      },
     })
     expect(result.config.agents).toEqual({
       perun: { model: "anthropic/claude-opus-4-7" },
     })
-    expect(result.errors.some((e) => /unknown field "agents\.perun\.temperature"/.test(e))).toBe(true)
+    expect(
+      result.errors.some((e) =>
+        /unknown field "agents\.perun\.temperature"/.test(e),
+      ),
+    ).toBe(true)
   })
 
   it("includes sourcePath in error messages when provided", () => {

@@ -21,14 +21,19 @@ const defaultGitRunner = async (cwd, args) => {
 };
 async function createControlledCommit(input) {
   const runGit = input.runGit ?? defaultGitRunner;
-  const repoCheck = await runGit(input.cwd, ["rev-parse", "--is-inside-work-tree"]);
+  const repoCheck = await runGit(input.cwd, [
+    "rev-parse",
+    "--is-inside-work-tree"
+  ]);
   if (repoCheck.exitCode !== 0) {
     throw new Error("Current directory is not a git repository.");
   }
   const addArgs = input.files && input.files.length > 0 ? ["add", "--", ...input.files] : ["add", "-A"];
   const addResult = await runGit(input.cwd, addArgs);
   if (addResult.exitCode !== 0) {
-    throw new Error(addResult.stderr.trim() || addResult.stdout.trim() || "git add failed.");
+    throw new Error(
+      addResult.stderr.trim() || addResult.stdout.trim() || "git add failed."
+    );
   }
   const stagedChanges = await runGit(input.cwd, ["diff", "--cached", "--quiet"]);
   if (stagedChanges.exitCode === 0) {

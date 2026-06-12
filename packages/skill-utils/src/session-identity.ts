@@ -11,11 +11,16 @@ type Client = PluginInput["client"]
 export const COORDINATOR_AGENT_NAME = "Perun - Coordinator"
 
 /** The agent a session runs under, from its first user message. Undefined if unknown. Never throws. */
-export async function getSessionAgent(sessionID: string, client: Client): Promise<string | undefined> {
+export async function getSessionAgent(
+  sessionID: string,
+  client: Client,
+): Promise<string | undefined> {
   try {
     const res = await client.session.messages({ path: { id: sessionID } })
     const msgs = res.data ?? []
-    const firstUser = msgs.find((m) => m.info?.role === "user")?.info as { agent?: string } | undefined
+    const firstUser = msgs.find((m) => m.info?.role === "user")?.info as
+      | { agent?: string }
+      | undefined
     return firstUser?.agent
   } catch {
     return undefined
@@ -81,7 +86,10 @@ const negativeCacheUntil = new Map<string, number>()
  *    life of a never-resolving session). The short TTL lets a late-resolving session
  *    re-attempt within seconds.
  */
-export async function getSessionAgentCached(sessionID: string, client: Client): Promise<string | undefined> {
+export async function getSessionAgentCached(
+  sessionID: string,
+  client: Client,
+): Promise<string | undefined> {
   const cached = sessionAgentCache.get(sessionID)
   if (cached !== undefined) return cached
 
@@ -155,6 +163,11 @@ export function forgetSessionAgent(sessionID: string): void {
  * transform) can route through this predicate without reintroducing a full-transcript
  * fetch on every invocation.
  */
-export async function isCoordinatorSession(sessionID: string, client: Client): Promise<boolean> {
-  return (await getSessionAgentCached(sessionID, client)) === COORDINATOR_AGENT_NAME
+export async function isCoordinatorSession(
+  sessionID: string,
+  client: Client,
+): Promise<boolean> {
+  return (
+    (await getSessionAgentCached(sessionID, client)) === COORDINATOR_AGENT_NAME
+  )
 }

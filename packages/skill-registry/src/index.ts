@@ -1,13 +1,31 @@
 import path from "node:path"
 import { fileURLToPath } from "node:url"
-import type { Plugin } from "@opencode-ai/plugin"
+import type { Config, Plugin } from "@opencode-ai/plugin"
 import { tool } from "@opencode-ai/plugin"
-import { forgetSessionAgent, isCoordinatorSession } from "@appverk/opencode-skill-utils"
+import {
+  forgetSessionAgent,
+  isCoordinatorSession,
+} from "@appverk/opencode-skill-utils"
 import { buildSkillCatalog } from "./skill-catalog.js"
 import { createSkillLoader } from "./load-skill.js"
 import { generateActivationRules } from "./prompt-injector.js"
 
 const moduleDirectory = path.dirname(fileURLToPath(import.meta.url))
+
+/**
+ * `skills.paths` is honored by the opencode runtime for native skill discovery
+ * but is absent from the SDK `Config` type the plugin compiles against. This
+ * accessor localizes the cast (mirrors `default_agent` in agent-roster) so the
+ * broad `any` does not leak across the whole `config` hook — only this one host
+ * field is untyped. Re-check on the next `@opencode-ai/plugin` bump; once
+ * `skills` is native on `Config`, the cast is removable.
+ */
+function getSkillPaths(config: Config): string[] {
+  const skills = (config as { skills?: { paths?: string[] } }).skills ?? {}
+  skills.paths ??= []
+  ;(config as { skills?: { paths?: string[] } }).skills = skills
+  return skills.paths
+}
 
 const skillDirectories = [
   path.resolve(moduleDirectory, "../../python-developer/dist/skills"),
@@ -23,13 +41,12 @@ export const AppVerkSkillRegistryPlugin: Plugin = async ({ client }) => {
   const activationRules = generateActivationRules(catalog)
 
   return {
-    config: async (config: any) => {
+    config: async (config: Config) => {
       // Register skill directories so OpenCode discovers them natively.
-      config.skills = config.skills || {}
-      config.skills.paths = config.skills.paths || []
+      const paths = getSkillPaths(config)
       for (const dir of skillDirectories) {
-        if (!config.skills.paths.includes(dir)) {
-          config.skills.paths.push(dir)
+        if (!paths.includes(dir)) {
+          paths.push(dir)
         }
       }
     },
@@ -40,7 +57,9 @@ export const AppVerkSkillRegistryPlugin: Plugin = async ({ client }) => {
         args: {
           name: tool.schema
             .string()
-            .describe("Skill name (e.g., python-coding-standards, fastapi-patterns)"),
+            .describe(
+              "Skill name (e.g., python-coding-standards, fastapi-patterns)",
+            ),
         },
         async execute(args: { name: string }) {
           try {

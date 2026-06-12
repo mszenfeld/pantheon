@@ -1,6 +1,9 @@
 import { describe, it, expect } from "vitest"
 import { BindingsStore } from "../../../src/modules/qa/bindings-store.js"
-import { QaRunState, MAX_DIALOG_ROUNDS } from "../../../src/modules/qa/qa-run-state.js"
+import {
+  QaRunState,
+  MAX_DIALOG_ROUNDS,
+} from "../../../src/modules/qa/qa-run-state.js"
 import { makeRecordInputHandler } from "../../../src/modules/qa/record-input.js"
 import type { ParsedBinding } from "../../../src/modules/qa/binding-parser.js"
 
@@ -33,16 +36,28 @@ function makeDeps(parentID: string) {
 describe("record_input tool handler", () => {
   it("writes a non-QA_BIND_ name as user-paste secret", async () => {
     const { store, handler } = makeDeps("perun-session")
-    const result = await handler({ name: "TEST_USER_EMAIL", value: "foo@bar.com" }, makeContext("perun-session"))
+    const result = await handler(
+      { name: "TEST_USER_EMAIL", value: "foo@bar.com" },
+      makeContext("perun-session"),
+    )
     expect(result.status).toBe("ok")
-    expect(store.getBinding("perun-session", "TEST_USER_EMAIL")?.value.unwrap()).toBe("foo@bar.com")
-    expect(store.getBinding("perun-session", "TEST_USER_EMAIL")?.source).toBe("user-paste")
-    expect(store.getBinding("perun-session", "TEST_USER_EMAIL")?.type).toBe("secret")
+    expect(
+      store.getBinding("perun-session", "TEST_USER_EMAIL")?.value.unwrap(),
+    ).toBe("foo@bar.com")
+    expect(store.getBinding("perun-session", "TEST_USER_EMAIL")?.source).toBe(
+      "user-paste",
+    )
+    expect(store.getBinding("perun-session", "TEST_USER_EMAIL")?.type).toBe(
+      "secret",
+    )
   })
 
   it("rejects a process-control env name", async () => {
     const { handler } = makeDeps("p1")
-    const result = await handler({ name: "PATH", value: "/tmp" }, makeContext("p1"))
+    const result = await handler(
+      { name: "PATH", value: "/tmp" },
+      makeContext("p1"),
+    )
     expect(result.status).toBe("rejected")
     if (result.status === "rejected") {
       expect(result.reason).toContain("denylist")
@@ -51,7 +66,10 @@ describe("record_input tool handler", () => {
 
   it("rejects an invalid identifier", async () => {
     const { handler } = makeDeps("p1")
-    const result = await handler({ name: "bad-name", value: "x" }, makeContext("p1"))
+    const result = await handler(
+      { name: "bad-name", value: "x" },
+      makeContext("p1"),
+    )
     expect(result.status).toBe("rejected")
   })
 
@@ -63,7 +81,10 @@ describe("record_input tool handler", () => {
       state,
       resolveParentID: async () => undefined,
     })
-    const result = await handler({ name: "X", value: "y" }, makeContext("perun-session"))
+    const result = await handler(
+      { name: "X", value: "y" },
+      makeContext("perun-session"),
+    )
     expect(result.status).toBe("ok")
     expect(store.getBinding("perun-session", "X")).toBeDefined()
   })
@@ -83,25 +104,39 @@ describe("record_input tool handler", () => {
 describe("record_input — declared-input exemption", () => {
   it("accepts a credential-prefix name that the plan declares as a recipe input", async () => {
     const { store, state, handler } = makeDeps("p1")
-    state.storePlan("p1", [bindingWithInputs(["SUPABASE_URL", "SUPABASE_ANON_KEY"])])
-    const result = await handler({ name: "SUPABASE_ANON_KEY", value: "anon" }, makeContext("p1"))
+    state.storePlan("p1", [
+      bindingWithInputs(["SUPABASE_URL", "SUPABASE_ANON_KEY"]),
+    ])
+    const result = await handler(
+      { name: "SUPABASE_ANON_KEY", value: "anon" },
+      makeContext("p1"),
+    )
     expect(result.status).toBe("ok")
-    expect(store.getBinding("p1", "SUPABASE_ANON_KEY")?.value.unwrap()).toBe("anon")
+    expect(store.getBinding("p1", "SUPABASE_ANON_KEY")?.value.unwrap()).toBe(
+      "anon",
+    )
   })
 
   it("rejects a credential-prefix name that no binding declares as an input", async () => {
     const { handler, state } = makeDeps("p1")
     // Plan exists but declares only TEST_USER_EMAIL — SUPABASE_ANON_KEY is undeclared.
     state.storePlan("p1", [bindingWithInputs(["TEST_USER_EMAIL"])])
-    const result = await handler({ name: "SUPABASE_ANON_KEY", value: "anon" }, makeContext("p1"))
+    const result = await handler(
+      { name: "SUPABASE_ANON_KEY", value: "anon" },
+      makeContext("p1"),
+    )
     expect(result.status).toBe("rejected")
-    if (result.status === "rejected") expect(result.reason).toContain("denylist")
+    if (result.status === "rejected")
+      expect(result.reason).toContain("denylist")
   })
 
   it("rejects a process-control name even when the plan declares it as an input", async () => {
     const { handler, state } = makeDeps("p1")
     state.storePlan("p1", [bindingWithInputs(["PATH"])])
-    const result = await handler({ name: "PATH", value: "/tmp/evil" }, makeContext("p1"))
+    const result = await handler(
+      { name: "PATH", value: "/tmp/evil" },
+      makeContext("p1"),
+    )
     expect(result.status).toBe("rejected")
   })
 })
@@ -129,14 +164,20 @@ describe("record_input — dialog round cap", () => {
     // Drive 3 successful rounds — pretend execute_recipe ends each round
     // between them.
     for (let i = 0; i < MAX_DIALOG_ROUNDS; i++) {
-      const ok = await handler({ name: `A${i}`, value: `v${i}` }, makeContext("p1"))
+      const ok = await handler(
+        { name: `A${i}`, value: `v${i}` },
+        makeContext("p1"),
+      )
       expect(ok.status).toBe("ok")
       state.endDialogRound("p1")
     }
     expect(state.getDialogRound("p1")).toBe(MAX_DIALOG_ROUNDS)
 
     // The 4th round must be refused before any binding is written.
-    const refused = await handler({ name: "TOO_LATE", value: "x" }, makeContext("p1"))
+    const refused = await handler(
+      { name: "TOO_LATE", value: "x" },
+      makeContext("p1"),
+    )
     expect(refused.status).toBe("rejected")
     if (refused.status === "rejected") {
       expect(refused.reason).toContain("dialog_round_exceeded")

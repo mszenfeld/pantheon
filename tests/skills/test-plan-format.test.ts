@@ -30,7 +30,9 @@ describe("test-plan-format skill", () => {
   })
 
   it("Coverage Matrix and checklist require a row per changed external surface (R-A)", () => {
-    expect(md).toContain("per changed external surface named in the Changes Summary")
+    expect(md).toContain(
+      "per changed external surface named in the Changes Summary",
+    )
     expect(md).toContain("one row per status and per changed external surface")
   })
 
@@ -41,11 +43,15 @@ describe("test-plan-format skill", () => {
   })
 
   it("Coverage Matrix desc locks reachable surfaces out of out-of-scope (L2)", () => {
-    expect(md).toContain("A changed surface with a harness-observable interface (route / DB-effect / Playwright)")
+    expect(md).toContain(
+      "A changed surface with a harness-observable interface (route / DB-effect / Playwright)",
+    )
   })
 
   it("Plan Quality Checklist forbids out-of-scoping a reachable changed surface (L2)", () => {
-    expect(md).toContain("No changed surface with a curl/psql/Playwright interface or effect is dispositioned")
+    expect(md).toContain(
+      "No changed surface with a curl/psql/Playwright interface or effect is dispositioned",
+    )
   })
 
   it("Blocker template carries the optional hermetic-observation pointer (L4)", () => {

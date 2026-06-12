@@ -51,7 +51,9 @@ describe("AppVerkSkillRegistryPlugin", () => {
       session: {
         messages: async () => {
           messageCalls++
-          return { data: [{ info: { role: "user", agent: "zmora-be" }, parts: [] }] }
+          return {
+            data: [{ info: { role: "user", agent: "zmora-be" }, parts: [] }],
+          }
         },
       },
     }
@@ -71,7 +73,10 @@ describe("AppVerkSkillRegistryPlugin", () => {
 
     // Teardown evicts the entry — the next turn must re-resolve from the transcript.
     await plugin.event?.({
-      event: { type: "session.deleted", properties: { info: { id: sessionID } } },
+      event: {
+        type: "session.deleted",
+        properties: { info: { id: sessionID } },
+      },
     } as never)
     await run()
     expect(messageCalls).toBe(2)

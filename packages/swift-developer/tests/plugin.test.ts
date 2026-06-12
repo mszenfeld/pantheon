@@ -15,7 +15,9 @@ describe("AppVerkSwiftDeveloperPlugin", () => {
 
     expect(config.agent?.["swift-developer"]).toBeDefined()
     expect(config.agent!["swift-developer"]!.description).toContain("Swift")
-    expect(config.agent!["swift-developer"]!.prompt).toContain("Swift Developer Agent")
+    expect(config.agent!["swift-developer"]!.prompt).toContain(
+      "Swift Developer Agent",
+    )
     expect(config.agent!["swift-developer"]!.mode).toBe("primary")
   })
 

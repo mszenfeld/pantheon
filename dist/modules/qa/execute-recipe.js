@@ -1,5 +1,12 @@
 import { scrubSecrets } from "./scrubber.js";
-const NULLISH_LITERALS = /* @__PURE__ */ new Set(["null", "undefined", "none", "nil", "nan", "(null)"]);
+const NULLISH_LITERALS = /* @__PURE__ */ new Set([
+  "null",
+  "undefined",
+  "none",
+  "nil",
+  "nan",
+  "(null)"
+]);
 const MAX_ATTEMPTS = 3;
 function makeExecuteRecipeHandler(deps) {
   return async (args, ctx) => {
@@ -24,31 +31,72 @@ function makeExecuteRecipeHandler(deps) {
       missing.push(inputName);
     }
     if (missing.length > 0) return { status: "need_info", missing };
-    const attempts = deps.state.incrementRecipeAttempt(parentID, args.binding_name);
+    const attempts = deps.state.incrementRecipeAttempt(
+      parentID,
+      args.binding_name
+    );
     if (attempts > MAX_ATTEMPTS) {
-      return { status: "recipe_failed", reason: "max_attempts", stderr_tail: "" };
+      return {
+        status: "recipe_failed",
+        reason: "max_attempts",
+        stderr_tail: ""
+      };
     }
     const result = await deps.runBash(target.recipe, composedEnv);
-    const scrubbedStderr = scrubSecrets(result.stderr, parentID, deps.store).slice(-200);
+    const scrubbedStderr = scrubSecrets(
+      result.stderr,
+      parentID,
+      deps.store
+    ).slice(-200);
     if (result.exitCode === 124) {
-      return { status: "recipe_failed", reason: "timeout", stderr_tail: scrubbedStderr };
+      return {
+        status: "recipe_failed",
+        reason: "timeout",
+        stderr_tail: scrubbedStderr
+      };
     }
     if (result.exitCode !== 0) {
-      return { status: "recipe_failed", reason: `exit_code=${result.exitCode}`, stderr_tail: scrubbedStderr };
+      return {
+        status: "recipe_failed",
+        reason: `exit_code=${result.exitCode}`,
+        stderr_tail: scrubbedStderr
+      };
     }
     const trimmed = result.stdout.replace(/\n$/, "").trim();
     if (trimmed.length === 0) {
-      return { status: "recipe_failed", reason: "invalid_output: empty", stderr_tail: scrubbedStderr };
+      return {
+        status: "recipe_failed",
+        reason: "invalid_output: empty",
+        stderr_tail: scrubbedStderr
+      };
     }
     if (NULLISH_LITERALS.has(trimmed.toLowerCase())) {
-      return { status: "recipe_failed", reason: `invalid_output: nullish ('${trimmed}')`, stderr_tail: scrubbedStderr };
+      return {
+        status: "recipe_failed",
+        reason: `invalid_output: nullish ('${trimmed}')`,
+        stderr_tail: scrubbedStderr
+      };
     }
     if (trimmed.length > 4096) {
-      return { status: "recipe_failed", reason: "invalid_output: too long", stderr_tail: scrubbedStderr };
+      return {
+        status: "recipe_failed",
+        reason: "invalid_output: too long",
+        stderr_tail: scrubbedStderr
+      };
     }
-    const write = deps.store.writeBinding(parentID, args.binding_name, trimmed, target.type, "minted-recipe");
+    const write = deps.store.writeBinding(
+      parentID,
+      args.binding_name,
+      trimmed,
+      target.type,
+      "minted-recipe"
+    );
     if (write.status === "error") {
-      return { status: "recipe_failed", reason: `register_failed: ${write.reason}`, stderr_tail: scrubbedStderr };
+      return {
+        status: "recipe_failed",
+        reason: `register_failed: ${write.reason}`,
+        stderr_tail: scrubbedStderr
+      };
     }
     return { status: "ok" };
   };

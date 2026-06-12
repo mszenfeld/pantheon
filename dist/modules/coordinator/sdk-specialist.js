@@ -9,7 +9,9 @@ function createSDKSpecialist(client, parentSessionID) {
       });
       const sessionId = created.data?.id ?? "";
       if (sessionId.length === 0) {
-        throw new Error(`createSession returned no session id for agent ${agentName}`);
+        throw new Error(
+          `createSession returned no session id for agent ${agentName}`
+        );
       }
       try {
         onSessionCreated?.(sessionId);
@@ -19,7 +21,9 @@ function createSDKSpecialist(client, parentSessionID) {
             service: "perun/dispatch",
             level: "warn",
             message: `onSessionCreated callback threw for agent ${agentName} (session ${sessionId}); binding injection may not occur \u2014 continuing dispatch`,
-            extra: { error: err instanceof Error ? err.message : String(err) }
+            extra: {
+              error: err instanceof Error ? err.message : String(err)
+            }
           }
         }).catch(() => {
         });
@@ -50,7 +54,9 @@ function createSDKSpecialist(client, parentSessionID) {
       });
       const sessionId = created.data?.id ?? "";
       if (sessionId.length === 0) {
-        throw new Error(`startBackground returned no session id for agent ${agentName}`);
+        throw new Error(
+          `startBackground returned no session id for agent ${agentName}`
+        );
       }
       await client.session.promptAsync({
         path: { id: sessionId },

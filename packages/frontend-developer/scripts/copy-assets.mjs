@@ -7,8 +7,16 @@ const root = path.dirname(fileURLToPath(import.meta.url))
 copyAssets(
   [
     { from: "src/skills", to: "dist/skills", type: "dir" },
-    { from: "src/agent-prompt.md", to: "dist/agent-prompt.md", required: false },
-    { from: "src/commands/frontend.md", to: "dist/commands/frontend.md", required: false },
+    {
+      from: "src/agent-prompt.md",
+      to: "dist/agent-prompt.md",
+      required: false,
+    },
+    {
+      from: "src/commands/frontend.md",
+      to: "dist/commands/frontend.md",
+      required: false,
+    },
   ],
-  path.resolve(root, "..")
+  path.resolve(root, ".."),
 )

@@ -29,12 +29,19 @@ describe("STRIBOG_TOOLS", () => {
     for (const t of gitTools) {
       expect(t).toMatch(/git --no-pager (log|blame|status|diff)/)
     }
-    const MUTATING_GIT = /git[^)]*\b(revert|reset|push|checkout|clean|commit|rm)\b/
+    const MUTATING_GIT =
+      /git[^)]*\b(revert|reset|push|checkout|clean|commit|rm)\b/
     expect(STRIBOG_TOOLS.filter((t) => MUTATING_GIT.test(t))).toEqual([])
   })
 
   it("excludes minting, fan-out, interactive, and rm (separation + scope)", () => {
-    for (const t of ["execute_recipe", "interactive_bash", "dispatch_parallel", "Task", "Bash(rm:*)"]) {
+    for (const t of [
+      "execute_recipe",
+      "interactive_bash",
+      "dispatch_parallel",
+      "Task",
+      "Bash(rm:*)",
+    ]) {
       expect(STRIBOG_TOOLS).not.toContain(t)
     }
   })

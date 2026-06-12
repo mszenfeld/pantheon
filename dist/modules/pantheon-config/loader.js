@@ -1,7 +1,7 @@
 import { existsSync, readFileSync, statSync } from "node:fs";
 import os from "node:os";
 import * as jsoncParser from "jsonc-parser";
-import { neutralizeUntrustedOutput } from "../coordinator/sanitize.js";
+import { neutralizeUntrustedOutput } from "../_shared/sanitize.js";
 import { validateConfigFile } from "./schema.js";
 import { userGlobalPath, walkUpProjectPaths } from "./paths.js";
 const MAX_PANTHEON_FILE_BYTES = 1024 * 1024;
@@ -44,7 +44,9 @@ function loadFresh(options = {}) {
       raw = readFileSync(filePath, "utf8");
     } catch (err) {
       const detail = err instanceof Error ? err.message : String(err);
-      errors.push(`[pantheon] ${safePath}: failed to read \u2014 ${neutralizeUntrustedOutput(detail)}`);
+      errors.push(
+        `[pantheon] ${safePath}: failed to read \u2014 ${neutralizeUntrustedOutput(detail)}`
+      );
       continue;
     }
     let parsed;
@@ -53,12 +55,18 @@ function loadFresh(options = {}) {
       parsed = jsoncParser.parse(raw, parseErrors, { allowTrailingComma: true });
     } catch (err) {
       const detail = err instanceof Error ? err.message : String(err);
-      errors.push(`[pantheon] ${safePath}: failed to parse \u2014 ${neutralizeUntrustedOutput(detail)}`);
+      errors.push(
+        `[pantheon] ${safePath}: failed to parse \u2014 ${neutralizeUntrustedOutput(detail)}`
+      );
       continue;
     }
     if (parseErrors.length > 0) {
-      const detail = parseErrors.map((e) => `${jsoncParser.printParseErrorCode(e.error)} at ${offsetToLineCol(raw, e.offset)}`).join(", ");
-      errors.push(`[pantheon] ${safePath}: failed to parse \u2014 ${neutralizeUntrustedOutput(detail)}`);
+      const detail = parseErrors.map(
+        (e) => `${jsoncParser.printParseErrorCode(e.error)} at ${offsetToLineCol(raw, e.offset)}`
+      ).join(", ");
+      errors.push(
+        `[pantheon] ${safePath}: failed to parse \u2014 ${neutralizeUntrustedOutput(detail)}`
+      );
       continue;
     }
     const { config, errors: fileErrors } = validateConfigFile(parsed, filePath);

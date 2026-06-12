@@ -3,13 +3,18 @@ import {
   PollerAbortError,
   PollerTimeoutError
 } from "./poller.js";
-import { neutralizeUntrustedOutput, normalizeVariantSuffix } from "./sanitize.js";
+import {
+  neutralizeUntrustedOutput,
+  normalizeVariantSuffix
+} from "../_shared/sanitize.js";
 import {
   truncateBytes,
   truncateBytesWithMarker,
   AGGREGATE_TRUNCATION_MARKER
 } from "./truncate-bytes.js";
-const DISPATCHABLE_ALL_AGENTS = /* @__PURE__ */ new Set(["Veles - Planner"]);
+const DISPATCHABLE_ALL_AGENTS = /* @__PURE__ */ new Set([
+  "Veles - Planner"
+]);
 function validateDispatchable(agentRegistry, name, callerMode) {
   const agentInfo = agentRegistry[name];
   if (agentInfo === void 0) {
@@ -125,7 +130,11 @@ function enforceAggregateBudget(results, aggregateMaxBytes) {
       remaining -= bodyBytes;
       continue;
     }
-    r.result = truncateBytesWithMarker(r.result, remaining, AGGREGATE_TRUNCATION_MARKER);
+    r.result = truncateBytesWithMarker(
+      r.result,
+      remaining,
+      AGGREGATE_TRUNCATION_MARKER
+    );
     remaining = 0;
   }
 }
@@ -167,10 +176,14 @@ async function runTask(task, specialist, options) {
     const fullPrompt = task.context ? `${task.prompt}
 
 ${task.context}` : task.prompt;
-    const id = await specialist.startTask(task.name, fullPrompt, (createdId) => {
-      sessionId = createdId;
-      options.sessionAgentRegistry?.register(createdId, task.name);
-    });
+    const id = await specialist.startTask(
+      task.name,
+      fullPrompt,
+      (createdId) => {
+        sessionId = createdId;
+        options.sessionAgentRegistry?.register(createdId, task.name);
+      }
+    );
     const rawResult = await pollUntilIdle({
       fetchMessages: () => specialist.fetchMessages(id),
       timeoutMs: options.taskTimeoutMs,
@@ -200,7 +213,9 @@ ${task.context}` : task.prompt;
       status,
       result: "",
       duration_ms: Date.now() - startTime,
-      error: neutralizeUntrustedOutput(err instanceof Error ? err.message : String(err))
+      error: neutralizeUntrustedOutput(
+        err instanceof Error ? err.message : String(err)
+      )
     };
   }
 }

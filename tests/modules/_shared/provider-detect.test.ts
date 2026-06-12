@@ -22,12 +22,16 @@ describe("providerIdOf", () => {
 
 describe("isProviderConfigured", () => {
   it("returns true when the provider is wired under config.provider", () => {
-    const config: ProviderConfigLike = { provider: { openai: {}, anthropic: {} } }
+    const config: ProviderConfigLike = {
+      provider: { openai: {}, anthropic: {} },
+    }
     expect(isProviderConfigured(config, "openai")).toBe(true)
   })
 
   it("returns false when the provider key is absent from config.provider", () => {
-    expect(isProviderConfigured({ provider: { anthropic: {} } }, "openai")).toBe(false)
+    expect(
+      isProviderConfigured({ provider: { anthropic: {} } }, "openai"),
+    ).toBe(false)
   })
 
   it("returns false when there is no provider map", () => {
@@ -35,7 +39,9 @@ describe("isProviderConfigured", () => {
   })
 
   it("returns false for a null provider map (malformed config)", () => {
-    expect(isProviderConfigured({ provider: null } as never, "openai")).toBe(false)
+    expect(isProviderConfigured({ provider: null } as never, "openai")).toBe(
+      false,
+    )
   })
 
   it("returns false when the provider is in disabled_providers (even if configured)", () => {

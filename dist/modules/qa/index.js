@@ -1,6 +1,9 @@
 import { tool } from "@opencode-ai/plugin";
 import { buildQATesterAgent } from "./prompt-builder.js";
-import { applyModelOverride, captureUserModels } from "../_shared/apply-model-override.js";
+import {
+  applyModelOverride,
+  captureUserModels
+} from "../_shared/apply-model-override.js";
 import { loadModuleAsset } from "../_shared/load-asset.js";
 import { registerDispatchExtensions } from "../_shared/dispatch-extensions.js";
 import { registerAgentMetadata } from "../agent-registry/index.js";
@@ -15,7 +18,13 @@ import { parseBindings } from "./binding-parser.js";
 import { scrubSecrets } from "./scrubber.js";
 import { makeRunBash } from "./run-bash.js";
 import { makeCallerGate, SETUP_AGENT_KEY } from "./caller-gate.js";
-import { FE_TOOLS, BE_TOOLS, SETUP_TOOLS, SHARED_TOOLS, toolsForVariant } from "./allowed-tools.js";
+import {
+  FE_TOOLS,
+  BE_TOOLS,
+  SETUP_TOOLS,
+  SHARED_TOOLS,
+  toolsForVariant
+} from "./allowed-tools.js";
 function loadCommandMarkdown(name) {
   return loadModuleAsset(import.meta.url, `../../commands/${name}`);
 }
@@ -70,7 +79,11 @@ const AppVerkQAPlugin = async ({ client }) => {
       return void 0;
     }
   }
-  const recordInputHandler = makeRecordInputHandler({ store, state, resolveParentID });
+  const recordInputHandler = makeRecordInputHandler({
+    store,
+    state,
+    resolveParentID
+  });
   const executeRecipeHandler = makeExecuteRecipeHandler({
     store,
     state,
@@ -81,7 +94,11 @@ const AppVerkQAPlugin = async ({ client }) => {
     runBash: makeRunBash(),
     processEnv: process.env
   });
-  const preflightHandler = makePreflightHandler({ store, resolveParentID, processEnv: process.env });
+  const preflightHandler = makePreflightHandler({
+    store,
+    resolveParentID,
+    processEnv: process.env
+  });
   const shellEnvHook = makeShellEnvHook({ store, registry, resolveParentID });
   registerDispatchExtensions({
     sessionAgentRegistry: registry,
@@ -181,7 +198,10 @@ const AppVerkQAPlugin = async ({ client }) => {
               reason: "preflight is restricted to the coordinator (Perun)"
             });
           }
-          const result = await preflightHandler({ env: args.env }, { sessionID: ctx.sessionID });
+          const result = await preflightHandler(
+            { env: args.env },
+            { sessionID: ctx.sessionID }
+          );
           return JSON.stringify(result);
         }
       }),

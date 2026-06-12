@@ -1,7 +1,7 @@
 import { existsSync, readFileSync, statSync } from "node:fs"
 import os from "node:os"
 import * as jsoncParser from "jsonc-parser"
-import { neutralizeUntrustedOutput } from "../coordinator/sanitize.js"
+import { neutralizeUntrustedOutput } from "../_shared/sanitize.js"
 import { type PantheonConfig, validateConfigFile } from "./schema.js"
 import { userGlobalPath, walkUpProjectPaths } from "./paths.js"
 
@@ -67,7 +67,9 @@ export function loadFresh(options: LoadFreshOptions = {}): LoadResult {
 
   // Order: user-global (base), then project paths from FURTHEST → CLOSEST.
   // walkUpProjectPaths returns closest-first, so reverse it.
-  const projectAscending = walkUpProjectPaths(startDir, homedir).slice().reverse()
+  const projectAscending = walkUpProjectPaths(startDir, homedir)
+    .slice()
+    .reverse()
   const ordered = [userGlobalPath(homedir), ...projectAscending]
 
   const result: PantheonConfig = { agents: {} }
@@ -112,7 +114,9 @@ export function loadFresh(options: LoadFreshOptions = {}): LoadResult {
       // before interpolating. CWE-117. Mirrors the source-side guard in
       // `schema.ts`.
       const detail = err instanceof Error ? err.message : String(err)
-      errors.push(`[pantheon] ${safePath}: failed to read — ${neutralizeUntrustedOutput(detail)}`)
+      errors.push(
+        `[pantheon] ${safePath}: failed to read — ${neutralizeUntrustedOutput(detail)}`,
+      )
       continue
     }
 
@@ -130,15 +134,22 @@ export function loadFresh(options: LoadFreshOptions = {}): LoadResult {
       // surrounding context interpolated by future error messages is not, so
       // sanitize at the source rather than relying on the coordinator sink.
       const detail = err instanceof Error ? err.message : String(err)
-      errors.push(`[pantheon] ${safePath}: failed to parse — ${neutralizeUntrustedOutput(detail)}`)
+      errors.push(
+        `[pantheon] ${safePath}: failed to parse — ${neutralizeUntrustedOutput(detail)}`,
+      )
       continue
     }
 
     if (parseErrors.length > 0) {
       const detail = parseErrors
-        .map((e) => `${jsoncParser.printParseErrorCode(e.error)} at ${offsetToLineCol(raw, e.offset)}`)
+        .map(
+          (e) =>
+            `${jsoncParser.printParseErrorCode(e.error)} at ${offsetToLineCol(raw, e.offset)}`,
+        )
         .join(", ")
-      errors.push(`[pantheon] ${safePath}: failed to parse — ${neutralizeUntrustedOutput(detail)}`)
+      errors.push(
+        `[pantheon] ${safePath}: failed to parse — ${neutralizeUntrustedOutput(detail)}`,
+      )
       continue
     }
 

@@ -98,7 +98,10 @@ function classifyCoordinatorBash(command, allowedPrograms) {
   return { allowed: allowedPrograms.includes(program), program };
 }
 function buildViolationError(info) {
-  const payload = JSON.stringify({ marker: "COORDINATOR_POLICY_VIOLATION", ...info });
+  const payload = JSON.stringify({
+    marker: "COORDINATOR_POLICY_VIOLATION",
+    ...info
+  });
   const subject = info.command ? isCompoundCommand(info.command) ? "a compound command" : `\`${info.command.split(/\s+/)[0]}\`` : info.skill ? `skill \`${info.skill}\`` : "that";
   return new Error(
     `${payload}
@@ -149,7 +152,10 @@ function createSkillPlugin(options) {
     mode = "primary"
   } = options;
   const packagedAgentPath = path.resolve(moduleDirectory, "agent-prompt.md");
-  const sourceAgentPath = path.resolve(moduleDirectory, "../src/agent-prompt.md");
+  const sourceAgentPath = path.resolve(
+    moduleDirectory,
+    "../src/agent-prompt.md"
+  );
   const packagedCommandPath = path.resolve(
     moduleDirectory,
     `commands/${commandName}.md`
@@ -158,7 +164,10 @@ function createSkillPlugin(options) {
     moduleDirectory,
     `../src/commands/${commandName}.md`
   );
-  const getAgentPrompt = createLazyFileLoader(packagedAgentPath, sourceAgentPath);
+  const getAgentPrompt = createLazyFileLoader(
+    packagedAgentPath,
+    sourceAgentPath
+  );
   const getCommandTemplate = createLazyFileLoader(
     packagedCommandPath,
     sourceCommandPath

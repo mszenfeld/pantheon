@@ -24,7 +24,8 @@ export type ParseResult =
   | { status: "error"; reason: string }
 
 const QA_BIND_RE = /^QA_BIND_[A-Z][A-Z0-9_]*$/
-const HEADER_RE = /^- `(QA_BIND_[A-Z][A-Z0-9_]*|[A-Z_][A-Z0-9_]*)` \((secret|plain)\)\s*[—-]\s*(.+)$/
+const HEADER_RE =
+  /^- `(QA_BIND_[A-Z][A-Z0-9_]*|[A-Z_][A-Z0-9_]*)` \((secret|plain)\)\s*[—-]\s*(.+)$/
 const INPUTS_RE = /^\s+- Inputs:\s+(.+)$/
 const EGRESS_RE = /^\s+- Egress:\s+`([^`]+)`\s*$/
 const RECIPE_HEADER_RE = /^\s+- Recipe:\s*$/
@@ -86,7 +87,10 @@ export function parseBindings(planText: string): ParseResult {
     const typeRaw = headerMatch[2]!
     const description = headerMatch[3]!
     if (!QA_BIND_RE.test(name)) {
-      return { status: "error", reason: `binding name '${name}' must match QA_BIND_[A-Z][A-Z0-9_]*` }
+      return {
+        status: "error",
+        reason: `binding name '${name}' must match QA_BIND_[A-Z][A-Z0-9_]*`,
+      }
     }
     const type: BindingType = typeRaw === "secret" ? "secret" : "plain"
 
@@ -97,12 +101,15 @@ export function parseBindings(planText: string): ParseResult {
     let j = i + 1
     while (j < lines.length) {
       const sub = lines[j]!
-      if (HEADER_RE.test(sub) || /^##\s+\S/.test(sub) || /^\*\*[A-Z]/.test(sub)) break
+      if (HEADER_RE.test(sub) || /^##\s+\S/.test(sub) || /^\*\*[A-Z]/.test(sub))
+        break
 
       const inputsMatch = sub.match(INPUTS_RE)
       if (inputsMatch !== null) {
         const list = inputsMatch[1]!
-        const names = [...list.matchAll(/\$([A-Z_][A-Z0-9_]*)/g)].map((m) => m[1]!)
+        const names = [...list.matchAll(/\$([A-Z_][A-Z0-9_]*)/g)].map(
+          (m) => m[1]!,
+        )
         inputs = names
         j++
         continue
@@ -119,18 +126,32 @@ export function parseBindings(planText: string): ParseResult {
         let k = j + 1
         while (k < lines.length && !/^\s*```bash\s*$/.test(lines[k]!)) k++
         if (k >= lines.length) {
-          return { status: "error", reason: `binding '${name}' missing recipe code block` }
+          return {
+            status: "error",
+            reason: `binding '${name}' missing recipe code block`,
+          }
         }
         const recipeStart = k + 1
         let recipeEnd = recipeStart
-        while (recipeEnd < lines.length && !/^\s*```\s*$/.test(lines[recipeEnd]!)) recipeEnd++
+        while (
+          recipeEnd < lines.length &&
+          !/^\s*```\s*$/.test(lines[recipeEnd]!)
+        )
+          recipeEnd++
         const recipeLines = lines.slice(recipeStart, recipeEnd)
-        const nonEmptyRecipeLines = recipeLines.filter((l) => l.trim().length > 0)
+        const nonEmptyRecipeLines = recipeLines.filter(
+          (l) => l.trim().length > 0,
+        )
         const minIndent =
           nonEmptyRecipeLines.length === 0
             ? 0
-            : Math.min(...nonEmptyRecipeLines.map((l) => /^[ \t]*/.exec(l)![0].length))
-        recipe = recipeLines.map((l) => l.slice(minIndent)).join("\n").trim()
+            : Math.min(
+                ...nonEmptyRecipeLines.map((l) => /^[ \t]*/.exec(l)![0].length),
+              )
+        recipe = recipeLines
+          .map((l) => l.slice(minIndent))
+          .join("\n")
+          .trim()
         j = recipeEnd + 1
         continue
       }
@@ -163,7 +184,10 @@ export function parseBindings(planText: string): ParseResult {
 
     const validation = validateRecipe(recipe, egress)
     if (validation.status !== "ok") {
-      return { status: "error", reason: `binding '${name}': ${validation.reason}` }
+      return {
+        status: "error",
+        reason: `binding '${name}': ${validation.reason}`,
+      }
     }
 
     bindings.push({

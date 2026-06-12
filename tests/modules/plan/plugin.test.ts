@@ -16,13 +16,18 @@ describe("AppVerkPlanPlugin", () => {
 
   it("registers veles metadata in the factory body", async () => {
     await AppVerkPlanPlugin(fakeInput())
-    expect(getAgentMetadataRegistry().map((a) => a.name)).toContain("Veles - Planner")
+    expect(getAgentMetadataRegistry().map((a) => a.name)).toContain(
+      "Veles - Planner",
+    )
   })
 
   it("registers the veles agent as mode all with the allow-list in its prompt", async () => {
     const hooks = await AppVerkPlanPlugin(fakeInput())
     const config: {
-      agent?: Record<string, { mode?: string; prompt?: string; tools?: Record<string, boolean> }>
+      agent?: Record<
+        string,
+        { mode?: string; prompt?: string; tools?: Record<string, boolean> }
+      >
     } = {}
     await hooks.config?.(config as never)
     const agent = config.agent?.["Veles - Planner"]
@@ -32,7 +37,9 @@ describe("AppVerkPlanPlugin", () => {
 
   it("enables exactly the coordinator's canonical dispatch tools via the AgentConfig.tools map", async () => {
     const hooks = await AppVerkPlanPlugin(fakeInput())
-    const config: { agent?: Record<string, { tools?: Record<string, boolean> }> } = {}
+    const config: {
+      agent?: Record<string, { tools?: Record<string, boolean> }>
+    } = {}
     await hooks.config?.(config as never)
     const tools = config.agent?.["Veles - Planner"]?.tools
     // Assert against the imported canonical names rather than literals: if the
@@ -43,7 +50,9 @@ describe("AppVerkPlanPlugin", () => {
       expect(tools?.[name]).toBe(true)
     }
     // And nothing extra is enabled beyond the canonical dispatch set.
-    expect(Object.keys(tools ?? {}).sort()).toEqual([...DISPATCH_TOOL_NAMES].sort())
+    expect(Object.keys(tools ?? {}).sort()).toEqual(
+      [...DISPATCH_TOOL_NAMES].sort(),
+    )
   })
 
   it("warns exactly once on session.created when serena is absent", async () => {

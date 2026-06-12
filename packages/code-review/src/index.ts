@@ -23,7 +23,12 @@ function injectPreAnalysis(content: string): string {
   }
 
   const endIndex = match[0].length
-  return content.slice(0, endIndex) + PRE_ANALYSIS_BLOCK + "\n" + content.slice(endIndex)
+  return (
+    content.slice(0, endIndex) +
+    PRE_ANALYSIS_BLOCK +
+    "\n" +
+    content.slice(endIndex)
+  )
 }
 
 function loadMarkdownFile(name: string): string {
@@ -37,7 +42,7 @@ function loadMarkdownFile(name: string): string {
   } catch {
     throw new Error(
       `Markdown asset not found: ${name} (looked in ${filePath}). ` +
-        `Ensure the package is built so that copy-assets.mjs copies assets into dist/.`
+        `Ensure the package is built so that copy-assets.mjs copies assets into dist/.`,
     )
   }
 }
@@ -91,7 +96,8 @@ const AGENTS: { name: string; description: string; path: string }[] = [
   },
   {
     name: "feedback-analyzer",
-    description: "Analyze single PR comment for validity and generate response if needed.",
+    description:
+      "Analyze single PR comment for validity and generate response if needed.",
     path: "agents/feedback-analyzer.md",
   },
   {
@@ -129,12 +135,14 @@ const AGENTS: { name: string; description: string; path: string }[] = [
 const COMMANDS: { name: string; description: string; path: string }[] = [
   {
     name: "review",
-    description: "Perform comprehensive code review for security, performance, architecture, and maintainability.",
+    description:
+      "Perform comprehensive code review for security, performance, architecture, and maintainability.",
     path: "commands/review.md",
   },
   {
     name: "fix",
-    description: "Apply fix for a single code review issue with verification and reporting.",
+    description:
+      "Apply fix for a single code review issue with verification and reporting.",
     path: "commands/fix.md",
   },
   {
@@ -145,7 +153,8 @@ const COMMANDS: { name: string; description: string; path: string }[] = [
   },
   {
     name: "analyze-feedback",
-    description: "Analyze PR feedback comments, classify them, and generate response drafts.",
+    description:
+      "Analyze PR feedback comments, classify them, and generate response drafts.",
     path: "commands/analyze-feedback.md",
   },
 ]

@@ -1,4 +1,11 @@
-import { copyFileSync, cpSync, existsSync, mkdirSync, readdirSync, rmSync } from "node:fs"
+import {
+  copyFileSync,
+  cpSync,
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  rmSync,
+} from "node:fs"
 import path from "node:path"
 
 /**
@@ -20,7 +27,11 @@ export function copyAssets(manifest, packageRoot) {
     // Guard the destination too: `dir`/`glob` entries now wipe `dst` before
     // copying, so a malformed `to` must never resolve outside the package root.
     const dstRelative = path.relative(resolvedRoot, dst)
-    if (dstRelative === "" || dstRelative.startsWith("..") || path.isAbsolute(dstRelative)) {
+    if (
+      dstRelative === "" ||
+      dstRelative.startsWith("..") ||
+      path.isAbsolute(dstRelative)
+    ) {
       throw new Error(`Path traversal detected in destination: ${entry.to}`)
     }
 
@@ -54,7 +65,9 @@ export function copyAssets(manifest, packageRoot) {
         const dstFile = path.join(dst, file)
         copyFileSync(srcFile, dstFile)
       }
-      console.log(`Copied ${files.length} files from ${entry.from} → ${entry.to}`)
+      console.log(
+        `Copied ${files.length} files from ${entry.from} → ${entry.to}`,
+      )
       copiedCount += files.length
     } else {
       mkdirSync(path.dirname(dst), { recursive: true })

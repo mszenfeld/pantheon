@@ -1,5 +1,9 @@
 import { isAbsolute, resolve } from "node:path";
-import { STRIBOG_AGENT_KEY, STRIBOG_ALLOWED_TOOL_IDS, STRIBOG_EDIT_BUDGET } from "./stribog.metadata.js";
+import {
+  STRIBOG_AGENT_KEY,
+  STRIBOG_ALLOWED_TOOL_IDS,
+  STRIBOG_EDIT_BUDGET
+} from "./stribog.metadata.js";
 const TOOL_DENIED = "STRIBOG_TOOL_DENIED";
 const SCOPE_VIOLATION = "STRIBOG_SCOPE_VIOLATION";
 function makeStribogToolHook(deps) {
@@ -38,7 +42,8 @@ function makeStribogToolHook(deps) {
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : "";
-      if (message.startsWith(TOOL_DENIED) || message.startsWith(SCOPE_VIOLATION)) throw error;
+      if (message.startsWith(TOOL_DENIED) || message.startsWith(SCOPE_VIOLATION))
+        throw error;
     }
   };
   const clearSession = (sessionID) => {

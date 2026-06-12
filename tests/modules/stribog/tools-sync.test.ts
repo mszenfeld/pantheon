@@ -16,7 +16,9 @@ import { STRIBOG_ALLOWED_TOOL_IDS } from "../../../src/modules/stribog/stribog.m
 function deriveRuntimeIds(tools: readonly string[]) {
   const isBash = (t: string) => t.startsWith("Bash(")
   const hasBash = tools.some(isBash)
-  const structured = new Set(tools.filter((t) => !isBash(t)).map((t) => t.toLowerCase()))
+  const structured = new Set(
+    tools.filter((t) => !isBash(t)).map((t) => t.toLowerCase()),
+  )
   return { hasBash, structured }
 }
 

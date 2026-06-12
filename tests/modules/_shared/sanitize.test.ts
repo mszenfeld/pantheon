@@ -3,7 +3,7 @@ import {
   deriveReportPath,
   neutralizeUntrustedOutput,
   normalizeVariantSuffix,
-} from "../../../src/modules/coordinator/sanitize.js"
+} from "../../../src/modules/_shared/sanitize.js"
 import { VARIANTS } from "../../../src/modules/qa/index.js"
 
 describe("neutralizeUntrustedOutput", () => {
@@ -23,7 +23,9 @@ describe("neutralizeUntrustedOutput", () => {
 
   it("strips ASCII control characters but preserves \\n, \\r, \\t", () => {
     const input = "line1\nline2\r\nline3\tcol\x00\x07\x1f end"
-    expect(neutralizeUntrustedOutput(input)).toBe("line1\nline2\r\nline3\tcol end")
+    expect(neutralizeUntrustedOutput(input)).toBe(
+      "line1\nline2\r\nline3\tcol end",
+    )
   })
 
   it("strips DEL (0x7F)", () => {
@@ -50,7 +52,8 @@ describe("neutralizeUntrustedOutput", () => {
   })
 
   it("leaves regular ASCII text untouched", () => {
-    const input = "Just a normal report line with numbers 12345 and punctuation."
+    const input =
+      "Just a normal report line with numbers 12345 and punctuation."
     expect(neutralizeUntrustedOutput(input)).toBe(input)
   })
 
@@ -143,7 +146,7 @@ describe("normalizeVariantSuffix", () => {
   })
 
   it("rewrites occurrences inside an error message", () => {
-    const error = 'Unknown agent: zmora-fe (timeout after 5m)'
+    const error = "Unknown agent: zmora-fe (timeout after 5m)"
     expect(normalizeVariantSuffix(error)).toBe(
       "Unknown agent: zmora (timeout after 5m)",
     )
@@ -178,9 +181,7 @@ describe("normalizeVariantSuffix", () => {
     // a hyphen-separated phrase still matches. The logical-name promise is
     // "the literal substring `zmora-fe` / `zmora-be` never reaches
     // user-facing output" — this aligns with that promise.
-    expect(normalizeVariantSuffix("my-zmora-fe-runner")).toBe(
-      "my-zmora-runner",
-    )
+    expect(normalizeVariantSuffix("my-zmora-fe-runner")).toBe("my-zmora-runner")
   })
 
   it("rewrites inside multi-line / report-shaped strings", () => {
@@ -200,8 +201,8 @@ describe("normalizeVariantSuffix", () => {
     )
   })
 
-  // Sync guard: pins coordinator/sanitize.ts's VARIANT_SUFFIXES to qa's
-  // VARIANTS. The two lists are intentionally duplicated (no coordinator → qa
+  // Sync guard: pins _shared/sanitize.ts's VARIANT_SUFFIXES to qa's
+  // VARIANTS. The two lists are intentionally duplicated (no _shared → qa
   // import edge — see the comment on VARIANT_SUFFIXES in sanitize.ts), so this
   // test is the only thing keeping them from drifting. If qa adds a fourth
   // dispatchable variant, every `zmora-<variant>` must still collapse to the
@@ -233,10 +234,7 @@ describe("deriveReportPath", () => {
   })
 
   it("accepts a bare basename (no directory prefix)", () => {
-    const out = deriveReportPath(
-      "2026-05-18-quick-test-plan.md",
-      "2026-05-18",
-    )
+    const out = deriveReportPath("2026-05-18-quick-test-plan.md", "2026-05-18")
     expect(out).toBe("docs/testing/reports/2026-05-18-quick-report.md")
   })
 

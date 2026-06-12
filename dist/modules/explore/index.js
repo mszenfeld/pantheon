@@ -1,5 +1,8 @@
 import { registerAgentMetadata } from "../agent-registry/index.js";
-import { applyModelOverride, captureUserModels } from "../_shared/apply-model-override.js";
+import {
+  applyModelOverride,
+  captureUserModels
+} from "../_shared/apply-model-override.js";
 import { TRIGLAV_AGENT_KEY, triglavSpecialistInfo } from "./triglav.metadata.js";
 import { buildTriglavPrompt } from "./prompt.js";
 import { isSerenaAvailable } from "../_shared/serena-detect.js";
@@ -21,7 +24,13 @@ const AppVerkExplorePlugin = async ({ client }) => {
           return buildTriglavPrompt();
         }
       };
-      applyModelOverride(config, "triglav", TRIGLAV_AGENT_KEY, void 0, userModels);
+      applyModelOverride(
+        config,
+        "triglav",
+        TRIGLAV_AGENT_KEY,
+        void 0,
+        userModels
+      );
       serenaNotifier.markSerenaMissing(!isSerenaAvailable(config));
     },
     event: serenaNotifier.onEvent

@@ -116,13 +116,17 @@ export function makeRunBash(
           if (outputCapped) return { buf, bytes: accBytes } // already aborting; drop
           const remaining = maxOutputBytes - accBytes
           if (chunk.length <= remaining) {
-            return { buf: buf + chunk.toString(), bytes: accBytes + chunk.length }
+            return {
+              buf: buf + chunk.toString(),
+              bytes: accBytes + chunk.length,
+            }
           }
           // This chunk crosses the ceiling: keep only the bytes that fit,
           // then trigger the early kill. Slice on the Buffer (byte-accurate)
           // before decoding so we never retain more than the cap.
           outputCapped = true
-          const kept = remaining > 0 ? buf + chunk.subarray(0, remaining).toString() : buf
+          const kept =
+            remaining > 0 ? buf + chunk.subarray(0, remaining).toString() : buf
           controller.abort()
           return { buf: kept, bytes: maxOutputBytes }
         }
@@ -161,12 +165,15 @@ export function makeRunBash(
           escalate.unref?.()
         }
         if (controller.signal.aborted) onAbort()
-        else controller.signal.addEventListener("abort", onAbort, { once: true })
+        else
+          controller.signal.addEventListener("abort", onAbort, { once: true })
 
         // Build the abort marker: the output-cap kill takes precedence over
         // the generic timeout marker so the cause is unambiguous downstream.
         const abortMarker = (): string =>
-          outputCapped ? `\n[killed: output exceeded ${maxOutputBytes} bytes]` : "\n[killed by timeout]"
+          outputCapped
+            ? `\n[killed: output exceeded ${maxOutputBytes} bytes]`
+            : "\n[killed by timeout]"
         child.on("close", (code, sig) => {
           // Treat the timeout/cap flags as the source of truth: if our timer
           // fired OR we hit the output ceiling we surface 124 regardless of
@@ -183,7 +190,8 @@ export function makeRunBash(
           // is fully wired. Surface AbortError as a timeout (124) to keep
           // the contract uniform with the `close`-path branch above.
           const isAbort =
-            (err as NodeJS.ErrnoException).code === "ABORT_ERR" || err.name === "AbortError"
+            (err as NodeJS.ErrnoException).code === "ABORT_ERR" ||
+            err.name === "AbortError"
           if (isAbort || timedOut || outputCapped) {
             resolve({ exitCode: 124, stdout, stderr: stderr + abortMarker() })
             return

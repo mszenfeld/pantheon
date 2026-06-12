@@ -32,7 +32,10 @@ function makeRunBash(opts = {}) {
           if (outputCapped) return { buf, bytes: accBytes };
           const remaining = maxOutputBytes - accBytes;
           if (chunk.length <= remaining) {
-            return { buf: buf + chunk.toString(), bytes: accBytes + chunk.length };
+            return {
+              buf: buf + chunk.toString(),
+              bytes: accBytes + chunk.length
+            };
           }
           outputCapped = true;
           const kept = remaining > 0 ? buf + chunk.subarray(0, remaining).toString() : buf;
@@ -64,7 +67,8 @@ function makeRunBash(opts = {}) {
           escalate.unref?.();
         };
         if (controller.signal.aborted) onAbort();
-        else controller.signal.addEventListener("abort", onAbort, { once: true });
+        else
+          controller.signal.addEventListener("abort", onAbort, { once: true });
         const abortMarker = () => outputCapped ? `
 [killed: output exceeded ${maxOutputBytes} bytes]` : "\n[killed by timeout]";
         child.on("close", (code, sig) => {

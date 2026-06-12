@@ -20,7 +20,12 @@ export function makeBashGate(client: Client, allowed: string[]) {
     if (!(await isCoordinatorSession(input.sessionID, client))) return
     const command = String(output.args?.command ?? "")
     const verdict = classifyCoordinatorBash(command, allowed)
-    if (!verdict.allowed) throw buildViolationError({ tool: "bash", command, reason: "not-allowlisted" })
+    if (!verdict.allowed)
+      throw buildViolationError({
+        tool: "bash",
+        command,
+        reason: "not-allowlisted",
+      })
   }
 }
 

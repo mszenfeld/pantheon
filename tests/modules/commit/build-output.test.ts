@@ -3,7 +3,9 @@ import path from "node:path"
 import { fileURLToPath, pathToFileURL } from "node:url"
 import { describe, expect, it } from "vitest"
 
-const repoRoot = path.resolve(fileURLToPath(new URL("../../..", import.meta.url)))
+const repoRoot = path.resolve(
+  fileURLToPath(new URL("../../..", import.meta.url)),
+)
 
 describe("commit build output", () => {
   it("ships the packaged commit markdown prompt and the lazy loader resolves it from dist", async () => {
@@ -15,9 +17,13 @@ describe("commit build output", () => {
 
     const promptContent = readFileSync(promptPath, "utf8")
     expect(promptContent).toContain("## Context")
-    expect(promptContent).toContain("Use the `av_commit` tool to create the commit.")
+    expect(promptContent).toContain(
+      "Use the `av_commit` tool to create the commit.",
+    )
 
-    const { AppVerkCommitPlugin } = await import(pathToFileURL(builtPluginPath).href)
+    const { AppVerkCommitPlugin } = await import(
+      pathToFileURL(builtPluginPath).href
+    )
     const plugin = await AppVerkCommitPlugin({} as never)
     const config = {} as {
       command?: Record<string, { description?: string; template: string }>

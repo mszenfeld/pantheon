@@ -18,7 +18,11 @@ describe("Perun tool sync", () => {
 
   it("includes the three background tools", () => {
     expect(PERUN_TOOLS).toEqual(
-      expect.arrayContaining(["dispatch_background", "poll_background", "wait_background"]),
+      expect.arrayContaining([
+        "dispatch_background",
+        "poll_background",
+        "wait_background",
+      ]),
     )
   })
 })

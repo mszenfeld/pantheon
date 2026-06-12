@@ -5,9 +5,7 @@ import type { SessionNotificationConfig } from "./session-notification.js"
 // surface (env vars aren't remote input), but keeps log output consistent with
 // the rest of the plugin's sink-specific neutralisation (CWE-117).
 function safeForLog(s: string): string {
-  return s
-    .replace(/[\x00-\x1F\x7F-\x9F]/g, "?")
-    .replace(/[‪-‮⁦-⁩]/g, "")
+  return s.replace(/[\x00-\x1F\x7F-\x9F]/g, "?").replace(/[‪-‮⁦-⁩]/g, "")
 }
 
 export const DEFAULT_SESSION_NOTIFICATION_CONFIG: SessionNotificationConfig = {
@@ -21,8 +19,12 @@ export const DEFAULT_SESSION_NOTIFICATION_CONFIG: SessionNotificationConfig = {
   soundPath: "/System/Library/Sounds/Glass.aiff",
 }
 
-export function readConfigFromEnv(env: Record<string, string | undefined>): SessionNotificationConfig {
-  const config: SessionNotificationConfig = { ...DEFAULT_SESSION_NOTIFICATION_CONFIG }
+export function readConfigFromEnv(
+  env: Record<string, string | undefined>,
+): SessionNotificationConfig {
+  const config: SessionNotificationConfig = {
+    ...DEFAULT_SESSION_NOTIFICATION_CONFIG,
+  }
 
   if (typeof env.AV_PANTHEON_NOTIFY_TITLE === "string") {
     config.title = env.AV_PANTHEON_NOTIFY_TITLE

@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest"
-import { buildSkillCatalog, parseSkillFrontmatter } from "../src/skill-catalog.js"
+import {
+  buildSkillCatalog,
+  parseSkillFrontmatter,
+} from "../src/skill-catalog.js"
 
 describe("parseSkillFrontmatter", () => {
   it("parses frontmatter with name, description, and activation", () => {
@@ -48,7 +51,9 @@ import { isToolSubset } from "../src/skill-catalog.js"
 
 describe("isToolSubset", () => {
   it("returns true for an exact match", () => {
-    expect(isToolSubset(["Read", "Write"], ["Read", "Write", "Bash"])).toBe(true)
+    expect(isToolSubset(["Read", "Write"], ["Read", "Write", "Bash"])).toBe(
+      true,
+    )
   })
 
   it("returns true when subset is empty", () => {
@@ -91,9 +96,7 @@ describe("buildSkillCatalog", () => {
   })
 
   it("parses frontmatter fields", () => {
-    const catalog = buildSkillCatalog([
-      "../python-developer/dist/skills",
-    ])
+    const catalog = buildSkillCatalog(["../python-developer/dist/skills"])
 
     const skill = catalog.get("python-coding-standards")!
     expect(skill.name).toBe("python-coding-standards")
@@ -112,9 +115,7 @@ describe("buildSkillCatalog", () => {
   })
 
   it("gracefully handles missing directories", () => {
-    const catalog = buildSkillCatalog([
-      "../nonexistent/dist/skills",
-    ])
+    const catalog = buildSkillCatalog(["../nonexistent/dist/skills"])
     expect(catalog.size).toBe(0)
   })
 })

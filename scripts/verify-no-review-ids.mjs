@@ -3,7 +3,7 @@
  * Verifies that per-review code-review issue IDs do NOT leak into source or
  * test files. See AGENTS.md → "Code Review Artefacts".
  *
- * IDs like SEC-001, MAINT-006, PERF-001, ARCH-002, COMP-003, COMPOSITE-3 are
+ * IDs like SEC-NNN, MAINT-NNN, PERF-NNN, ARCH-NNN, COMP-NNN, COMPOSITE-N are
  * generated per-review by the `/review` workflow and live in docs/reviews/*.md.
  * They are context-bound to a single report and become noise — and a live
  * collision risk — the moment that report is regenerated or deleted. The
@@ -21,7 +21,8 @@ import process from "node:process"
 
 // Per-review ID prefixes emitted by the `/review` workflow. CWE/CVE/OWASP are
 // deliberately absent — those are load-bearing external identifiers.
-const REVIEW_ID = /\b(?:SEC|MAINT|PERF|ARCH|COMP|COMPOSITE|REL|OPS|DOC|TEST|BUG)-\d+/
+const REVIEW_ID =
+  /\b(?:SEC|MAINT|PERF|ARCH|COMP|COMPOSITE|REL|OPS|DOC|TEST|BUG)-\d+/
 
 // Exceptions from AGENTS.md — these IDs are *system documentation*, not review
 // residue. Paths are matched as suffixes against the repo-relative path.
@@ -37,7 +38,9 @@ const EXCEPTED_PATHS = [
 const SCANNED_EXTENSIONS = [".ts", ".tsx", ".js", ".jsx", ".mjs"]
 
 function isExcepted(path) {
-  return EXCEPTED_PATHS.some((excepted) => path === excepted || path.endsWith(`/${excepted}`))
+  return EXCEPTED_PATHS.some(
+    (excepted) => path === excepted || path.endsWith(`/${excepted}`),
+  )
 }
 
 function isScanned(path) {
@@ -70,19 +73,30 @@ for (const path of trackedFiles) {
   contents.split("\n").forEach((line, index) => {
     const match = REVIEW_ID.exec(line)
     if (match) {
-      violations.push({ path, line: index + 1, id: match[0], text: line.trim() })
+      violations.push({
+        path,
+        line: index + 1,
+        id: match[0],
+        text: line.trim(),
+      })
     }
   })
 }
 
 if (violations.length > 0) {
   console.error("\n❌ PER-REVIEW ISSUE IDs FOUND IN SOURCE/TEST")
-  console.error("AGENTS.md → Code Review Artefacts: never write code-review issue IDs into source or test files.")
-  console.error("Keep the technical rationale; drop the per-review ID (it lives in git history + docs/reviews/).\n")
+  console.error(
+    "AGENTS.md → Code Review Artefacts: never write code-review issue IDs into source or test files.",
+  )
+  console.error(
+    "Keep the technical rationale; drop the per-review ID (it lives in git history + docs/reviews/).\n",
+  )
   for (const v of violations) {
     console.error(`  ${v.path}:${v.line}  [${v.id}]  ${v.text}`)
   }
-  console.error("\nIf an ID is genuinely system documentation, add it to EXCEPTED_PATHS in scripts/verify-no-review-ids.mjs.")
+  console.error(
+    "\nIf an ID is genuinely system documentation, add it to EXCEPTED_PATHS in scripts/verify-no-review-ids.mjs.",
+  )
   process.exit(1)
 }
 

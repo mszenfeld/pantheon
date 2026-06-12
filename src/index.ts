@@ -12,13 +12,15 @@ import { AppVerkSwiftDeveloperPlugin } from "../packages/swift-developer/dist/in
 import { AppVerkCoordinatorPlugin } from "./modules/coordinator/index.js"
 import { AppVerkCoordinatorPolicyPlugin } from "./modules/coordinator-policy/index.js"
 import { AppVerkPantheonPlugin } from "./hooks/session-notification/plugin.js"
-import { AppVerkAgentRosterPlugin, applyRosterPolicy } from "./modules/agent-roster/index.js"
+import {
+  AppVerkAgentRosterPlugin,
+  applyRosterPolicy,
+} from "./modules/agent-roster/index.js"
 type PluginHooks = Awaited<ReturnType<Plugin>>
 type HookKey = Exclude<keyof PluginHooks, "config" | "tool">
 type MergedHook = (...args: unknown[]) => Promise<void>
 type ToolExecuteBefore = NonNullable<Hooks["tool.execute.before"]>
 type ToolExecuteAfter = NonNullable<Hooks["tool.execute.after"]>
-
 
 const defaultPluginFactories: Plugin[] = [
   AppVerkCommitPlugin,
@@ -92,10 +94,16 @@ function mergeToolExecuteAfter(plugins: PluginHooks[]) {
 // site instead of silently dropping return values at runtime. Do not delete —
 // removing this guard removes the only compile-time guarantee against that bug.
 type FunctionHookKey = {
-  [K in HookKey]: NonNullable<PluginHooks[K]> extends (...args: never[]) => unknown ? K : never
+  [K in HookKey]: NonNullable<PluginHooks[K]> extends (
+    ...args: never[]
+  ) => unknown
+    ? K
+    : never
 }[HookKey]
 type AssertVoidReturn<K extends FunctionHookKey> =
-  ReturnType<NonNullable<PluginHooks[K]> & ((...args: never[]) => unknown)> extends Promise<void>
+  ReturnType<
+    NonNullable<PluginHooks[K]> & ((...args: never[]) => unknown)
+  > extends Promise<void>
     ? true
     : never
 // Compile-time-only guard; see comment above. Name is underscore-prefixed
@@ -126,7 +134,10 @@ function mergeHook<K extends HookKey>(plugins: PluginHooks[], key: K) {
   }
 }
 
-function isHookKey(key: keyof PluginHooks, value: PluginHooks[keyof PluginHooks]): key is HookKey {
+function isHookKey(
+  key: keyof PluginHooks,
+  value: PluginHooks[keyof PluginHooks],
+): key is HookKey {
   return key !== "config" && key !== "tool" && typeof value === "function"
 }
 
@@ -138,7 +149,9 @@ function assignHook<K extends HookKey>(
   merged[key] = hook
 }
 
-export function createAppVerkPlugins(pluginFactories: Plugin[] = defaultPluginFactories): Plugin {
+export function createAppVerkPlugins(
+  pluginFactories: Plugin[] = defaultPluginFactories,
+): Plugin {
   return async (context) => {
     const plugins = await Promise.all(
       pluginFactories.map((factory) => factory(context)),

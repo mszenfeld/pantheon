@@ -80,7 +80,9 @@ describe("IdleScheduler", () => {
     const onFire = vi.fn(async () => {
       throw new Error("boom")
     })
-    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined)
+    const errorSpy = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => undefined)
     const s = new IdleScheduler(100, onFire)
     s.schedule("ses_a")
     await vi.advanceTimersByTimeAsync(100)
@@ -95,7 +97,9 @@ describe("IdleScheduler", () => {
     const onFire = vi.fn(async () => {
       throw boom
     })
-    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined)
+    const errorSpy = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => undefined)
     const s = new IdleScheduler(100, onFire)
     s.schedule("ses_a")
     await vi.advanceTimersByTimeAsync(100)
@@ -103,7 +107,10 @@ describe("IdleScheduler", () => {
     await Promise.resolve()
     await Promise.resolve()
     expect(errorSpy).toHaveBeenCalledTimes(1)
-    expect(errorSpy).toHaveBeenCalledWith("[pantheon/idle-scheduler] onFire rejected", boom)
+    expect(errorSpy).toHaveBeenCalledWith(
+      "[pantheon/idle-scheduler] onFire rejected",
+      boom,
+    )
     errorSpy.mockRestore()
   })
 })

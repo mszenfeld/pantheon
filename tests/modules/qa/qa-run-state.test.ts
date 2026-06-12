@@ -3,13 +3,19 @@ import { QaRunState } from "../../../src/modules/qa/qa-run-state.js"
 import type { ParsedBinding } from "../../../src/modules/qa/binding-parser.js"
 
 const fakeBinding: ParsedBinding = {
-  name: "QA_BIND_TOKEN", type: "secret", description: "test",
-  inputs: ["X"], egress: "$X", recipe: "curl \"$X\""
+  name: "QA_BIND_TOKEN",
+  type: "secret",
+  description: "test",
+  inputs: ["X"],
+  egress: "$X",
+  recipe: 'curl "$X"',
 }
 
 describe("QaRunState", () => {
   let state: QaRunState
-  beforeEach(() => { state = new QaRunState() })
+  beforeEach(() => {
+    state = new QaRunState()
+  })
 
   it("returns undefined when parent not initialized", () => {
     expect(state.getBindings("p1")).toBeUndefined()

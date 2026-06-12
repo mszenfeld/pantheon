@@ -83,7 +83,7 @@ interface CollectBackgroundInput {
      * always thread `context.sessionID`, so they have no reason to. Keeping the
      * fail-open path behind an explicit opt-in (rather than inferring it from a
      * missing id) means a real handler that forgets to pass an id fails closed,
-     * not open. SEC-001.
+     * not open.
      */
     allowUnscopedCollect?: boolean;
 }

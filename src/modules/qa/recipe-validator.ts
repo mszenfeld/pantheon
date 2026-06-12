@@ -32,7 +32,15 @@ const DSN_COMMANDS = new Set(["psql", "sqlite3"])
 // Sqlite3 dot-commands that escape to shell (`.shell`, `.system`) or read
 // arbitrary files (`.read`) — bypass any positional-arg validation by
 // embedding the malicious action in the SQL initialiser.
-const SQLITE_FORBIDDEN_DOT_COMMANDS = [".read", ".shell", ".system", ".import", ".save", ".output", ".log"]
+const SQLITE_FORBIDDEN_DOT_COMMANDS = [
+  ".read",
+  ".shell",
+  ".system",
+  ".import",
+  ".save",
+  ".output",
+  ".log",
+]
 
 // Maximum recipe length. Used to bound the work the validator's regex
 // pipeline does on adversarial input. 16 KiB is roughly 4× the
@@ -51,12 +59,18 @@ const FORBIDDEN_TOKENS: { pattern: RegExp; label: string }[] = [
   { pattern: /(?:^|\s)\.\s+\//, label: ". /path (dot-sourcing)" },
   { pattern: /\bexport\b/, label: "export" },
   { pattern: /\bunset\b/, label: "unset" },
-  { pattern: /\b(declare|local|readonly|set)\s/, label: "declare/local/readonly/set" },
+  {
+    pattern: /\b(declare|local|readonly|set)\s/,
+    label: "declare/local/readonly/set",
+  },
   { pattern: /\bfunction\s/, label: "function" },
 ]
 
 const CURL_FORBIDDEN_FLAGS: { pattern: RegExp; label: string }[] = [
-  { pattern: /(?:^|\s)(?:--upload-file|-T)(?:\s|=)/, label: "--upload-file/-T" },
+  {
+    pattern: /(?:^|\s)(?:--upload-file|-T)(?:\s|=)/,
+    label: "--upload-file/-T",
+  },
   { pattern: /(?:^|\s)(?:--form|-F)\s+["']?@/, label: "--form/-F with @file" },
   {
     pattern: /(?:^|\s)(?:--data|--data-binary|--data-raw|-d)\s+["']?@/,
@@ -78,11 +92,17 @@ const CURL_FORBIDDEN_FLAGS: { pattern: RegExp; label: string }[] = [
     pattern: /(?:^|\s)(?:--remote-name-all|-J|--remote-header-name)\b/,
     label: "remote-name flags",
   },
-  { pattern: /(?:^|\s)(?:--write-out|-w)\s+["']?@/, label: "--write-out/-w with @file" },
+  {
+    pattern: /(?:^|\s)(?:--write-out|-w)\s+["']?@/,
+    label: "--write-out/-w with @file",
+  },
   // `--next` chains a second request whose URL bypasses the
   // single-URL extractCurlURL check. Refuse outright — recipes are
   // single-request by contract.
-  { pattern: /(?:^|\s)--next(?:\s|$)/, label: "--next (chains additional request)" },
+  {
+    pattern: /(?:^|\s)--next(?:\s|$)/,
+    label: "--next (chains additional request)",
+  },
   // `--url` is an alternative way to specify a target URL. Allowing
   // it would require us to validate every flag-value pair against the egress
   // host. Simpler: forbid it; the bare positional URL is the canonical form.
@@ -110,7 +130,10 @@ function splitOnUnquotedSeparators(text: string): string[] {
         current = ""
         continue
       }
-      if ((c === "&" && text[i + 1] === "&") || (c === "|" && text[i + 1] === "|")) {
+      if (
+        (c === "&" && text[i + 1] === "&") ||
+        (c === "|" && text[i + 1] === "|")
+      ) {
         out.push(current)
         current = ""
         i++
@@ -230,7 +253,11 @@ function hostOfURL(urlOrTemplate: string): string | null {
   // equality check while curl actually connects to attacker.com. No legitimate
   // recipe needs `user@host`.
   try {
-    const u = new URL(urlOrTemplate.includes("://") ? urlOrTemplate : `scheme://${urlOrTemplate}`)
+    const u = new URL(
+      urlOrTemplate.includes("://")
+        ? urlOrTemplate
+        : `scheme://${urlOrTemplate}`,
+    )
     if (u.username !== "" || u.password !== "") return null
     return u.hostname || null
   } catch {
@@ -268,7 +295,11 @@ function extractDSNTarget(cmd: string): string | null {
 // Allowlist for file-reader path arguments. Anything starting with
 // `/` that isn't one of these is rejected so a recipe can't `tail /etc/passwd`
 // to exfiltrate host files.
-const FILE_READER_ALLOWED_DEV_PATHS = new Set(["/dev/null", "/dev/stdin", "/dev/zero"])
+const FILE_READER_ALLOWED_DEV_PATHS = new Set([
+  "/dev/null",
+  "/dev/stdin",
+  "/dev/zero",
+])
 
 function isAllowedFileReaderArg(token: string): boolean {
   const unquoted = token.replace(/^["']|["']$/g, "")
@@ -290,7 +321,10 @@ function isAllowedFileReaderArg(token: string): boolean {
   return true
 }
 
-export function validateRecipe(recipe: string, egress: string): ValidateRecipeResult {
+export function validateRecipe(
+  recipe: string,
+  egress: string,
+): ValidateRecipeResult {
   // Cap recipe length up-front. The validator runs a pipeline of
   // regexes over the input; a multi-kilobyte adversarial recipe could push
   // worst-case backtracking into the seconds. 16 KiB is comfortably above
@@ -318,16 +352,25 @@ export function validateRecipe(recipe: string, egress: string): ValidateRecipeRe
 
   for (const { pattern, label } of FORBIDDEN_TOKENS) {
     if (pattern.test(stmt)) {
-      return { status: "error", reason: `recipe contains forbidden construct: ${label}` }
+      return {
+        status: "error",
+        reason: `recipe contains forbidden construct: ${label}`,
+      }
     }
   }
 
   if (/(?:^|\s)(?:>|>>|&>|2>>?)(?!\s*\/dev\/null\b)/.test(stmt)) {
-    return { status: "error", reason: "recipe contains redirect to non-/dev/null path" }
+    return {
+      status: "error",
+      reason: "recipe contains redirect to non-/dev/null path",
+    }
   }
 
   if (hasUnquotedBackgroundOperator(stmt)) {
-    return { status: "error", reason: "recipe contains & (background/job-control operator)" }
+    return {
+      status: "error",
+      reason: "recipe contains & (background/job-control operator)",
+    }
   }
 
   const cmds = tokenizePipeline(stmt)
@@ -339,7 +382,10 @@ export function validateRecipe(recipe: string, egress: string): ValidateRecipeRe
     if (head === "curl") {
       for (const { pattern, label } of CURL_FORBIDDEN_FLAGS) {
         if (pattern.test(" " + cmd + " ")) {
-          return { status: "error", reason: `curl uses forbidden flag: ${label}` }
+          return {
+            status: "error",
+            reason: `curl uses forbidden flag: ${label}`,
+          }
         }
       }
     }
@@ -385,7 +431,10 @@ export function validateRecipe(recipe: string, egress: string): ValidateRecipeRe
     if (head === "curl") {
       const url = extractCurlURL(cmd)
       if (url === null) {
-        return { status: "error", reason: "curl invocation without a URL argument" }
+        return {
+          status: "error",
+          reason: "curl invocation without a URL argument",
+        }
       }
       const host = hostOfURL(url)
       if (host !== egressHost) {

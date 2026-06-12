@@ -7,7 +7,10 @@ import type { ToolContext } from "@opencode-ai/plugin"
 import { AppVerkCoordinatorPlugin } from "../../../src/modules/coordinator/index.js"
 import type { SDKClient } from "../../../src/modules/coordinator/sdk-specialist.js"
 import type { DispatchResult } from "../../../src/modules/coordinator/dispatch.js"
-import { assignIssueIds, type Finding } from "../../../src/modules/coordinator/assign-issue-ids.js"
+import {
+  assignIssueIds,
+  type Finding,
+} from "../../../src/modules/coordinator/assign-issue-ids.js"
 
 /**
  * End-to-end integration test for the coordinator plugin. Exercises the public
@@ -59,7 +62,10 @@ function makeAgent(name: string, mode: Agent["mode"]): Agent {
   }
 }
 
-function finishedAssistant(text: string): { info: Message; parts: Array<{ type: string; text?: string }> } {
+function finishedAssistant(text: string): {
+  info: Message
+  parts: Array<{ type: string; text?: string }>
+} {
   const info: Message = {
     id: `msg-${text.slice(0, 6)}`,
     sessionID: "ignored",
@@ -166,9 +172,7 @@ function makeToolContext(sessionID: string): ToolContext {
   } as unknown as ToolContext
 }
 
-async function invokePlugin(
-  client: SDKClient,
-): Promise<{
+async function invokePlugin(client: SDKClient): Promise<{
   dispatchParallel: (
     args: {
       agent: string
@@ -268,8 +272,14 @@ describe("@perun QA flow integration (plugin entry point)", () => {
         makeAgent("perun", "primary"),
       ],
       sessions: {
-        "zmora-fe": { sessionId: "fe-session", finalText: JSON.stringify(FE_FINDING) },
-        "zmora-be": { sessionId: "be-session", finalText: JSON.stringify(BE_FINDING) },
+        "zmora-fe": {
+          sessionId: "fe-session",
+          finalText: JSON.stringify(FE_FINDING),
+        },
+        "zmora-be": {
+          sessionId: "be-session",
+          finalText: JSON.stringify(BE_FINDING),
+        },
       },
     })
 
@@ -342,7 +352,9 @@ describe("@perun QA flow integration (plugin entry point)", () => {
     // (assign_issue_ids tool) and produces the same deterministic ordering.
     // The FE finding repeats twice because both FE tasks return the same
     // canned response; the BE finding appears once.
-    const rawFindings: Finding[] = results.map((r) => JSON.parse(r.result) as Finding)
+    const rawFindings: Finding[] = results.map(
+      (r) => JSON.parse(r.result) as Finding,
+    )
     const sorted = sortBySeverity(rawFindings)
 
     const rawWithIds = await plugin.assignIssueIds(
@@ -369,13 +381,18 @@ describe("@perun QA flow integration (plugin entry point)", () => {
         makeAgent("zmora-be", "subagent"),
       ],
       sessions: {
-        "zmora-fe": { sessionId: "fe-session", finalText: JSON.stringify(FE_FINDING) },
+        "zmora-fe": {
+          sessionId: "fe-session",
+          finalText: JSON.stringify(FE_FINDING),
+        },
       },
     })
 
     // Override session.create to return an empty id specifically for the BE variant.
     const originalCreate = fake.client.session.create.bind(fake.client.session)
-    fake.client.session.create = (async (options: { body: { parentID: string; title: string } }) => {
+    fake.client.session.create = (async (options: {
+      body: { parentID: string; title: string }
+    }) => {
       if (options.body.title.endsWith("dispatch to zmora-be")) {
         fake.calls.sessionCreate.push(options)
         return { data: { id: "" } }
@@ -423,8 +440,14 @@ describe("@perun QA flow integration (plugin entry point)", () => {
           makeAgent("zmora-be", "subagent"),
         ],
         sessions: {
-          "zmora-fe": { sessionId: "fe-session", finalText: JSON.stringify(FE_FINDING) },
-          "zmora-be": { sessionId: "be-session", finalText: JSON.stringify(BE_FINDING) },
+          "zmora-fe": {
+            sessionId: "fe-session",
+            finalText: JSON.stringify(FE_FINDING),
+          },
+          "zmora-be": {
+            sessionId: "be-session",
+            finalText: JSON.stringify(BE_FINDING),
+          },
         },
       })
       const plugin = await invokePlugin(fake.client)
@@ -532,8 +555,14 @@ describe("@perun QA flow integration (plugin entry point)", () => {
           makeAgent("zmora-be", "subagent"),
         ],
         sessions: {
-          "zmora-fe": { sessionId: "fe-session", finalText: JSON.stringify(FE_FINDING) },
-          "zmora-be": { sessionId: "be-session", finalText: JSON.stringify(BE_FINDING) },
+          "zmora-fe": {
+            sessionId: "fe-session",
+            finalText: JSON.stringify(FE_FINDING),
+          },
+          "zmora-be": {
+            sessionId: "be-session",
+            finalText: JSON.stringify(BE_FINDING),
+          },
         },
       })
       const plugin = await invokePlugin(fake.client)
@@ -580,7 +609,10 @@ describe("@perun QA flow integration (plugin entry point)", () => {
           makeAgent("zmora-be", "subagent"),
         ],
         sessions: {
-          "zmora-be": { sessionId: "be-session", finalText: JSON.stringify(BE_FINDING) },
+          "zmora-be": {
+            sessionId: "be-session",
+            finalText: JSON.stringify(BE_FINDING),
+          },
         },
       })
       const plugin = await invokePlugin(fake.client)
@@ -616,14 +648,21 @@ describe("@perun QA flow integration (plugin entry point)", () => {
       const fake = makeFakeClient({
         agents: [makeAgent("zmora-be", "subagent")],
         sessions: {
-          "zmora-be": { sessionId: "be-session", finalText: JSON.stringify(BE_FINDING) },
+          "zmora-be": {
+            sessionId: "be-session",
+            finalText: JSON.stringify(BE_FINDING),
+          },
         },
       })
 
       // Wave 0: force an empty session id so the BE task errors out.
-      const originalCreate = fake.client.session.create.bind(fake.client.session)
+      const originalCreate = fake.client.session.create.bind(
+        fake.client.session,
+      )
       let calls = 0
-      fake.client.session.create = (async (options: { body: { parentID: string; title: string } }) => {
+      fake.client.session.create = (async (options: {
+        body: { parentID: string; title: string }
+      }) => {
         calls += 1
         if (calls === 1) {
           fake.calls.sessionCreate.push(options)

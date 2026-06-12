@@ -14,7 +14,10 @@ export type ShellChain = Promise<ShellOutput> & {
 // (2) it makes this structural alias assignable-from Bun's `BunShell`, whose
 // own call signature takes `ShellExpression[]` (a superset of `string`). That
 // assignability lets the plugin pass OpenCode's `ctx` straight in with no cast.
-export type ShellTag = (parts: TemplateStringsArray, ...values: string[]) => ShellChain
+export type ShellTag = (
+  parts: TemplateStringsArray,
+  ...values: string[]
+) => ShellChain
 
 export interface NotificationSenderContext {
   readonly $?: ShellTag
@@ -34,10 +37,12 @@ interface ProbeResult {
  * (e.g., `subtitle`) without escaping becomes a compile-time error rather
  * than a latent injection bug.
  */
-export type AppleScriptLiteral = string & { readonly __appleScriptLiteral: unique symbol }
+export type AppleScriptLiteral = string & {
+  readonly __appleScriptLiteral: unique symbol
+}
 
 // For the markdown-sink variant see
-// `packages/coordinator/src/sanitize.ts::neutralizeUntrustedOutput`.
+// `src/modules/_shared/sanitize.ts::neutralizeUntrustedOutput`.
 // Different rules — different sinks.
 export function escapeAppleScriptText(input: string): string {
   // Defense-in-depth: strip ASCII control chars (NUL, BEL, etc., excluding TAB)
@@ -97,7 +102,9 @@ export class NotificationSender {
     const probe = await this.probe($)
     try {
       if (probe.terminalNotifierPath !== null) {
-        await $`${probe.terminalNotifierPath} -title ${args.title} -message ${args.message}`.nothrow().quiet()
+        await $`${probe.terminalNotifierPath} -title ${args.title} -message ${args.message}`
+          .nothrow()
+          .quiet()
         return
       }
       if (probe.osascriptPath !== null) {
@@ -139,7 +146,9 @@ export class NotificationSender {
   private warnOnceNoShell(): void {
     if (this.warnedNoShell) return
     this.warnedNoShell = true
-    console.warn("[pantheon/session-notification] ctx.$ unavailable; notifications disabled")
+    console.warn(
+      "[pantheon/session-notification] ctx.$ unavailable; notifications disabled",
+    )
   }
 }
 
@@ -147,7 +156,11 @@ async function whichOrNull($: ShellTag, bin: string): Promise<string | null> {
   try {
     const result = await $`which ${bin}`.nothrow().quiet()
     if (result.exitCode !== 0) return null
-    const path = (typeof result.stdout === "string" ? result.stdout : result.stdout.toString()).trim()
+    const path = (
+      typeof result.stdout === "string"
+        ? result.stdout
+        : result.stdout.toString()
+    ).trim()
     return path.length > 0 ? path : null
   } catch {
     return null

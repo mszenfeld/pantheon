@@ -21,7 +21,11 @@ describe("loadModuleAsset", () => {
   })
 
   it("returns the file contents for a successful read", () => {
-    writeFileSync(path.join(workingDirectory, "asset.md"), "hello world", "utf8")
+    writeFileSync(
+      path.join(workingDirectory, "asset.md"),
+      "hello world",
+      "utf8",
+    )
 
     expect(loadModuleAsset(callerUrl, "asset.md")).toBe("hello world")
   })
@@ -55,9 +59,13 @@ describe("loadModuleAsset", () => {
 
     const nestedDir = path.join(workingDirectory, "nested")
     mkdirSync(nestedDir)
-    const nestedCallerUrl = pathToFileURL(path.join(nestedDir, "caller.js")).href
+    const nestedCallerUrl = pathToFileURL(
+      path.join(nestedDir, "caller.js"),
+    ).href
 
-    expect(loadModuleAsset(nestedCallerUrl, path.join("..", assetName))).toBe("shared")
+    expect(loadModuleAsset(nestedCallerUrl, path.join("..", assetName))).toBe(
+      "shared",
+    )
   })
 
   it("throws on a read failure and does not cache the failure", () => {

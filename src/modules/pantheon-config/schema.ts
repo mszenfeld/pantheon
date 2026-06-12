@@ -6,7 +6,7 @@
  * across all source files for diagnostic display.
  */
 
-import { neutralizeUntrustedOutput } from "../coordinator/sanitize.js"
+import { neutralizeUntrustedOutput } from "../_shared/sanitize.js"
 
 export type PantheonConfig = {
   agents: { [name: string]: { model: string } }
@@ -62,7 +62,10 @@ function prefix(sourcePath?: string): string {
   return sourcePath !== undefined ? `[pantheon] ${sourcePath}: ` : "[pantheon] "
 }
 
-export function validateConfigFile(raw: unknown, sourcePath?: string): ValidationResult {
+export function validateConfigFile(
+  raw: unknown,
+  sourcePath?: string,
+): ValidationResult {
   const errors: string[] = []
   const result: PantheonConfig = { agents: {} }
 
@@ -107,17 +110,27 @@ export function validateConfigFile(raw: unknown, sourcePath?: string): Validatio
   // The sink also wraps `getLoadErrors()`, but `validateConfigFile`
   // is exported independently (consumed by tests and potentially other
   // callers), so neutralizing at the source is required for defense-in-depth.
-  for (const [rawName, agentRaw] of Object.entries(agents as Record<string, unknown>)) {
+  for (const [rawName, agentRaw] of Object.entries(
+    agents as Record<string, unknown>,
+  )) {
     const safeName = neutralizeUntrustedOutput(rawName)
-    if (agentRaw === null || typeof agentRaw !== "object" || Array.isArray(agentRaw)) {
-      errors.push(`${prefix(sourcePath)}agents.${safeName} must be object — ignoring`)
+    if (
+      agentRaw === null ||
+      typeof agentRaw !== "object" ||
+      Array.isArray(agentRaw)
+    ) {
+      errors.push(
+        `${prefix(sourcePath)}agents.${safeName} must be object — ignoring`,
+      )
       continue
     }
     const agent = agentRaw as Record<string, unknown>
 
     for (const rawField of Object.keys(agent)) {
       if (!KNOWN_AGENT_FIELDS.has(rawField)) {
-        errors.push(`${prefix(sourcePath)}unknown field "agents.${safeName}.${neutralizeUntrustedOutput(rawField)}"`)
+        errors.push(
+          `${prefix(sourcePath)}unknown field "agents.${safeName}.${neutralizeUntrustedOutput(rawField)}"`,
+        )
       }
     }
 
@@ -135,7 +148,9 @@ export function validateConfigFile(raw: unknown, sourcePath?: string): Validatio
       const raw = typeof model === "string" ? model : String(model)
       const cleaned = neutralizeUntrustedOutput(raw)
       const truncated =
-        cleaned.length > MAX_SHOWN_LEN ? `${cleaned.slice(0, MAX_SHOWN_LEN)}…` : cleaned
+        cleaned.length > MAX_SHOWN_LEN
+          ? `${cleaned.slice(0, MAX_SHOWN_LEN)}…`
+          : cleaned
       const shown = `"${truncated}"`
       errors.push(
         `${prefix(sourcePath)}invalid model ${shown} for agent "${safeName}" — must match <providerID>/<modelID> (aggregator paths like openrouter/openai/gpt-5.5 are allowed)`,

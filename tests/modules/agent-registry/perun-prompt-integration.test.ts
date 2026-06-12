@@ -14,7 +14,9 @@ import { DISPATCHABLE_ALL_AGENTS } from "../../../src/modules/coordinator/dispat
 const here = path.dirname(fileURLToPath(import.meta.url))
 const PERUN_MD = path.resolve(here, "../../../src/agents/perun.md")
 
-const ALLOWLIST = [...DISPATCHABLE_ALL_AGENTS].sort((a, b) => a.localeCompare(b))
+const ALLOWLIST = [...DISPATCHABLE_ALL_AGENTS].sort((a, b) =>
+  a.localeCompare(b),
+)
 
 function render(): string {
   const template = readFileSync(PERUN_MD, "utf8")
@@ -71,6 +73,8 @@ describe("perun prompt integration", () => {
 
   it("does not repeat the legacy hand-written allowlist clause", () => {
     // Guards against re-introducing the duplicated prose the placeholder replaced.
-    expect(render()).not.toContain("the lone entry in the `DISPATCHABLE_ALL_AGENTS` allowlist")
+    expect(render()).not.toContain(
+      "the lone entry in the `DISPATCHABLE_ALL_AGENTS` allowlist",
+    )
   })
 })

@@ -8,7 +8,9 @@ import {
   VALID_CATEGORIES,
 } from "../packages/skill-utils/dist/index.js"
 
-const rootDirectory = path.resolve(fileURLToPath(new URL("..", import.meta.url)))
+const rootDirectory = path.resolve(
+  fileURLToPath(new URL("..", import.meta.url)),
+)
 
 function readPackageFile(packageName: string, relativePath: string): string {
   const filePath = path.resolve(
@@ -36,7 +38,14 @@ describe("Cross-plugin Category→Prefix mapping consistency", () => {
       Documentation: "DOC",
       Testing: "QA",
     })
-    expect(VALID_PREFIXES).toEqual(["SEC", "PERF", "ARCH", "MAINT", "DOC", "QA"])
+    expect(VALID_PREFIXES).toEqual([
+      "SEC",
+      "PERF",
+      "ARCH",
+      "MAINT",
+      "DOC",
+      "QA",
+    ])
   })
 
   it("code-review review.md contains the full canonical mapping table", () => {
@@ -96,8 +105,9 @@ describe("Cross-plugin Category→Prefix mapping consistency", () => {
     // Narrow match: look for rows where both cells are valid category/prefix values
     const reviewRows = reviewMd.match(/\|\s*\w+\s*\|\s*\w+\s*\|/g) ?? []
     const reportRows =
-      reportFormatMd.match(/\|\s*\*?\*?\w+\*?\*?\s*\|\s*\*?\*?\w+\*?\*?\s*\|/g) ??
-      []
+      reportFormatMd.match(
+        /\|\s*\*?\*?\w+\*?\*?\s*\|\s*\*?\*?\w+\*?\*?\s*\|/g,
+      ) ?? []
 
     // Only count rows where the first cell is a known category and second is a known prefix
     const reviewDataRows = reviewRows.filter((r) => {
@@ -113,7 +123,11 @@ describe("Cross-plugin Category→Prefix mapping consistency", () => {
       return category && prefix
     })
 
-    expect(reviewDataRows.length).toBe(Object.keys(CATEGORY_PREFIX_MAPPING).length)
-    expect(reportDataRows.length).toBe(Object.keys(CATEGORY_PREFIX_MAPPING).length)
+    expect(reviewDataRows.length).toBe(
+      Object.keys(CATEGORY_PREFIX_MAPPING).length,
+    )
+    expect(reportDataRows.length).toBe(
+      Object.keys(CATEGORY_PREFIX_MAPPING).length,
+    )
   })
 })

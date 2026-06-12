@@ -25,13 +25,17 @@ describe("readCoordinatorBashAllowlist fallback branches", () => {
 
     expect(readCoordinatorBashAllowlist()).toEqual(FALLBACK_ALLOWLIST)
     expect(warn).toHaveBeenCalledOnce()
-    expect(warn.mock.calls[0]?.[0]).toContain("could not read perun.md allowlist")
+    expect(warn.mock.calls[0]?.[0]).toContain(
+      "could not read perun.md allowlist",
+    )
   })
 
   it("returns FALLBACK_ALLOWLIST when frontmatter yields no Bash(...) programs (empty-parse branch)", () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {})
     // Frontmatter present but with zero Bash(...) entries → parseAllowedBashPrograms → [].
-    readFileSyncMock.mockReturnValue("allowed-tools: Read, Write, Edit, Glob, Grep\n")
+    readFileSyncMock.mockReturnValue(
+      "allowed-tools: Read, Write, Edit, Glob, Grep\n",
+    )
 
     expect(readCoordinatorBashAllowlist()).toEqual(FALLBACK_ALLOWLIST)
     expect(warn).toHaveBeenCalledOnce()
@@ -39,7 +43,9 @@ describe("readCoordinatorBashAllowlist fallback branches", () => {
   })
 
   it("returns parsed programs (not the fallback) when frontmatter has Bash(...) entries", () => {
-    readFileSyncMock.mockReturnValue("allowed-tools: Read, Bash(echo:*), Bash(pwd:*)\n")
+    readFileSyncMock.mockReturnValue(
+      "allowed-tools: Read, Bash(echo:*), Bash(pwd:*)\n",
+    )
 
     expect(readCoordinatorBashAllowlist()).toEqual(["echo", "pwd"])
   })

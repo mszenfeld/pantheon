@@ -6,8 +6,15 @@ import {
   DEFAULT_TASK_TIMEOUT_MS,
   validateDispatchable,
 } from "./dispatch.js"
-import { PollerAbortError, PollerTimeoutError, pollUntilIdle } from "./poller.js"
-import { neutralizeUntrustedOutput, normalizeVariantSuffix } from "./sanitize.js"
+import {
+  PollerAbortError,
+  PollerTimeoutError,
+  pollUntilIdle,
+} from "./poller.js"
+import {
+  neutralizeUntrustedOutput,
+  normalizeVariantSuffix,
+} from "../_shared/sanitize.js"
 import { truncateBytes } from "./truncate-bytes.js"
 import type { BackgroundTaskStore } from "./background-store.js"
 import type { SessionAgentRegistry } from "../_shared/session-agent-registry.js"
@@ -44,8 +51,17 @@ export interface StartBackgroundResult {
 export async function startBackgroundTask(
   input: StartBackgroundInput,
 ): Promise<StartBackgroundResult> {
-  const { store, specialist, agentRegistry, parentSessionId, agent, prompt, context, callerMode, sessionAgentRegistry } =
-    input
+  const {
+    store,
+    specialist,
+    agentRegistry,
+    parentSessionId,
+    agent,
+    prompt,
+    context,
+    callerMode,
+    sessionAgentRegistry,
+  } = input
 
   validateDispatchable(agentRegistry, agent, callerMode)
 
@@ -77,7 +93,13 @@ export async function startBackgroundTask(
   // bindings, so there is no before-the-turn ordering constraint to satisfy.
   // See `sdk-specialist.ts` `startBackground`.
   sessionAgentRegistry?.register(childSessionId, agent)
-  store.register({ id, childSessionId, parentSessionId, agent, startedAt: Date.now() })
+  store.register({
+    id,
+    childSessionId,
+    parentSessionId,
+    agent,
+    startedAt: Date.now(),
+  })
   return { id, agent, status: "running" }
 }
 
@@ -133,7 +155,7 @@ export interface CollectBackgroundInput {
    * always thread `context.sessionID`, so they have no reason to. Keeping the
    * fail-open path behind an explicit opt-in (rather than inferring it from a
    * missing id) means a real handler that forgets to pass an id fails closed,
-   * not open. SEC-001.
+   * not open.
    */
   allowUnscopedCollect?: boolean
 }
@@ -157,7 +179,9 @@ export async function collectBackground(
   // failures are absorbed (the contract is "never throw; return undefined"),
   // falling back to the legacy `scrubber` (typically also undefined → no-op).
   // Mirrors `dispatchParallel`'s scrubber-session lifecycle in dispatch.ts.
-  let scrubberSession: { scrub: (text: string) => string; release: () => void } | undefined
+  let scrubberSession:
+    | { scrub: (text: string) => string; release: () => void }
+    | undefined
   if (
     input.scrubberFactory !== undefined &&
     input.parentSessionId !== undefined &&
@@ -172,7 +196,9 @@ export async function collectBackground(
   // Adapt the per-collect scrubber to the `(text, parentSessionID)` signature
   // so `collectOne` stays agnostic of which path produced it. The session's
   // `scrub` already closes over the pinned snapshot.
-  const effectiveScrubber: ((text: string, parentSessionID: string) => string) | undefined =
+  const effectiveScrubber:
+    | ((text: string, parentSessionID: string) => string)
+    | undefined =
     scrubberSession !== undefined
       ? (text) => scrubberSession!.scrub(text)
       : input.scrubber
@@ -232,10 +258,11 @@ async function collectOne(
   // Both production handlers (`index.ts` poll_background / wait_background) pass
   // a length-guarded `context.sessionID`, so production is always scoped and
   // never hits the closed path. The single, explicit exception is the
-  // test-only `allowUnscopedCollect` opt-in (SEC-001), which unit tests set to
+  // test-only `allowUnscopedCollect` opt-in, which unit tests set to
   // collect a seeded task without modelling a caller; production never sets it.
   const callerIsUnknown = parentSessionId === undefined
-  const callerOwnsTask = !callerIsUnknown && task.parentSessionId === parentSessionId
+  const callerOwnsTask =
+    !callerIsUnknown && task.parentSessionId === parentSessionId
   const skipGate = callerIsUnknown && allowUnscopedCollect
   if (!callerOwnsTask && !skipGate) {
     return { id, agent: "", status: "not_found" }
@@ -284,7 +311,13 @@ async function collectOne(
       maxBytes: resultMaxBytes,
     })
     store.remove(id)
-    return { id, agent, status: "success", result: finalize(raw), duration_ms: Date.now() - task.startedAt }
+    return {
+      id,
+      agent,
+      status: "success",
+      result: finalize(raw),
+      duration_ms: Date.now() - task.startedAt,
+    }
   } catch (err) {
     // Cancel the still-running child server-side BEFORE removing the task from
     // the store, on BOTH abort AND timeout. The background turn was fired
@@ -303,10 +336,24 @@ async function collectOne(
     }
     store.remove(id)
     if (err instanceof PollerAbortError) {
-      return { id, agent, status: "aborted", result: "", duration_ms: Date.now() - task.startedAt, error: "aborted" }
+      return {
+        id,
+        agent,
+        status: "aborted",
+        result: "",
+        duration_ms: Date.now() - task.startedAt,
+        error: "aborted",
+      }
     }
     if (err instanceof PollerTimeoutError) {
-      return { id, agent, status: "timeout", result: "", duration_ms: Date.now() - task.startedAt, error: "timeout" }
+      return {
+        id,
+        agent,
+        status: "timeout",
+        result: "",
+        duration_ms: Date.now() - task.startedAt,
+        error: "timeout",
+      }
     }
     return {
       id,
@@ -314,7 +361,9 @@ async function collectOne(
       status: "error",
       result: "",
       duration_ms: Date.now() - task.startedAt,
-      error: neutralizeUntrustedOutput(err instanceof Error ? err.message : String(err)),
+      error: neutralizeUntrustedOutput(
+        err instanceof Error ? err.message : String(err),
+      ),
     }
   }
 }

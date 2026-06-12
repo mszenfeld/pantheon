@@ -1,6 +1,9 @@
 import { describe, it, expect } from "vitest"
 import { SessionAgentRegistry } from "../../../src/modules/_shared/session-agent-registry.js"
-import { makeCallerGate, SETUP_AGENT_KEY } from "../../../src/modules/qa/caller-gate.js"
+import {
+  makeCallerGate,
+  SETUP_AGENT_KEY,
+} from "../../../src/modules/qa/caller-gate.js"
 import { VARIANTS } from "../../../src/modules/qa/index.js"
 
 function gateWith(entries: Array<[string, string]>) {

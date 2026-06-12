@@ -6,7 +6,7 @@ on:
     # Release tags trigger the version-tag job below. Without this, a
     # `git push <remote> vX.Y.Z` would never start the workflow and the
     # tag-time guards would not run.
-    tags: ['v*']
+    tags: ["v*"]
   pull_request:
     branches: [master]
 

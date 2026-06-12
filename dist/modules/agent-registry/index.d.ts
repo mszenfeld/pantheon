@@ -16,11 +16,33 @@ export { PERUN_PLACEHOLDERS, PerunPromptOptions, buildDelegationTable, buildDisp
  * that safe while still catching a genuine name collision between two distinct
  * agents — mirroring `registerDispatchExtensions`'s merge-don't-throw semantics
  * without silently shadowing a real conflict.
+ *
+ * Throws AFTER the registry has been snapshotted for Perun's prompt
+ * (`snapshotAgentMetadataRegistry`). A late registration could never reach the
+ * already-cached Perun prompt, so the agent would exist but be invisible to
+ * routing — a silent failure. Failing loud here makes a mis-ordered
+ * `defaultPluginFactories` (an agent-registering module placed AFTER
+ * `AppVerkCoordinatorPlugin`) crash at startup instead of quietly dropping the
+ * agent from Perun's view. Mirrors the conflicting-name throw above. NOTE:
+ * re-registering IDENTICAL metadata after freeze is still allowed (returns
+ * early below) — only a genuinely NEW or CONFLICTING entry is rejected.
  */
 declare function registerAgentMetadata(info: SpecialistInfo): void;
 /** Returns a name-sorted copy (deterministic order; callers cannot mutate state). */
 declare function getAgentMetadataRegistry(): SpecialistInfo[];
-/** Reset to empty. Tests only — production code never clears. */
+/**
+ * Returns a name-sorted copy AND freezes the registry against any subsequent
+ * NEW registration. Called once by the coordinator when it builds (and caches)
+ * Perun's prompt: the snapshot it returns is what Perun routes on for the rest
+ * of the process. After this runs, a `registerAgentMetadata()` of a new agent
+ * throws (see that function) rather than silently failing to reach the cached
+ * prompt — enforcing the "register before the coordinator" ordering invariant
+ * documented in AGENTS.md "Adding a New Plugin". Idempotent: calling it again
+ * (the prompt is also cached, so this is not expected in practice) returns the
+ * same snapshot and keeps the registry frozen.
+ */
+declare function snapshotAgentMetadataRegistry(): SpecialistInfo[];
+/** Reset to empty AND un-freeze. Tests only — production code never clears. */
 declare function clearAgentMetadataRegistry(): void;
 
-export { SpecialistInfo, clearAgentMetadataRegistry, getAgentMetadataRegistry, registerAgentMetadata };
+export { SpecialistInfo, clearAgentMetadataRegistry, getAgentMetadataRegistry, registerAgentMetadata, snapshotAgentMetadataRegistry };

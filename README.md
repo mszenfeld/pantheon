@@ -44,7 +44,9 @@ Add to your OpenCode config:
 
 Restart OpenCode after installation or any config change.
 
-## Commands
+## QA commands
+
+The QA workflow exposes two slash commands (this is not a full command reference — most harness work flows through the agents above):
 
 | Command           | Description                                                                                                                                                                                                                                                                                                                                                 |
 | ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

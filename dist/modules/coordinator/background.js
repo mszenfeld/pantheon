@@ -5,12 +5,29 @@ import {
   DEFAULT_TASK_TIMEOUT_MS,
   validateDispatchable
 } from "./dispatch.js";
-import { PollerAbortError, PollerTimeoutError, pollUntilIdle } from "./poller.js";
-import { neutralizeUntrustedOutput, normalizeVariantSuffix } from "./sanitize.js";
+import {
+  PollerAbortError,
+  PollerTimeoutError,
+  pollUntilIdle
+} from "./poller.js";
+import {
+  neutralizeUntrustedOutput,
+  normalizeVariantSuffix
+} from "../_shared/sanitize.js";
 import { truncateBytes } from "./truncate-bytes.js";
 const BACKGROUND_MAX_CONCURRENT = 4;
 async function startBackgroundTask(input) {
-  const { store, specialist, agentRegistry, parentSessionId, agent, prompt, context, callerMode, sessionAgentRegistry } = input;
+  const {
+    store,
+    specialist,
+    agentRegistry,
+    parentSessionId,
+    agent,
+    prompt,
+    context,
+    callerMode,
+    sessionAgentRegistry
+  } = input;
   validateDispatchable(agentRegistry, agent, callerMode);
   if (store.countActiveByParent(parentSessionId) >= BACKGROUND_MAX_CONCURRENT) {
     throw new Error(
@@ -23,7 +40,13 @@ ${context}` : prompt;
   const childSessionId = await specialist.startBackground(agent, fullPrompt);
   const id = `bg_${randomUUID().slice(0, 8)}`;
   sessionAgentRegistry?.register(childSessionId, agent);
-  store.register({ id, childSessionId, parentSessionId, agent, startedAt: Date.now() });
+  store.register({
+    id,
+    childSessionId,
+    parentSessionId,
+    agent,
+    startedAt: Date.now()
+  });
   return { id, agent, status: "running" };
 }
 async function collectBackground(input) {
@@ -101,7 +124,13 @@ async function collectOne(id, input, scrubber) {
       maxBytes: resultMaxBytes
     });
     store.remove(id);
-    return { id, agent, status: "success", result: finalize(raw), duration_ms: Date.now() - task.startedAt };
+    return {
+      id,
+      agent,
+      status: "success",
+      result: finalize(raw),
+      duration_ms: Date.now() - task.startedAt
+    };
   } catch (err) {
     if (err instanceof PollerAbortError || err instanceof PollerTimeoutError) {
       try {
@@ -111,10 +140,24 @@ async function collectOne(id, input, scrubber) {
     }
     store.remove(id);
     if (err instanceof PollerAbortError) {
-      return { id, agent, status: "aborted", result: "", duration_ms: Date.now() - task.startedAt, error: "aborted" };
+      return {
+        id,
+        agent,
+        status: "aborted",
+        result: "",
+        duration_ms: Date.now() - task.startedAt,
+        error: "aborted"
+      };
     }
     if (err instanceof PollerTimeoutError) {
-      return { id, agent, status: "timeout", result: "", duration_ms: Date.now() - task.startedAt, error: "timeout" };
+      return {
+        id,
+        agent,
+        status: "timeout",
+        result: "",
+        duration_ms: Date.now() - task.startedAt,
+        error: "timeout"
+      };
     }
     return {
       id,
@@ -122,7 +165,9 @@ async function collectOne(id, input, scrubber) {
       status: "error",
       result: "",
       duration_ms: Date.now() - task.startedAt,
-      error: neutralizeUntrustedOutput(err instanceof Error ? err.message : String(err))
+      error: neutralizeUntrustedOutput(
+        err instanceof Error ? err.message : String(err)
+      )
     };
   }
 }

@@ -58,7 +58,10 @@ describe("AppVerkCommitPlugin runtime", () => {
 
     await expect(
       plugin["tool.execute.before"]?.(
-        { tool: "bash", args: { command: 'git commit -m "feat: bypass"' } } as never,
+        {
+          tool: "bash",
+          args: { command: 'git commit -m "feat: bypass"' },
+        } as never,
         { args: { command: 'git commit -m "feat: bypass"' } } as never,
       ),
     ).rejects.toThrow(/use \/commit/i)

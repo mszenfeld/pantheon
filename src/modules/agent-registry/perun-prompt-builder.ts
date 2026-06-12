@@ -68,7 +68,11 @@ export function buildKeyTriggersSection(registry: SpecialistInfo[]): string {
     .filter((a) => a.metadata.keyTrigger !== undefined)
   if (withTrigger.length === 0) return ""
   const bullets = withTrigger.map((a) => `- ${a.metadata.keyTrigger}`)
-  return ["### Key Triggers (check BEFORE classification):", "", ...bullets].join("\n")
+  return [
+    "### Key Triggers (check BEFORE classification):",
+    "",
+    ...bullets,
+  ].join("\n")
 }
 
 export function buildDelegationTable(registry: SpecialistInfo[]): string {

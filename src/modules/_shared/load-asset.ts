@@ -28,7 +28,10 @@ import { fileURLToPath } from "node:url"
  */
 const assetCache = new Map<string, string>()
 
-export function loadModuleAsset(callerUrl: string, relativePath: string): string {
+export function loadModuleAsset(
+  callerUrl: string,
+  relativePath: string,
+): string {
   const moduleDir = path.dirname(fileURLToPath(callerUrl))
   const filePath = path.resolve(moduleDir, relativePath)
 

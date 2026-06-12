@@ -89,7 +89,19 @@ interface BashClassification {
     allowed: boolean;
     program: string | null;
 }
-/** Decide whether a coordinator bash command is permitted (allowlist + no compounds). */
+/**
+ * Decide whether a coordinator bash command is permitted (allowlist + no compounds).
+ *
+ * This allowlist is a workflow rail, NOT a security boundary. It is
+ * defense-in-depth that keeps the coordinator on its intended path (dispatch
+ * agents rather than inspect the repo directly) and raises the cost of a
+ * prompt-injection escalation; it is NOT a hardened control over shell
+ * execution. Per project doctrine (`docs/plugins/coordinator.md` — "Security
+ * model — code-enforced vs LLM-requested"): code-enforced rules are the
+ * security boundary; LLM-requested rails like this one are defense in depth.
+ * Real shell-execution boundaries (sandboxing, permission controls) live
+ * outside this plugin. Do not "harden" this into a fake boundary.
+ */
 declare function classifyCoordinatorBash(command: string, allowedPrograms: string[]): BashClassification;
 interface ViolationInfo {
     tool: string;

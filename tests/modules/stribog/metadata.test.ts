@@ -4,7 +4,11 @@ import {
   DEFAULT_STRIBOG_MODEL,
   stribogSpecialistInfo,
 } from "../../../src/modules/stribog/stribog.metadata.js"
-import { STRIBOG_EDIT_BUDGET, STRIBOG_ALLOWED_TOOL_IDS, STRIBOG_DENIED_TOOLS } from "../../../src/modules/stribog/stribog.metadata.js"
+import {
+  STRIBOG_EDIT_BUDGET,
+  STRIBOG_ALLOWED_TOOL_IDS,
+  STRIBOG_DENIED_TOOLS,
+} from "../../../src/modules/stribog/stribog.metadata.js"
 
 describe("stribogSpecialistInfo", () => {
   it("uses the bare 'stribog' key and subagent mode", () => {
@@ -22,7 +26,8 @@ describe("stribogSpecialistInfo", () => {
   })
 
   it("routes AWAY from secrets and feature work (avoid-when)", () => {
-    const avoid = stribogSpecialistInfo.metadata.avoidWhen?.join(" ").toLowerCase() ?? ""
+    const avoid =
+      stribogSpecialistInfo.metadata.avoidWhen?.join(" ").toLowerCase() ?? ""
     expect(avoid).toContain("secret")
     expect(avoid).toMatch(/feature|main executor/)
   })
@@ -51,7 +56,9 @@ describe("stribogSpecialistInfo", () => {
   })
 
   it("defaults to a valid <provider>/<model> identifier", () => {
-    expect(DEFAULT_STRIBOG_MODEL).toMatch(/^[A-Za-z0-9._-]+(\/[A-Za-z0-9._-]+)+$/)
+    expect(DEFAULT_STRIBOG_MODEL).toMatch(
+      /^[A-Za-z0-9._-]+(\/[A-Za-z0-9._-]+)+$/,
+    )
   })
 
   it("pins the edit budget at 2", () => {
@@ -59,7 +66,14 @@ describe("stribogSpecialistInfo", () => {
   })
 
   it("allow-lists exactly the lowercase runtime tool ids the hook enforces", () => {
-    expect([...STRIBOG_ALLOWED_TOOL_IDS].sort()).toEqual(["bash", "edit", "glob", "grep", "read", "write"])
+    expect([...STRIBOG_ALLOWED_TOOL_IDS].sort()).toEqual([
+      "bash",
+      "edit",
+      "glob",
+      "grep",
+      "read",
+      "write",
+    ])
   })
 
   it("denies the non-allow-listed structured tools natively (default-allow opt-out)", () => {

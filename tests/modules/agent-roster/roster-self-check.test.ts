@@ -17,10 +17,7 @@ type Hooks = Awaited<ReturnType<Plugin>>
  * `app.agents()` (the runtime map) and `tui.showToast` (the warn channel).
  * `agents()` can be made to throw to exercise the best-effort guard.
  */
-function makeClient(opts: {
-  agents?: RuntimeAgent[]
-  agentsThrows?: boolean
-}) {
+function makeClient(opts: { agents?: RuntimeAgent[]; agentsThrows?: boolean }) {
   const showToast = vi.fn(async () => ({}))
   const agents = vi.fn(async () => {
     if (opts.agentsThrows) throw new Error("agents endpoint unavailable")
@@ -111,9 +108,9 @@ describe("agent-roster: AppVerkAgentRosterPlugin (startup self-check)", () => {
       agents: [{ name: "chat", mode: "primary", native: true }],
     })
     const hooks = await init(client)
-    await hooks.event?.({ event: { type: "session.deleted" } } as unknown as Parameters<
-      NonNullable<Hooks["event"]>
-    >[0])
+    await hooks.event?.({
+      event: { type: "session.deleted" },
+    } as unknown as Parameters<NonNullable<Hooks["event"]>>[0])
 
     expect(agents).not.toHaveBeenCalled()
   })

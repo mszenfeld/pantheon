@@ -14,8 +14,12 @@ describe("AppVerkFrontendDeveloperPlugin", () => {
     await plugin.config?.(config)
 
     expect(config.agent?.["frontend-developer"]).toBeDefined()
-    expect(config.agent!["frontend-developer"]!.description).toContain("TypeScript")
-    expect(config.agent!["frontend-developer"]!.prompt).toContain("TypeScript + React Developer Agent")
+    expect(config.agent!["frontend-developer"]!.description).toContain(
+      "TypeScript",
+    )
+    expect(config.agent!["frontend-developer"]!.prompt).toContain(
+      "TypeScript + React Developer Agent",
+    )
     expect(config.agent!["frontend-developer"]!.mode).toBe("primary")
   })
 
@@ -27,7 +31,9 @@ describe("AppVerkFrontendDeveloperPlugin", () => {
 
     expect(config.command?.frontend).toBeDefined()
     expect(config.command!.frontend!.description).toContain("TypeScript")
-    expect(config.command!.frontend!.template).toContain("TypeScript + React Development Workflow")
+    expect(config.command!.frontend!.template).toContain(
+      "TypeScript + React Development Workflow",
+    )
     expect(config.command!.frontend!.agent).toBe("frontend-developer")
   })
 

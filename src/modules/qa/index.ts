@@ -1,6 +1,9 @@
 import { tool, type Plugin } from "@opencode-ai/plugin"
 import { buildQATesterAgent } from "./prompt-builder.js"
-import { applyModelOverride, captureUserModels } from "../_shared/apply-model-override.js"
+import {
+  applyModelOverride,
+  captureUserModels,
+} from "../_shared/apply-model-override.js"
 import { loadModuleAsset } from "../_shared/load-asset.js"
 import { registerDispatchExtensions } from "../_shared/dispatch-extensions.js"
 import { registerAgentMetadata } from "../agent-registry/index.js"
@@ -17,7 +20,13 @@ import { makeRunBash } from "./run-bash.js"
 import { makeCallerGate, SETUP_AGENT_KEY } from "./caller-gate.js"
 
 export { buildQATesterAgent }
-export { FE_TOOLS, BE_TOOLS, SETUP_TOOLS, SHARED_TOOLS, toolsForVariant } from "./allowed-tools.js"
+export {
+  FE_TOOLS,
+  BE_TOOLS,
+  SETUP_TOOLS,
+  SHARED_TOOLS,
+  toolsForVariant,
+} from "./allowed-tools.js"
 
 function loadCommandMarkdown(name: string): string {
   return loadModuleAsset(import.meta.url, `../../commands/${name}`)
@@ -25,8 +34,8 @@ function loadCommandMarkdown(name: string): string {
 
 export const VARIANTS = ["fe", "be", "setup"] as const
 
-const TTL_MS = 60 * 60 * 1000  // 1 hour
-const SWEEP_INTERVAL_MS = 5 * 60 * 1000  // 5 minutes
+const TTL_MS = 60 * 60 * 1000 // 1 hour
+const SWEEP_INTERVAL_MS = 5 * 60 * 1000 // 5 minutes
 
 const COMMANDS = [
   {
@@ -48,7 +57,8 @@ const COMMANDS = [
   // once the new names have propagated.
   {
     name: "create-qa-plan",
-    description: "Deprecated — renamed to /qa:create-plan. Please use that instead.",
+    description:
+      "Deprecated — renamed to /qa:create-plan. Please use that instead.",
     file: "create-qa-plan.md",
   },
   {
@@ -76,7 +86,9 @@ export const AppVerkQAPlugin: Plugin = async ({ client }) => {
   // changes for the life of a session (sessions don't re-parent). Skipping the
   // SDK round-trip is a pure perf win for the hot `shell.env` path.
   const parentIDCache = new Map<string, string>()
-  async function resolveParentID(sessionID: string): Promise<string | undefined> {
+  async function resolveParentID(
+    sessionID: string,
+  ): Promise<string | undefined> {
     const cached = parentIDCache.get(sessionID)
     if (cached !== undefined) return cached
     try {
@@ -92,7 +104,11 @@ export const AppVerkQAPlugin: Plugin = async ({ client }) => {
     }
   }
 
-  const recordInputHandler = makeRecordInputHandler({ store, state, resolveParentID })
+  const recordInputHandler = makeRecordInputHandler({
+    store,
+    state,
+    resolveParentID,
+  })
   const executeRecipeHandler = makeExecuteRecipeHandler({
     store,
     state,
@@ -104,7 +120,11 @@ export const AppVerkQAPlugin: Plugin = async ({ client }) => {
     processEnv: process.env,
   })
 
-  const preflightHandler = makePreflightHandler({ store, resolveParentID, processEnv: process.env })
+  const preflightHandler = makePreflightHandler({
+    store,
+    resolveParentID,
+    processEnv: process.env,
+  })
 
   const shellEnvHook = makeShellEnvHook({ store, registry, resolveParentID })
 
@@ -238,11 +258,11 @@ export const AppVerkQAPlugin: Plugin = async ({ client }) => {
           "",
           "A name is 'present' if it is bound in the run's bindings store (user-pasted via `record_input`, or minted) OR set to a non-empty value in OpenCode's process env (which dispatched zmora children inherit) — the same resolution order `execute_recipe` uses for recipe inputs.",
           "",
-          "Service / database *liveness* is NOT probed here — a host that is up now may be down at dispatch, so reachability is verified per-scenario via the `NEED_INFO` backstop (which reports `kind: \"service\"`). This tool only catches the most common gap: a missing credential / binding input.",
+          'Service / database *liveness* is NOT probed here — a host that is up now may be down at dispatch, so reachability is verified per-scenario via the `NEED_INFO` backstop (which reports `kind: "service"`). This tool only catches the most common gap: a missing credential / binding input.',
           "",
           "Result shape (JSON-stringified):",
-          "- `{ status: \"ok\" }` — every requested name is resolvable; proceed to dispatch.",
-          "- `{ status: \"missing\", missing: string[] }` — these names are unresolvable; ABORT the dispatch and emit the preflight prompt asking the user to provide them.",
+          '- `{ status: "ok" }` — every requested name is resolvable; proceed to dispatch.',
+          '- `{ status: "missing", missing: string[] }` — these names are unresolvable; ABORT the dispatch and emit the preflight prompt asking the user to provide them.',
         ].join("\n"),
         args: {
           env: tool.schema
@@ -258,7 +278,10 @@ export const AppVerkQAPlugin: Plugin = async ({ client }) => {
               reason: "preflight is restricted to the coordinator (Perun)",
             })
           }
-          const result = await preflightHandler({ env: args.env }, { sessionID: ctx.sessionID })
+          const result = await preflightHandler(
+            { env: args.env },
+            { sessionID: ctx.sessionID },
+          )
           return JSON.stringify(result)
         },
       }),
@@ -269,8 +292,8 @@ export const AppVerkQAPlugin: Plugin = async ({ client }) => {
           "The plan text is parsed in-process — the binding values themselves are NEVER produced here, only the recipe AST. Value materialisation happens later in `execute_recipe`.",
           "",
           "Result shape (JSON-stringified):",
-          "- `{ status: \"ok\", bindings: string[] }` — bindings stored; `bindings` lists the names parsed (e.g. `[\"QA_BIND_TOKEN\"]`). Empty array means the plan has no `## Setup` / `**Bindings:**` subsection — Perun should proceed to dispatch without any zmora-setup tasks.",
-          "- `{ status: \"error\", reason }` — parse/validation failed (invalid binding name, recipe AST rejection, etc.). Surface `reason` to the user verbatim and abort the QA run.",
+          '- `{ status: "ok", bindings: string[] }` — bindings stored; `bindings` lists the names parsed (e.g. `["QA_BIND_TOKEN"]`). Empty array means the plan has no `## Setup` / `**Bindings:**` subsection — Perun should proceed to dispatch without any zmora-setup tasks.',
+          '- `{ status: "error", reason }` — parse/validation failed (invalid binding name, recipe AST rejection, etc.). Surface `reason` to the user verbatim and abort the QA run.',
           "",
           "Idempotent: calling twice with the same plan replaces the stored plan (later wins). Safe to call again on resume.",
         ].join("\n"),
@@ -288,7 +311,8 @@ export const AppVerkQAPlugin: Plugin = async ({ client }) => {
               reason: "parse_plan is restricted to the coordinator (Perun)",
             })
           }
-          const parentID = (await resolveParentID(ctx.sessionID)) ?? ctx.sessionID
+          const parentID =
+            (await resolveParentID(ctx.sessionID)) ?? ctx.sessionID
           const parsed = parseBindings(args.plan)
           if (parsed.status !== "ok") {
             return JSON.stringify({ status: "error", reason: parsed.reason })
@@ -307,23 +331,24 @@ export const AppVerkQAPlugin: Plugin = async ({ client }) => {
           "Available only to the dispatched zmora-setup variant — enforced at execute() by the caller gate (the per-agent AgentConfig tools map is declarative-only on opencode 1.15.10).",
           "",
           "Result shape (JSON-stringified):",
-          "- `{ status: \"ok\" }` — binding minted and stored.",
-          "- `{ status: \"need_info\", missing: string[] }` — recipe inputs are not yet bound; Perun must collect them first.",
-          "- `{ status: \"recipe_failed\", reason, stderr_tail }` — bash exit non-zero, timeout, or output validation failed. `stderr_tail` is scrubbed of secrets and truncated to 200 chars.",
-          "- `{ status: \"unknown_binding\" }` — `binding_name` is not in the parent run's plan.",
+          '- `{ status: "ok" }` — binding minted and stored.',
+          '- `{ status: "need_info", missing: string[] }` — recipe inputs are not yet bound; Perun must collect them first.',
+          '- `{ status: "recipe_failed", reason, stderr_tail }` — bash exit non-zero, timeout, or output validation failed. `stderr_tail` is scrubbed of secrets and truncated to 200 chars.',
+          '- `{ status: "unknown_binding" }` — `binding_name` is not in the parent run\'s plan.',
         ].join("\n"),
         args: {
           binding_name: tool.schema
             .string()
             .describe(
-              "Name of the binding to provision, e.g. \"QA_BIND_TOKEN\". Must start with QA_BIND_ and match the plan's **Bindings:** declaration.",
+              'Name of the binding to provision, e.g. "QA_BIND_TOKEN". Must start with QA_BIND_ and match the plan\'s **Bindings:** declaration.',
             ),
         },
         async execute(args, ctx) {
           if (!gate.isSetupCaller(ctx.sessionID)) {
             return JSON.stringify({
               status: "forbidden",
-              reason: "execute_recipe is restricted to the zmora-setup specialist — only a dispatched zmora-setup task may mint bindings",
+              reason:
+                "execute_recipe is restricted to the zmora-setup specialist — only a dispatched zmora-setup task may mint bindings",
             })
           }
           const result = await executeRecipeHandler(
@@ -340,14 +365,14 @@ export const AppVerkQAPlugin: Plugin = async ({ client }) => {
           "Available only to Perun, invoked when parsing user replies during mid-run dialog. The value is stored as type=secret, source=user-paste — it is scrubbed from any specialist stderr that propagates back through the plugin.",
           "",
           "Result shape (JSON-stringified):",
-          "- `{ status: \"ok\" }` — recorded (also returned for duplicates, idempotent).",
-          "- `{ status: \"rejected\", reason }` — name failed denylist/regex check, or value failed charset/length validation.",
+          '- `{ status: "ok" }` — recorded (also returned for duplicates, idempotent).',
+          '- `{ status: "rejected", reason }` — name failed denylist/regex check, or value failed charset/length validation.',
         ].join("\n"),
         args: {
           name: tool.schema
             .string()
             .describe(
-              "Env var name (regular identifier, not necessarily QA_BIND_*), e.g. \"TEST_USER_EMAIL\". Must match /^[A-Z_][A-Z0-9_]*$/ and never a process-control name (PATH, NODE_OPTIONS, ...). Credential-prefixed names (AWS_, SUPABASE_, DATABASE_, ...) are accepted only when the parsed plan declares them as a binding Input; otherwise rejected.",
+              'Env var name (regular identifier, not necessarily QA_BIND_*), e.g. "TEST_USER_EMAIL". Must match /^[A-Z_][A-Z0-9_]*$/ and never a process-control name (PATH, NODE_OPTIONS, ...). Credential-prefixed names (AWS_, SUPABASE_, DATABASE_, ...) are accepted only when the parsed plan declares them as a binding Input; otherwise rejected.',
             ),
           value: tool.schema
             .string()

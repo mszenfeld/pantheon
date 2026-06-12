@@ -10,12 +10,21 @@ const SKILL_PATH = path.resolve(
   __dirname,
   "../../src/skills/qa/qa-plan-authoring/SKILL.md",
 )
-const COMMAND_PATH = path.resolve(__dirname, "../../src/commands/create-qa-plan.md")
+const COMMAND_PATH = path.resolve(
+  __dirname,
+  "../../src/commands/create-qa-plan.md",
+)
 
 function frontmatterToolList(md: string): string[] {
   const m = md.match(/^---\r?\n([\s\S]*?)\r?\n---/)
-  const line = (m?.[1] ?? "").split(/\r?\n/).find((l) => l.startsWith("allowed-tools:"))
-  return (line ?? "").replace("allowed-tools:", "").split(",").map((t) => t.trim()).filter(Boolean)
+  const line = (m?.[1] ?? "")
+    .split(/\r?\n/)
+    .find((l) => l.startsWith("allowed-tools:"))
+  return (line ?? "")
+    .replace("allowed-tools:", "")
+    .split(",")
+    .map((t) => t.trim())
+    .filter(Boolean)
 }
 
 describe("qa-plan-authoring skill", () => {
@@ -43,7 +52,9 @@ describe("qa-plan-authoring skill", () => {
   })
 
   it("teaches the framework-default trap (verify against the installed version)", () => {
-    expect(md).toContain("Framework defaults are the most common confident-wrong trap")
+    expect(md).toContain(
+      "Framework defaults are the most common confident-wrong trap",
+    )
     expect(md).toContain("HTTPBearer")
   })
 
@@ -123,17 +134,23 @@ describe("qa-plan-authoring skill", () => {
   })
 
   it("Step 6.8 forbids hand-computed derived literals (R-B)", () => {
-    expect(md).toContain("never assert a hand-computed encoding/hash/slug literal")
+    expect(md).toContain(
+      "never assert a hand-computed encoding/hash/slug literal",
+    )
     expect(md).toContain("assert the producing rule")
   })
 
   it("Step 6.7 carries the findings re-scan loop-back (R-C)", () => {
-    expect(md).toContain("re-scan the changed files for the Step 3.5 hazard classes")
+    expect(md).toContain(
+      "re-scan the changed files for the Step 3.5 hazard classes",
+    )
     expect(md).toContain("not folded into another blocker")
   })
 
   it("Step 6.8 requires the raise-site+catcher pair for envelope claims (L1)", () => {
-    expect(md).toContain("cite the *pair* — the raise-site AND the handler that catches that exception type")
+    expect(md).toContain(
+      "cite the *pair* — the raise-site AND the handler that catches that exception type",
+    )
   })
 
   it("Step 6.8 carries the order-gated resolution-order rule (L1)", () => {
@@ -145,22 +162,32 @@ describe("qa-plan-authoring skill", () => {
   })
 
   it("Step 6.7 locks reachable changed surfaces out of out-of-scope (L2)", () => {
-    expect(md).toContain("A changed surface with a harness-observable interface")
+    expect(md).toContain(
+      "A changed surface with a harness-observable interface",
+    )
   })
 
   it("Step 6.8 out-of-scope-surface bullet carries the reachable-interface test (L2)", () => {
-    expect(md).toContain("if the changed surface has a curl/psql/Playwright interface or effect")
+    expect(md).toContain(
+      "if the changed surface has a curl/psql/Playwright interface or effect",
+    )
   })
 
   it("Step 6.6 carries the 422 schema-validation class (L3)", () => {
-    expect(md).toContain("**Schema validation → 422** (any surface with a typed request body or typed params)")
+    expect(md).toContain(
+      "**Schema validation → 422** (any surface with a typed request body or typed params)",
+    )
   })
 
   it("Step 0 carves the hermetic-observation pointer exception (L4)", () => {
-    expect(md).toContain("**EXCEPTION (verification pointer, not a scenario):**")
+    expect(md).toContain(
+      "**EXCEPTION (verification pointer, not a scenario):**",
+    )
   })
 
   it("Step 0 escalates a failed probe instead of guessing (L5)", () => {
-    expect(md).toContain("**A failed or inconclusive probe is not a license to guess:**")
+    expect(md).toContain(
+      "**A failed or inconclusive probe is not a license to guess:**",
+    )
   })
 })

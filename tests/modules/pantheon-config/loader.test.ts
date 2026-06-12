@@ -2,7 +2,10 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest"
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs"
 import path from "node:path"
 import { tmpdir } from "node:os"
-import { loadFresh, offsetToLineCol } from "../../../src/modules/pantheon-config/loader.js"
+import {
+  loadFresh,
+  offsetToLineCol,
+} from "../../../src/modules/pantheon-config/loader.js"
 import {
   __resetCacheForTests,
   loadPantheonConfig,
@@ -42,15 +45,24 @@ describe("loadFresh", () => {
   })
 
   it("loads user-global only", () => {
-    writeUserGlobal(`{ "agents": { "perun": { "model": "anthropic/claude-opus-4-7" } } }`)
+    writeUserGlobal(
+      `{ "agents": { "perun": { "model": "anthropic/claude-opus-4-7" } } }`,
+    )
     const result = loadFresh({ startDir: projectDir, homedir: tmpHome })
-    expect(result.config.agents.perun).toEqual({ model: "anthropic/claude-opus-4-7" })
+    expect(result.config.agents.perun).toEqual({
+      model: "anthropic/claude-opus-4-7",
+    })
   })
 
   it("loads project-only", () => {
-    writeProject(projectDir, `{ "agents": { "zmora": { "model": "anthropic/claude-sonnet-4-6" } } }`)
+    writeProject(
+      projectDir,
+      `{ "agents": { "zmora": { "model": "anthropic/claude-sonnet-4-6" } } }`,
+    )
     const result = loadFresh({ startDir: projectDir, homedir: tmpHome })
-    expect(result.config.agents.zmora).toEqual({ model: "anthropic/claude-sonnet-4-6" })
+    expect(result.config.agents.zmora).toEqual({
+      model: "anthropic/claude-sonnet-4-6",
+    })
   })
 
   it("merges user-global + project per-agent (project wins on collision)", () => {
@@ -58,7 +70,10 @@ describe("loadFresh", () => {
       "perun": { "model": "anthropic/claude-opus-4-7" },
       "zmora": { "model": "anthropic/claude-haiku-4-5-20251001" }
     } }`)
-    writeProject(projectDir, `{ "agents": { "zmora": { "model": "anthropic/claude-sonnet-4-6" } } }`)
+    writeProject(
+      projectDir,
+      `{ "agents": { "zmora": { "model": "anthropic/claude-sonnet-4-6" } } }`,
+    )
     const result = loadFresh({ startDir: projectDir, homedir: tmpHome })
     expect(result.config.agents).toEqual({
       perun: { model: "anthropic/claude-opus-4-7" },
@@ -68,8 +83,14 @@ describe("loadFresh", () => {
 
   it("closest project file wins over farther one", () => {
     const outer = path.join(tmpHome, "work")
-    writeProject(outer, `{ "agents": { "perun": { "model": "anthropic/from-outer" } } }`)
-    writeProject(projectDir, `{ "agents": { "perun": { "model": "anthropic/from-inner" } } }`)
+    writeProject(
+      outer,
+      `{ "agents": { "perun": { "model": "anthropic/from-outer" } } }`,
+    )
+    writeProject(
+      projectDir,
+      `{ "agents": { "perun": { "model": "anthropic/from-inner" } } }`,
+    )
     const result = loadFresh({ startDir: projectDir, homedir: tmpHome })
     expect(result.config.agents.perun!.model).toBe("anthropic/from-inner")
   })
@@ -85,26 +106,36 @@ describe("loadFresh", () => {
       }`,
     )
     const result = loadFresh({ startDir: projectDir, homedir: tmpHome })
-    expect(result.config.agents.perun).toEqual({ model: "anthropic/claude-opus-4-7" })
+    expect(result.config.agents.perun).toEqual({
+      model: "anthropic/claude-opus-4-7",
+    })
     expect(result.errors).toEqual([])
   })
 
   it("records error and skips file on malformed JSON", () => {
     writeProject(projectDir, `{ this is : not json`)
-    writeUserGlobal(`{ "agents": { "perun": { "model": "anthropic/claude-opus-4-7" } } }`)
+    writeUserGlobal(
+      `{ "agents": { "perun": { "model": "anthropic/claude-opus-4-7" } } }`,
+    )
     const result = loadFresh({ startDir: projectDir, homedir: tmpHome })
     expect(result.errors.some((e) => /failed to parse/.test(e))).toBe(true)
     // Parse-error detail must render as line:col, not a raw byte offset.
     // A goto-byte editor is rare; line:col is what users actually navigate by.
-    expect(result.errors.some((e) => /failed to parse — .* at line \d+:\d+/.test(e))).toBe(true)
+    expect(
+      result.errors.some((e) => /failed to parse — .* at line \d+:\d+/.test(e)),
+    ).toBe(true)
     // user-global still applied
-    expect(result.config.agents.perun).toEqual({ model: "anthropic/claude-opus-4-7" })
+    expect(result.config.agents.perun).toEqual({
+      model: "anthropic/claude-opus-4-7",
+    })
   })
 
   it("records error on non-object top-level and continues", () => {
     writeProject(projectDir, `["not", "an", "object"]`)
     const result = loadFresh({ startDir: projectDir, homedir: tmpHome })
-    expect(result.errors.some((e) => /top-level must be object/.test(e))).toBe(true)
+    expect(result.errors.some((e) => /top-level must be object/.test(e))).toBe(
+      true,
+    )
     expect(result.config.agents).toEqual({})
   })
 
@@ -117,9 +148,13 @@ describe("loadFresh", () => {
       } }`,
     )
     const result = loadFresh({ startDir: projectDir, homedir: tmpHome })
-    expect(result.config.agents.perun).toEqual({ model: "anthropic/claude-opus-4-7" })
+    expect(result.config.agents.perun).toEqual({
+      model: "anthropic/claude-opus-4-7",
+    })
     expect(result.config.agents.broken).toBeUndefined()
-    expect(result.errors.some((e) => /invalid model "no-slash"/.test(e))).toBe(true)
+    expect(result.errors.some((e) => /invalid model "no-slash"/.test(e))).toBe(
+      true,
+    )
   })
 
   it("silently skips unknown top-level sections and still applies known ones (forward-compatible per docs)", () => {
@@ -131,7 +166,9 @@ describe("loadFresh", () => {
       }`,
     )
     const result = loadFresh({ startDir: projectDir, homedir: tmpHome })
-    expect(result.config.agents.perun).toEqual({ model: "anthropic/claude-opus-4-7" })
+    expect(result.config.agents.perun).toEqual({
+      model: "anthropic/claude-opus-4-7",
+    })
     // Unknown sections must NOT show up in errors — they would trigger a
     // warning toast and contradict the documented forward-compat promise.
     expect(result.errors).toEqual([])
@@ -143,8 +180,14 @@ describe("loadFresh", () => {
       `{ "agents": { "perun": { "model": "anthropic/claude-opus-4-7", "temperature": 0.5 } } }`,
     )
     const result = loadFresh({ startDir: projectDir, homedir: tmpHome })
-    expect(result.config.agents.perun).toEqual({ model: "anthropic/claude-opus-4-7" })
-    expect(result.errors.some((e) => /unknown field "agents\.perun\.temperature"/.test(e))).toBe(true)
+    expect(result.config.agents.perun).toEqual({
+      model: "anthropic/claude-opus-4-7",
+    })
+    expect(
+      result.errors.some((e) =>
+        /unknown field "agents\.perun\.temperature"/.test(e),
+      ),
+    ).toBe(true)
   })
 
   it("records an error and does not throw on deeply-nested JSON (RangeError-class input)", () => {
@@ -155,7 +198,9 @@ describe("loadFresh", () => {
     const depth = 10_000
     const nested = "[".repeat(depth) + "1" + "]".repeat(depth)
     writeProject(projectDir, nested)
-    writeUserGlobal(`{ "agents": { "perun": { "model": "anthropic/claude-opus-4-7" } } }`)
+    writeUserGlobal(
+      `{ "agents": { "perun": { "model": "anthropic/claude-opus-4-7" } } }`,
+    )
 
     let result: ReturnType<typeof loadFresh>
     expect(() => {
@@ -164,7 +209,9 @@ describe("loadFresh", () => {
     expect(result!.errors.some((e) => /failed to parse/.test(e))).toBe(true)
     // user-global config must still be applied — one bad file does not
     // poison the whole load.
-    expect(result!.config.agents.perun).toEqual({ model: "anthropic/claude-opus-4-7" })
+    expect(result!.config.agents.perun).toEqual({
+      model: "anthropic/claude-opus-4-7",
+    })
   })
 
   it("skips an oversized file with an error entry instead of slurping it into memory", () => {
@@ -172,11 +219,15 @@ describe("loadFresh", () => {
     // before the file is read.
     const oversized = "x".repeat(1024 * 1024 + 16)
     writeProject(projectDir, oversized)
-    writeUserGlobal(`{ "agents": { "perun": { "model": "anthropic/claude-opus-4-7" } } }`)
+    writeUserGlobal(
+      `{ "agents": { "perun": { "model": "anthropic/claude-opus-4-7" } } }`,
+    )
 
     const result = loadFresh({ startDir: projectDir, homedir: tmpHome })
     expect(result.errors.some((e) => /exceeds.*byte limit/i.test(e))).toBe(true)
-    expect(result.config.agents.perun).toEqual({ model: "anthropic/claude-opus-4-7" })
+    expect(result.config.agents.perun).toEqual({
+      model: "anthropic/claude-opus-4-7",
+    })
   })
 })
 

@@ -37,7 +37,8 @@ export const velesSpecialistInfo: SpecialistInfo = {
     triggers: [
       {
         domain: "Planning",
-        trigger: "Author a QA test plan (or other work plan) from a diff or request",
+        trigger:
+          "Author a QA test plan (or other work plan) from a diff or request",
       },
     ],
   },

@@ -10,8 +10,14 @@ const COMMIT_COMMAND_DESCRIPTION =
   "Create a git commit with the AppVerk commit workflow"
 
 const moduleDirectory = path.dirname(fileURLToPath(import.meta.url))
-const packagedCommandPath = path.resolve(moduleDirectory, "../../commands/commit.md")
-const sourceCommandPath = path.resolve(moduleDirectory, "../../../src/commands/commit.md")
+const packagedCommandPath = path.resolve(
+  moduleDirectory,
+  "../../commands/commit.md",
+)
+const sourceCommandPath = path.resolve(
+  moduleDirectory,
+  "../../../src/commands/commit.md",
+)
 const isDevEnvironment = import.meta.url.includes("/src/")
 
 function loadCommitCommandTemplate(): string {

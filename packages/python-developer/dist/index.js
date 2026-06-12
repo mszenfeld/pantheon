@@ -58,7 +58,10 @@ function createSkillPlugin(options) {
     mode = "primary"
   } = options;
   const packagedAgentPath = path.resolve(moduleDirectory2, "agent-prompt.md");
-  const sourceAgentPath = path.resolve(moduleDirectory2, "../src/agent-prompt.md");
+  const sourceAgentPath = path.resolve(
+    moduleDirectory2,
+    "../src/agent-prompt.md"
+  );
   const packagedCommandPath = path.resolve(
     moduleDirectory2,
     `commands/${commandName}.md`
@@ -67,7 +70,10 @@ function createSkillPlugin(options) {
     moduleDirectory2,
     `../src/commands/${commandName}.md`
   );
-  const getAgentPrompt = createLazyFileLoader(packagedAgentPath, sourceAgentPath);
+  const getAgentPrompt = createLazyFileLoader(
+    packagedAgentPath,
+    sourceAgentPath
+  );
   const getCommandTemplate = createLazyFileLoader(
     packagedCommandPath,
     sourceCommandPath

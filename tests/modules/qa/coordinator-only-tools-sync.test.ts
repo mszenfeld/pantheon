@@ -28,7 +28,11 @@ import { clearAgentMetadataRegistry } from "../../../src/modules/agent-registry/
 // definitions (markdown frontmatter + programmatic config.agent maps) rather
 // than a hard-coded roster, so a newly-added agent is covered automatically.
 
-const COORDINATOR_ONLY_QA_TOOLS = ["parse_plan", "record_input", "preflight"] as const
+const COORDINATOR_ONLY_QA_TOOLS = [
+  "parse_plan",
+  "record_input",
+  "preflight",
+] as const
 
 const here = path.dirname(fileURLToPath(import.meta.url))
 const AGENTS_DIR = path.resolve(here, "../../../src/agents")
@@ -59,15 +63,22 @@ function allowedToolsOf(markdown: string): Set<string> {
 
 /** True iff a programmatic config.agent[...].tools map ENABLES `toolName`. A
  *  missing key or an explicit `false` both count as "not enabled". */
-function enablesTool(tools: Record<string, unknown> | undefined, toolName: string): boolean {
+function enablesTool(
+  tools: Record<string, unknown> | undefined,
+  toolName: string,
+): boolean {
   return tools?.[toolName] === true
 }
 
 /** Run a plugin's config() callback against a fresh fake config and return the
  *  synthesized config.agent map (agentKey -> AgentConfig). */
-async function agentMapFromPlugin(plugin: typeof AppVerkQAPlugin): Promise<Record<string, { tools?: Record<string, unknown> }>> {
+async function agentMapFromPlugin(
+  plugin: typeof AppVerkQAPlugin,
+): Promise<Record<string, { tools?: Record<string, unknown> }>> {
   const instance = await plugin(fakeInput)
-  const config: { agent?: Record<string, { tools?: Record<string, unknown> }> } = {}
+  const config: {
+    agent?: Record<string, { tools?: Record<string, unknown> }>
+  } = {}
   await instance.config?.(config as never)
   return config.agent ?? {}
 }
@@ -89,7 +100,9 @@ describe("coordinator-only QA tools are granted to Perun only", () => {
     const mdFiles = readdirSync(AGENTS_DIR).filter((f) => f.endsWith(".md"))
     for (const file of mdFiles) {
       if (file === "perun.md") continue
-      const granted = allowedToolsOf(readFileSync(path.join(AGENTS_DIR, file), "utf8"))
+      const granted = allowedToolsOf(
+        readFileSync(path.join(AGENTS_DIR, file), "utf8"),
+      )
       for (const t of COORDINATOR_ONLY_QA_TOOLS) {
         expect(
           granted.has(t),

@@ -48,12 +48,7 @@ const BE_TOOLS = [
   "Bash(head:./*)",
   "Bash(tail:./*)"
 ];
-const SETUP_TOOLS = [
-  "Read",
-  "Glob",
-  "Grep",
-  "execute_recipe"
-];
+const SETUP_TOOLS = ["Read", "Glob", "Grep", "execute_recipe"];
 function toolsForVariant(stack) {
   switch (stack) {
     case "fe":

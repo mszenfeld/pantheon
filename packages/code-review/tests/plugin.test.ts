@@ -70,7 +70,9 @@ describe("AppVerkCodeReviewPlugin", () => {
 
       for (const name of EXPECTED_AGENTS) {
         const prompt = config.agent![name]!.prompt!
-        expect(prompt).toContain("## Pre-Analysis Step: Discover Project Standards")
+        expect(prompt).toContain(
+          "## Pre-Analysis Step: Discover Project Standards",
+        )
         expect(prompt).toContain("load the `standards-discovery` skill")
       }
     })
@@ -81,7 +83,9 @@ describe("AppVerkCodeReviewPlugin", () => {
 
       for (const name of EXPECTED_COMMANDS) {
         const template = config.command![name]!.template!
-        expect(template).toContain("## Pre-Analysis Step: Discover Project Standards")
+        expect(template).toContain(
+          "## Pre-Analysis Step: Discover Project Standards",
+        )
         expect(template).toContain("load the `standards-discovery` skill")
       }
     })
@@ -95,7 +99,9 @@ describe("AppVerkCodeReviewPlugin", () => {
       const frontmatterEnd = prompt.indexOf("---\n", 4) // Find end of frontmatter
       expect(frontmatterEnd).toBeGreaterThan(-1)
 
-      const preAnalysisIndex = prompt.indexOf("## Pre-Analysis Step: Discover Project Standards")
+      const preAnalysisIndex = prompt.indexOf(
+        "## Pre-Analysis Step: Discover Project Standards",
+      )
       expect(preAnalysisIndex).toBeGreaterThan(frontmatterEnd)
     })
 
@@ -105,7 +111,9 @@ describe("AppVerkCodeReviewPlugin", () => {
 
       for (const name of EXPECTED_AGENTS) {
         const prompt = config.agent![name]!.prompt!
-        const matches = prompt.match(/## Pre-Analysis Step: Discover Project Standards/g)
+        const matches = prompt.match(
+          /## Pre-Analysis Step: Discover Project Standards/g,
+        )
         expect(matches?.length ?? 0).toBe(1)
       }
     })

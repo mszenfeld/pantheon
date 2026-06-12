@@ -43,7 +43,11 @@ describe("createControlledCommit (unit, injected git runner)", () => {
         "rev-parse": { stdout: "true\n", stderr: "", exitCode: 0 },
         add: { stdout: "", stderr: "", exitCode: 0 },
         diff: { stdout: "", stderr: "", exitCode: 1 },
-        commit: { stdout: "[main abc] feat: add note\n", stderr: "", exitCode: 0 },
+        commit: {
+          stdout: "[main abc] feat: add note\n",
+          stderr: "",
+          exitCode: 0,
+        },
         status: { stdout: " M other.txt\n", stderr: "", exitCode: 0 },
       },
     })

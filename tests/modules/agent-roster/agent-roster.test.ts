@@ -9,7 +9,12 @@ import {
   buildDriftWarning,
 } from "../../../src/modules/agent-roster/index.js"
 
-type Entry = { mode?: string; hidden?: boolean; model?: string; description?: string }
+type Entry = {
+  mode?: string
+  hidden?: boolean
+  model?: string
+  description?: string
+}
 
 function cfg(
   agent: Record<string, Entry>,
@@ -26,7 +31,9 @@ function entry(config: Config, key: string): Entry {
 
 describe("agent-roster: applyRosterPolicy", () => {
   it("hides a pre-existing key, sets hidden:true, preserves other fields", () => {
-    const config = cfg({ "user-agent": { mode: "primary", model: "x/y", description: "d" } })
+    const config = cfg({
+      "user-agent": { mode: "primary", model: "x/y", description: "d" },
+    })
     applyRosterPolicy(config, new Set(["user-agent"]))
     const e = entry(config, "user-agent")
     expect(e.hidden).toBe(true)
@@ -78,7 +85,10 @@ describe("agent-roster: applyRosterPolicy", () => {
 
   it("leaves a valid (visible primary) default_agent unchanged", () => {
     const config = cfg(
-      { "Perun - Coordinator": { mode: "primary" }, "frontend-developer": { mode: "primary" } },
+      {
+        "Perun - Coordinator": { mode: "primary" },
+        "frontend-developer": { mode: "primary" },
+      },
       { default_agent: "frontend-developer" },
     )
     applyRosterPolicy(config, new Set())
@@ -95,13 +105,19 @@ describe("agent-roster: applyRosterPolicy", () => {
   })
 
   it("repoints a default_agent pointing to a non-existent key", () => {
-    const config = cfg({ "Perun - Coordinator": { mode: "primary" } }, { default_agent: "ghost" })
+    const config = cfg(
+      { "Perun - Coordinator": { mode: "primary" } },
+      { default_agent: "ghost" },
+    )
     applyRosterPolicy(config, new Set())
     expect(getDefaultAgent(config)).toBe("Perun - Coordinator")
   })
 
   it("falls back to the sorted-first visible primary when Perun is absent", () => {
-    const config = cfg({ zeta: { mode: "primary" }, alpha: { mode: "primary" } })
+    const config = cfg({
+      zeta: { mode: "primary" },
+      alpha: { mode: "primary" },
+    })
     applyRosterPolicy(config, new Set())
     expect(getDefaultAgent(config)).toBe("alpha")
   })
@@ -230,7 +246,9 @@ describe("agent-roster: findUncoveredNatives (drift detector)", () => {
   })
 
   it("accepts the v1 SDK `builtIn` flag as the native marker", () => {
-    const agents: RuntimeAgent[] = [{ name: "chat", mode: "primary", builtIn: true }]
+    const agents: RuntimeAgent[] = [
+      { name: "chat", mode: "primary", builtIn: true },
+    ]
     expect(findUncoveredNatives(agents)).toEqual(["chat"])
   })
 

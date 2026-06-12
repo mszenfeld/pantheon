@@ -23,9 +23,13 @@ export interface RecordInputContext {
 
 export function makeRecordInputHandler(
   deps: RecordInputHandlerDeps,
-): (args: RecordInputArgs, ctx: RecordInputContext) => Promise<RecordInputResult> {
+): (
+  args: RecordInputArgs,
+  ctx: RecordInputContext,
+) => Promise<RecordInputResult> {
   return async (args, ctx) => {
-    const parentID = (await deps.resolveParentID(ctx.sessionID)) ?? ctx.sessionID
+    const parentID =
+      (await deps.resolveParentID(ctx.sessionID)) ?? ctx.sessionID
 
     // Enforce the mid-run dialog round cap deterministically.
     // The spec in `src/agents/perun.md` caps Perun's NAME=value request loop
@@ -52,7 +56,14 @@ export function makeRecordInputHandler(
     )
     const declaredInput = declaredInputs.has(args.name)
 
-    const write = deps.store.writeBinding(parentID, args.name, args.value, "secret", "user-paste", { declaredInput })
+    const write = deps.store.writeBinding(
+      parentID,
+      args.name,
+      args.value,
+      "secret",
+      "user-paste",
+      { declaredInput },
+    )
     if (write.status === "ok") return { status: "ok" }
     if (write.status === "duplicate") return { status: "ok" }
     return { status: "rejected", reason: write.reason }

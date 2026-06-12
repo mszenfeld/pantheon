@@ -183,7 +183,7 @@ echo "$RESPONSE" | grep -q '"status":"active"' && echo "PASS" || echo "FAIL"
 ## Credential Safety Rules
 
 - NEVER log full DATABASE_URL, DB_PASSWORD, or connection strings in reports.
-- Mask passwords: `postgres://admin:***@host/db`
+- Mask passwords: `postgres://USER:***@HOST:5432/DB`
 - Prefer test/local DB connections. If production credentials detected, abort and mark SKIP.
 
 ---

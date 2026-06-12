@@ -2,7 +2,14 @@ import type { BindingsStore } from "./bindings-store.js"
 import type { QaRunState } from "./qa-run-state.js"
 import { scrubSecrets } from "./scrubber.js"
 
-const NULLISH_LITERALS = new Set(["null", "undefined", "none", "nil", "nan", "(null)"])
+const NULLISH_LITERALS = new Set([
+  "null",
+  "undefined",
+  "none",
+  "nil",
+  "nan",
+  "(null)",
+])
 
 export interface BashResult {
   exitCode: number
@@ -36,9 +43,13 @@ const MAX_ATTEMPTS = 3
 
 export function makeExecuteRecipeHandler(
   deps: ExecuteRecipeDeps,
-): (a: ExecuteRecipeArgs, c: ExecuteRecipeContext) => Promise<ExecuteRecipeResult> {
+): (
+  a: ExecuteRecipeArgs,
+  c: ExecuteRecipeContext,
+) => Promise<ExecuteRecipeResult> {
   return async (args, ctx) => {
-    const parentID = (await deps.resolveParentID(ctx.sessionID)) ?? ctx.sessionID
+    const parentID =
+      (await deps.resolveParentID(ctx.sessionID)) ?? ctx.sessionID
     const bindings = deps.state.getBindings(parentID) ?? []
     const target = bindings.find((b) => b.name === args.binding_name)
     if (target === undefined) return { status: "unknown_binding" }
@@ -67,9 +78,16 @@ export function makeExecuteRecipeHandler(
     if (missing.length > 0) return { status: "need_info", missing }
 
     // Bounded attempts.
-    const attempts = deps.state.incrementRecipeAttempt(parentID, args.binding_name)
+    const attempts = deps.state.incrementRecipeAttempt(
+      parentID,
+      args.binding_name,
+    )
     if (attempts > MAX_ATTEMPTS) {
-      return { status: "recipe_failed", reason: "max_attempts", stderr_tail: "" }
+      return {
+        status: "recipe_failed",
+        reason: "max_attempts",
+        stderr_tail: "",
+      }
     }
 
     // Run the recipe. `runBash` owns the wall-clock timeout:
@@ -81,29 +99,63 @@ export function makeExecuteRecipeHandler(
     // Scrub the full stderr BEFORE truncating: `slice(-200)` could otherwise
     // cut a secret in half and let partial bytes survive the scrubber
     // The O(N) full scan is the correct trade-off.
-    const scrubbedStderr = scrubSecrets(result.stderr, parentID, deps.store).slice(-200)
+    const scrubbedStderr = scrubSecrets(
+      result.stderr,
+      parentID,
+      deps.store,
+    ).slice(-200)
 
     if (result.exitCode === 124) {
-      return { status: "recipe_failed", reason: "timeout", stderr_tail: scrubbedStderr }
+      return {
+        status: "recipe_failed",
+        reason: "timeout",
+        stderr_tail: scrubbedStderr,
+      }
     }
     if (result.exitCode !== 0) {
-      return { status: "recipe_failed", reason: `exit_code=${result.exitCode}`, stderr_tail: scrubbedStderr }
+      return {
+        status: "recipe_failed",
+        reason: `exit_code=${result.exitCode}`,
+        stderr_tail: scrubbedStderr,
+      }
     }
 
     const trimmed = result.stdout.replace(/\n$/, "").trim()
     if (trimmed.length === 0) {
-      return { status: "recipe_failed", reason: "invalid_output: empty", stderr_tail: scrubbedStderr }
+      return {
+        status: "recipe_failed",
+        reason: "invalid_output: empty",
+        stderr_tail: scrubbedStderr,
+      }
     }
     if (NULLISH_LITERALS.has(trimmed.toLowerCase())) {
-      return { status: "recipe_failed", reason: `invalid_output: nullish ('${trimmed}')`, stderr_tail: scrubbedStderr }
+      return {
+        status: "recipe_failed",
+        reason: `invalid_output: nullish ('${trimmed}')`,
+        stderr_tail: scrubbedStderr,
+      }
     }
     if (trimmed.length > 4096) {
-      return { status: "recipe_failed", reason: "invalid_output: too long", stderr_tail: scrubbedStderr }
+      return {
+        status: "recipe_failed",
+        reason: "invalid_output: too long",
+        stderr_tail: scrubbedStderr,
+      }
     }
 
-    const write = deps.store.writeBinding(parentID, args.binding_name, trimmed, target.type, "minted-recipe")
+    const write = deps.store.writeBinding(
+      parentID,
+      args.binding_name,
+      trimmed,
+      target.type,
+      "minted-recipe",
+    )
     if (write.status === "error") {
-      return { status: "recipe_failed", reason: `register_failed: ${write.reason}`, stderr_tail: scrubbedStderr }
+      return {
+        status: "recipe_failed",
+        reason: `register_failed: ${write.reason}`,
+        stderr_tail: scrubbedStderr,
+      }
     }
     return { status: "ok" }
   }

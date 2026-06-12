@@ -3,3 +3,12 @@ dist
 .tmp-build
 coverage
 bun.lock
+
+# Markdown is hand-authored here: docs use literal `*` (globs like `*.ts`,
+# scenario patterns like `SETUP-*`), there are content-pinning tests, and
+# `src/agents/perun.md` is an alignment-sensitive prompt template. Prettier
+# misreads the `*` as emphasis and corrupts it, so markdown is formatted by hand.
+*.md
+
+# Never let root-level tooling descend into nested git worktrees.
+.worktrees

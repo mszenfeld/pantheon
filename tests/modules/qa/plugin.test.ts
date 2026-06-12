@@ -20,7 +20,13 @@ describe("AppVerkQAPlugin", () => {
   })
 
   const EXPECTED_VARIANTS = ["zmora-fe", "zmora-be"]
-  const REMOVED_AGENTS = ["qa-tester-fe", "qa-tester-be", "qa-tester", "qa-fe-tester", "qa-be-tester"]
+  const REMOVED_AGENTS = [
+    "qa-tester-fe",
+    "qa-tester-be",
+    "qa-tester",
+    "qa-fe-tester",
+    "qa-be-tester",
+  ]
   const EXPECTED_COMMANDS = ["qa:create-plan", "qa:run"]
   // Deprecated aliases for the pre-namespace names must still register (back-compat
   // shim). They resolve to the same templates as the canonical
@@ -35,11 +41,14 @@ describe("AppVerkQAPlugin", () => {
     expect(typeof config.agent![name]!.prompt).toBe("string")
   })
 
-  it.each(REMOVED_AGENTS)("does not register %s (old or unsuffixed)", async (name) => {
-    const config: Config = { agent: {} }
-    await pluginResult.config?.(config)
-    expect(config.agent![name]).toBeUndefined()
-  })
+  it.each(REMOVED_AGENTS)(
+    "does not register %s (old or unsuffixed)",
+    async (name) => {
+      const config: Config = { agent: {} }
+      await pluginResult.config?.(config)
+      expect(config.agent![name]).toBeUndefined()
+    },
+  )
 
   it.each(EXPECTED_COMMANDS)("registers %s command", async (name) => {
     const config: Config = { command: {} }
@@ -66,7 +75,9 @@ describe("AppVerkQAPlugin", () => {
     expect(config.command!["create-qa-plan"]!.template).toBe(
       config.command!["qa:create-plan"]!.template,
     )
-    expect(config.command!["run-qa"]!.template).toBe(config.command!["qa:run"]!.template)
+    expect(config.command!["run-qa"]!.template).toBe(
+      config.command!["qa:run"]!.template,
+    )
   })
 })
 
@@ -253,7 +264,8 @@ describe("scrubberFactory snapshot lifecycle", () => {
     const pluginResult = await AppVerkQAPlugin(pluginInput)
 
     const parentID = "perun-arch004"
-    const tokenValue = "eyJhbGciOiJIUzI1NiJ9-PinnedSnapshotValue-XYZ-LONG-PAYLOAD"
+    const tokenValue =
+      "eyJhbGciOiJIUzI1NiJ9-PinnedSnapshotValue-XYZ-LONG-PAYLOAD"
 
     // Seed the store via the public record_input tool, exactly as Perun would.
     const recordInputTool = pluginResult.tool?.record_input
@@ -354,8 +366,9 @@ describe("scrubberFactory snapshot lifecycle", () => {
         properties: { info: { id: parentID } },
       },
     } as never)
-    expect(session.scrub(`contains ${seedValue} here`))
-      .toContain("[REDACTED:QA_BIND_TEMP]")
+    expect(session.scrub(`contains ${seedValue} here`)).toContain(
+      "[REDACTED:QA_BIND_TEMP]",
+    )
 
     // Release the pin. A subsequent session.deleted event must now reclaim
     // the (previously pinned) entry — proving the release decremented the

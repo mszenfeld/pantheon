@@ -1,5 +1,8 @@
 import { registerAgentMetadata } from "../agent-registry/index.js";
-import { applyModelOverride, captureUserModels } from "../_shared/apply-model-override.js";
+import {
+  applyModelOverride,
+  captureUserModels
+} from "../_shared/apply-model-override.js";
 import { VELES_AGENT_KEY, velesSpecialistInfo } from "./veles.metadata.js";
 import { buildVelesPrompt } from "./prompt.js";
 import { isSerenaAvailable } from "../_shared/serena-detect.js";
@@ -36,7 +39,13 @@ const AppVerkPlanPlugin = async ({ client }) => {
         // enforcement model". Do not treat it as a security boundary.
         tools: { ...VELES_DISPATCH_TOOLS }
       };
-      applyModelOverride(config, "veles", VELES_AGENT_KEY, void 0, userModels);
+      applyModelOverride(
+        config,
+        "veles",
+        VELES_AGENT_KEY,
+        void 0,
+        userModels
+      );
       serenaNotifier.markSerenaMissing(!isSerenaAvailable(config));
     },
     event: serenaNotifier.onEvent

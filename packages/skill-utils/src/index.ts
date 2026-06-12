@@ -46,7 +46,11 @@ function createLazyFileLoader(packaged: string, source: string): () => string {
   }
 }
 
-export { CATEGORY_PREFIX_MAPPING, VALID_PREFIXES, VALID_CATEGORIES } from "./category-prefix-mapping.js"
+export {
+  CATEGORY_PREFIX_MAPPING,
+  VALID_PREFIXES,
+  VALID_CATEGORIES,
+} from "./category-prefix-mapping.js"
 
 export * from "./session-identity.js"
 
@@ -66,7 +70,10 @@ export function createSkillPlugin(options: CreateSkillPluginOptions): Plugin {
   } = options
 
   const packagedAgentPath = path.resolve(moduleDirectory, "agent-prompt.md")
-  const sourceAgentPath = path.resolve(moduleDirectory, "../src/agent-prompt.md")
+  const sourceAgentPath = path.resolve(
+    moduleDirectory,
+    "../src/agent-prompt.md",
+  )
   const packagedCommandPath = path.resolve(
     moduleDirectory,
     `commands/${commandName}.md`,
@@ -76,7 +83,10 @@ export function createSkillPlugin(options: CreateSkillPluginOptions): Plugin {
     `../src/commands/${commandName}.md`,
   )
 
-  const getAgentPrompt = createLazyFileLoader(packagedAgentPath, sourceAgentPath)
+  const getAgentPrompt = createLazyFileLoader(
+    packagedAgentPath,
+    sourceAgentPath,
+  )
   const getCommandTemplate = createLazyFileLoader(
     packagedCommandPath,
     sourceCommandPath,

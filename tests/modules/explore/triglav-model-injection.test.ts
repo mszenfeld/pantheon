@@ -49,11 +49,15 @@ describe("AppVerkExplorePlugin triglav model injection", () => {
   }
 
   it("sets model on 'triglav' when pantheon.json provides triglav.model", async () => {
-    writeUserGlobal(`{ "agents": { "triglav": { "model": "opencode/claude-haiku-4-5" } } }`)
+    writeUserGlobal(
+      `{ "agents": { "triglav": { "model": "opencode/claude-haiku-4-5" } } }`,
+    )
     const plugin = await AppVerkExplorePlugin(fakeInput())
     const config: Config = { agent: {} }
     await plugin.config?.(config)
-    expect(config.agent![TRIGLAV_AGENT_KEY]!.model).toBe("opencode/claude-haiku-4-5")
+    expect(config.agent![TRIGLAV_AGENT_KEY]!.model).toBe(
+      "opencode/claude-haiku-4-5",
+    )
   })
 
   it("leaves model unset when no pantheon.json exists", async () => {
@@ -64,7 +68,9 @@ describe("AppVerkExplorePlugin triglav model injection", () => {
   })
 
   it("leaves model unset when triglav key is absent", async () => {
-    writeUserGlobal(`{ "agents": { "perun": { "model": "anthropic/claude-opus-4-7" } } }`)
+    writeUserGlobal(
+      `{ "agents": { "perun": { "model": "anthropic/claude-opus-4-7" } } }`,
+    )
     const plugin = await AppVerkExplorePlugin(fakeInput())
     const config: Config = { agent: {} }
     await plugin.config?.(config)
@@ -77,7 +83,9 @@ describe("AppVerkExplorePlugin triglav model injection", () => {
   // CWE-117/CWE-1188 — an ANSI/BiDi/control-byte payload must never reach
   // `config.agent["triglav"].model` and downstream TUI sinks.
   it("leaves model unset when pantheon.json provides an invalid model", async () => {
-    writeUserGlobal(`{ "agents": { "triglav": { "model": "bad model\\u001b[31m" } } }`)
+    writeUserGlobal(
+      `{ "agents": { "triglav": { "model": "bad model\\u001b[31m" } } }`,
+    )
     const plugin = await AppVerkExplorePlugin(fakeInput())
     const config: Config = { agent: {} }
     await plugin.config?.(config)

@@ -63,7 +63,9 @@ class NotificationSender {
   warnOnceNoShell() {
     if (this.warnedNoShell) return;
     this.warnedNoShell = true;
-    console.warn("[pantheon/session-notification] ctx.$ unavailable; notifications disabled");
+    console.warn(
+      "[pantheon/session-notification] ctx.$ unavailable; notifications disabled"
+    );
   }
 }
 async function whichOrNull($, bin) {

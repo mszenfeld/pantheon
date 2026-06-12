@@ -74,7 +74,11 @@ describe("truncateBytes", () => {
 
 describe("truncateBytesWithMarker", () => {
   it("uses the supplied marker rather than the default", () => {
-    const out = truncateBytesWithMarker("hello world", 5, AGGREGATE_TRUNCATION_MARKER)
+    const out = truncateBytesWithMarker(
+      "hello world",
+      5,
+      AGGREGATE_TRUNCATION_MARKER,
+    )
     expect(out).toBe("hello" + AGGREGATE_TRUNCATION_MARKER)
     expect(out).not.toContain(TRUNCATION_MARKER.trimStart())
   })
@@ -83,22 +87,36 @@ describe("truncateBytesWithMarker", () => {
     // The aggregate budget relies on this: once the wave budget is spent, the
     // remaining bytes argument is 0, so the body must collapse to just the
     // pointer marker — never a silent drop, never a U+FFFD artefact.
-    const out = truncateBytesWithMarker("anything", 0, AGGREGATE_TRUNCATION_MARKER)
+    const out = truncateBytesWithMarker(
+      "anything",
+      0,
+      AGGREGATE_TRUNCATION_MARKER,
+    )
     expect(out).toBe(AGGREGATE_TRUNCATION_MARKER)
     expect(out).not.toContain("�")
   })
 
   it("treats a negative maxBytes as zero (marker only)", () => {
-    const out = truncateBytesWithMarker("anything", -10, AGGREGATE_TRUNCATION_MARKER)
+    const out = truncateBytesWithMarker(
+      "anything",
+      -10,
+      AGGREGATE_TRUNCATION_MARKER,
+    )
     expect(out).toBe(AGGREGATE_TRUNCATION_MARKER)
   })
 
   it("returns the input unchanged when it fits under a positive cap", () => {
-    expect(truncateBytesWithMarker("hi", 16, AGGREGATE_TRUNCATION_MARKER)).toBe("hi")
+    expect(truncateBytesWithMarker("hi", 16, AGGREGATE_TRUNCATION_MARKER)).toBe(
+      "hi",
+    )
   })
 
   it("drops a partial multi-byte sequence at the cut without emitting U+FFFD", () => {
-    const out = truncateBytesWithMarker("ab😀cd", 4, AGGREGATE_TRUNCATION_MARKER)
+    const out = truncateBytesWithMarker(
+      "ab😀cd",
+      4,
+      AGGREGATE_TRUNCATION_MARKER,
+    )
     expect(out).toBe("ab" + AGGREGATE_TRUNCATION_MARKER)
     expect(out).not.toContain("�")
   })

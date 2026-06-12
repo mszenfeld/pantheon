@@ -1,7 +1,11 @@
 import type { SkillEntry } from "./skill-catalog.js"
 
-export function generateActivationRules(catalog: Map<string, SkillEntry>): string {
-  const entries = Array.from(catalog.values()).sort((a, b) => a.name.localeCompare(b.name))
+export function generateActivationRules(
+  catalog: Map<string, SkillEntry>,
+): string {
+  const entries = Array.from(catalog.values()).sort((a, b) =>
+    a.name.localeCompare(b.name),
+  )
 
   const rows = entries
     .map((skill) => `| \`${skill.name}\` | ${skill.activation} |`)

@@ -83,7 +83,9 @@ describe("AppVerkCoordinatorPlugin toast notification", () => {
       path.join(dir, "pantheon.json"),
       `{ "agents": { "perun": { "model": "anthropic/claude-opus-4-7" }, "strigob": { "model": "anthropic/claude-opus-4-7" } } }`,
     )
-    const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {})
+    const consoleErrorSpy = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => {})
     try {
       const plugin = await AppVerkCoordinatorPlugin({ client } as never)
       await plugin.config?.({ agent: {} } as never)
@@ -91,7 +93,9 @@ describe("AppVerkCoordinatorPlugin toast notification", () => {
       expect(showToast).toHaveBeenCalledTimes(1)
       expect(showToast.mock.calls[0]![0].body.variant).toBe("warning")
       const allArgs = consoleErrorSpy.mock.calls.map((c) => String(c[0]))
-      expect(allArgs.some((m) => /\[pantheon\] unknown agent "strigob"/.test(m))).toBe(true)
+      expect(
+        allArgs.some((m) => /\[pantheon\] unknown agent "strigob"/.test(m)),
+      ).toBe(true)
     } finally {
       consoleErrorSpy.mockRestore()
     }
@@ -116,13 +120,17 @@ describe("AppVerkCoordinatorPlugin toast notification", () => {
     const dir = path.join(tmpHome, ".config", "opencode")
     mkdirSync(dir, { recursive: true })
     writeFileSync(path.join(dir, "pantheon.json"), `{ malformed`)
-    const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {})
+    const consoleErrorSpy = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => {})
     try {
       const plugin = await AppVerkCoordinatorPlugin({ client } as never)
       await plugin.event?.({ event: { type: "session.created" } } as never)
       expect(consoleErrorSpy).toHaveBeenCalled()
       const allArgs = consoleErrorSpy.mock.calls.map((c) => String(c[0]))
-      expect(allArgs.some((m) => /\[pantheon\].*failed to parse/.test(m))).toBe(true)
+      expect(allArgs.some((m) => /\[pantheon\].*failed to parse/.test(m))).toBe(
+        true,
+      )
     } finally {
       consoleErrorSpy.mockRestore()
     }
@@ -136,7 +144,9 @@ describe("AppVerkCoordinatorPlugin toast notification", () => {
       path.join(dir, "pantheon.json"),
       "[".repeat(depth) + "1" + "]".repeat(depth),
     )
-    const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {})
+    const consoleErrorSpy = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => {})
     try {
       const plugin = await AppVerkCoordinatorPlugin({ client } as never)
       await expect(

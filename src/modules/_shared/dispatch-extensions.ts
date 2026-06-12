@@ -122,7 +122,9 @@ let registered: DispatchExtensions = {}
  * a scrubber without clearing the registry. Tests can `clearDispatchExtensions()`
  * between cases.
  */
-export function registerDispatchExtensions(extensions: DispatchExtensions): void {
+export function registerDispatchExtensions(
+  extensions: DispatchExtensions,
+): void {
   registered = { ...registered, ...extensions }
 }
 

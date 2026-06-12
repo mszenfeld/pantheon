@@ -5,7 +5,10 @@ import {
   PollerTimeoutError,
   type PollerMessage,
 } from "./poller.js"
-import { neutralizeUntrustedOutput, normalizeVariantSuffix } from "./sanitize.js"
+import {
+  neutralizeUntrustedOutput,
+  normalizeVariantSuffix,
+} from "../_shared/sanitize.js"
 import {
   truncateBytes,
   truncateBytesWithMarker,
@@ -78,7 +81,9 @@ export interface AgentInfo {
 // Value must match `VELES_AGENT_KEY` in `plan/veles.metadata.ts` (the agent's
 // registered name). Kept as a literal here to avoid a coordinator→plan import;
 // `validate-dispatchable.test.ts` pins the two together against drift.
-export const DISPATCHABLE_ALL_AGENTS: ReadonlySet<string> = new Set<string>(["Veles - Planner"])
+export const DISPATCHABLE_ALL_AGENTS: ReadonlySet<string> = new Set<string>([
+  "Veles - Planner",
+])
 
 /**
  * Anti-recursion guard. Dispatchable targets:
@@ -261,7 +266,11 @@ export async function dispatchParallel(
   // is spawned, so dependent state (e.g. QA bindings) is populated before the
   // first specialist task starts. Swallow errors so a buggy hook cannot break
   // unrelated dispatches — the hook is expected to be self-defensive.
-  if (preflight !== undefined && parentSessionID !== undefined && parentSessionID.length > 0) {
+  if (
+    preflight !== undefined &&
+    parentSessionID !== undefined &&
+    parentSessionID.length > 0
+  ) {
     try {
       await preflight({
         parentSessionID,
@@ -277,7 +286,9 @@ export async function dispatchParallel(
   // takes precedence over the legacy `scrubber` field — when both are set the
   // factory wins because it is the race-safe path. Factory failures
   // are absorbed: a buggy factory must not break unrelated dispatches.
-  let scrubberSession: { scrub: (text: string) => string; release: () => void } | undefined
+  let scrubberSession:
+    | { scrub: (text: string) => string; release: () => void }
+    | undefined
   if (
     scrubberFactory !== undefined &&
     parentSessionID !== undefined &&
@@ -292,7 +303,9 @@ export async function dispatchParallel(
   // Adapt the per-dispatch scrubber to the per-task `(text, parentSessionID)`
   // signature so `runTask` can stay agnostic of which path produced it. The
   // session's `scrub` already closes over the snapshot.
-  const effectiveScrubber: ((text: string, parent: string) => string) | undefined =
+  const effectiveScrubber:
+    | ((text: string, parent: string) => string)
+    | undefined =
     scrubberSession !== undefined
       ? (text) => scrubberSession!.scrub(text)
       : scrubber
@@ -396,7 +409,11 @@ function enforceAggregateBudget(
     // Budget exhausted for this (and every later) body: keep only what fits and
     // append a pointer-to-child marker. `truncateBytesWithMarker` is UTF-8-safe
     // and never splits a multi-byte sequence at the cut.
-    r.result = truncateBytesWithMarker(r.result, remaining, AGGREGATE_TRUNCATION_MARKER)
+    r.result = truncateBytesWithMarker(
+      r.result,
+      remaining,
+      AGGREGATE_TRUNCATION_MARKER,
+    )
     remaining = 0
   }
 }
@@ -488,21 +505,27 @@ async function runTask(
   let sessionId: string | undefined
 
   try {
-    const fullPrompt = task.context ? `${task.prompt}\n\n${task.context}` : task.prompt
-    const id = await specialist.startTask(task.name, fullPrompt, (createdId) => {
-      // Runs after the child session is created but BEFORE its turn is fired.
-      //  - Mirror into the outer `let` so the catch block's abort-path cleanup
-      //    can cancel a child that fails (or is aborted) mid-turn.
-      //  - Register (childSessionID → agent name) so plugin hooks resolve which
-      //    agent owns the session. This MUST happen before the turn: the
-      //    `shell.env` hook fires mid-turn server-side, and the turn starts as
-      //    soon as `session.promptAsync` is acknowledged, so registering after
-      //    `startTask` resolves would race the hook — it could see no mapping
-      //    and inject no bindings. Cleanup is the plugin's `session.deleted`
-      //    handler, not this dispatcher.
-      sessionId = createdId
-      options.sessionAgentRegistry?.register(createdId, task.name)
-    })
+    const fullPrompt = task.context
+      ? `${task.prompt}\n\n${task.context}`
+      : task.prompt
+    const id = await specialist.startTask(
+      task.name,
+      fullPrompt,
+      (createdId) => {
+        // Runs after the child session is created but BEFORE its turn is fired.
+        //  - Mirror into the outer `let` so the catch block's abort-path cleanup
+        //    can cancel a child that fails (or is aborted) mid-turn.
+        //  - Register (childSessionID → agent name) so plugin hooks resolve which
+        //    agent owns the session. This MUST happen before the turn: the
+        //    `shell.env` hook fires mid-turn server-side, and the turn starts as
+        //    soon as `session.promptAsync` is acknowledged, so registering after
+        //    `startTask` resolves would race the hook — it could see no mapping
+        //    and inject no bindings. Cleanup is the plugin's `session.deleted`
+        //    handler, not this dispatcher.
+        sessionId = createdId
+        options.sessionAgentRegistry?.register(createdId, task.name)
+      },
+    )
 
     const rawResult = await pollUntilIdle({
       fetchMessages: () => specialist.fetchMessages(id),
@@ -549,7 +572,9 @@ async function runTask(
       status,
       result: "",
       duration_ms: Date.now() - startTime,
-      error: neutralizeUntrustedOutput(err instanceof Error ? err.message : String(err)),
+      error: neutralizeUntrustedOutput(
+        err instanceof Error ? err.message : String(err),
+      ),
     }
   }
 }

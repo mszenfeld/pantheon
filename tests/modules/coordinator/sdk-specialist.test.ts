@@ -34,7 +34,15 @@ interface FakeClient {
 interface FakeClientConfig {
   createResponses?: Array<{ data?: { id?: string } | undefined }>
   promptResponse?: { data?: unknown }
-  messagesResponses?: Record<string, { data?: Array<{ info: Message; parts: Array<{ type: string; text?: string }> }> }>
+  messagesResponses?: Record<
+    string,
+    {
+      data?: Array<{
+        info: Message
+        parts: Array<{ type: string; text?: string }>
+      }>
+    }
+  >
   agentsResponse?: { data?: Agent[] } | Error
   /** When set, `app.log` rejects with this error — used to prove the breadcrumb is itself best-effort. */
   logRejectsWith?: Error
@@ -57,7 +65,9 @@ function makeFakeClient(config: FakeClientConfig = {}): FakeClient {
     session: {
       async create(options: Record<string, unknown>) {
         calls.sessionCreate.push(options)
-        const response = config.createResponses?.[createIndex] ?? { data: { id: "default-session-id" } }
+        const response = config.createResponses?.[createIndex] ?? {
+          data: { id: "default-session-id" },
+        }
         createIndex += 1
         return response
       },
@@ -69,7 +79,9 @@ function makeFakeClient(config: FakeClientConfig = {}): FakeClient {
         calls.sessionPromptAsync.push(options)
         return config.promptResponse ?? { data: undefined }
       },
-      async messages(options: { path: { id: string } } & Record<string, unknown>) {
+      async messages(
+        options: { path: { id: string } } & Record<string, unknown>,
+      ) {
         calls.sessionMessages.push(options)
         const id = options.path.id
         return config.messagesResponses?.[id] ?? { data: [] }
@@ -103,7 +115,9 @@ function makeFakeClient(config: FakeClientConfig = {}): FakeClient {
   }
 }
 
-function makeAssistant(overrides: Partial<AssistantMessage> = {}): AssistantMessage {
+function makeAssistant(
+  overrides: Partial<AssistantMessage> = {},
+): AssistantMessage {
   return {
     id: "msg-1",
     sessionID: "sess-1",
@@ -125,7 +139,9 @@ function makeAssistant(overrides: Partial<AssistantMessage> = {}): AssistantMess
   }
 }
 
-function makeAgent(overrides: Partial<Agent> & Pick<Agent, "name" | "mode">): Agent {
+function makeAgent(
+  overrides: Partial<Agent> & Pick<Agent, "name" | "mode">,
+): Agent {
   return {
     description: undefined,
     builtIn: false,
@@ -146,7 +162,10 @@ describe("createSDKSpecialist.startTask", () => {
     })
     const specialist = createSDKSpecialist(fake.client, "parent-session-42")
 
-    const returnedId = await specialist.startTask("qa-fe-tester", "run the smoke tests")
+    const returnedId = await specialist.startTask(
+      "qa-fe-tester",
+      "run the smoke tests",
+    )
 
     expect(returnedId).toBe("sess-child-1")
 
@@ -191,9 +210,16 @@ describe("createSDKSpecialist.startTask", () => {
     const specialist = createSDKSpecialist(fake.client, "parent-session-42")
 
     const observed: Array<{ id: string; promptCallsAtCallback: number }> = []
-    const returnedId = await specialist.startTask("zmora-be", "run BE-01", (id) => {
-      observed.push({ id, promptCallsAtCallback: fake.calls.sessionPromptAsync.length })
-    })
+    const returnedId = await specialist.startTask(
+      "zmora-be",
+      "run BE-01",
+      (id) => {
+        observed.push({
+          id,
+          promptCallsAtCallback: fake.calls.sessionPromptAsync.length,
+        })
+      },
+    )
 
     expect(returnedId).toBe("sess-child-7")
     expect(observed).toEqual([{ id: "sess-child-7", promptCallsAtCallback: 0 }])
@@ -220,7 +246,9 @@ describe("createSDKSpecialist.startTask", () => {
     })
     const specialist = createSDKSpecialist(fake.client, "parent-session-42")
 
-    await expect(specialist.startTask("qa-be-tester", "ignored")).rejects.toThrow(
+    await expect(
+      specialist.startTask("qa-be-tester", "ignored"),
+    ).rejects.toThrow(
       "createSession returned no session id for agent qa-be-tester",
     )
 
@@ -251,9 +279,13 @@ describe("createSDKSpecialist.startTask", () => {
     })
     const specialist = createSDKSpecialist(fake.client, "parent-session-42")
 
-    const returnedId = await specialist.startTask("zmora-be", "run BE-09", () => {
-      throw new Error("registry Map.set blew up")
-    })
+    const returnedId = await specialist.startTask(
+      "zmora-be",
+      "run BE-09",
+      () => {
+        throw new Error("registry Map.set blew up")
+      },
+    )
 
     // Dispatch is NOT aborted: id returned and the turn fired afterwards.
     expect(returnedId).toBe("sess-child-9")
@@ -284,9 +316,13 @@ describe("createSDKSpecialist.startTask", () => {
     })
     const specialist = createSDKSpecialist(fake.client, "parent-session-42")
 
-    const returnedId = await specialist.startTask("zmora-be", "run BE-10", () => {
-      throw new Error("callback fault")
-    })
+    const returnedId = await specialist.startTask(
+      "zmora-be",
+      "run BE-10",
+      () => {
+        throw new Error("callback fault")
+      },
+    )
 
     expect(returnedId).toBe("sess-child-10")
     expect(fake.calls.sessionPromptAsync).toHaveLength(1)
@@ -321,7 +357,9 @@ describe("createSDKSpecialist.fetchMessages", () => {
     const messages = await specialist.fetchMessages("sess-child-1")
 
     expect(fake.calls.sessionMessages).toHaveLength(1)
-    expect(fake.calls.sessionMessages[0]).toEqual({ path: { id: "sess-child-1" } })
+    expect(fake.calls.sessionMessages[0]).toEqual({
+      path: { id: "sess-child-1" },
+    })
 
     // The adapter must project to `[last]` only — `pollUntilIdle` inspects
     // `messages[last]` exclusively, and holding the full transcript
@@ -382,7 +420,9 @@ describe("createSDKSpecialist.fetchMessages", () => {
     const messages = await specialist.fetchMessages("sess-empty")
 
     expect(messages).toEqual([])
-    expect(fake.calls.sessionMessages[0]).toEqual({ path: { id: "sess-empty" } })
+    expect(fake.calls.sessionMessages[0]).toEqual({
+      path: { id: "sess-empty" },
+    })
   })
 })
 
@@ -493,7 +533,9 @@ describe("loadAgentRegistry — caching", () => {
 
   it("caches the registry within the TTL and serves subsequent calls from memory", async () => {
     const fake = makeFakeClient({
-      agentsResponse: { data: [makeAgent({ name: "qa-fe-tester", mode: "subagent" })] },
+      agentsResponse: {
+        data: [makeAgent({ name: "qa-fe-tester", mode: "subagent" })],
+      },
     })
 
     const first = await loadAgentRegistry(fake.client)
@@ -509,7 +551,9 @@ describe("loadAgentRegistry — caching", () => {
     vi.setSystemTime(new Date("2026-05-19T10:00:00Z"))
 
     const fake = makeFakeClient({
-      agentsResponse: { data: [makeAgent({ name: "qa-fe-tester", mode: "subagent" })] },
+      agentsResponse: {
+        data: [makeAgent({ name: "qa-fe-tester", mode: "subagent" })],
+      },
     })
 
     await loadAgentRegistry(fake.client)
@@ -521,7 +565,9 @@ describe("loadAgentRegistry — caching", () => {
 
   it("deduplicates concurrent first-calls into a single HTTP request", async () => {
     const fake = makeFakeClient({
-      agentsResponse: { data: [makeAgent({ name: "qa-fe-tester", mode: "subagent" })] },
+      agentsResponse: {
+        data: [makeAgent({ name: "qa-fe-tester", mode: "subagent" })],
+      },
     })
 
     const [a, b] = await Promise.all([
@@ -545,12 +591,16 @@ describe("loadAgentRegistry — caching", () => {
           calls.push(undefined)
           invocation += 1
           if (invocation === 1) throw new Error("transient HTTP 503")
-          return { data: [makeAgent({ name: "qa-fe-tester", mode: "subagent" })] }
+          return {
+            data: [makeAgent({ name: "qa-fe-tester", mode: "subagent" })],
+          }
         },
       },
     } as unknown as SDKClient
 
-    await expect(loadAgentRegistry(client)).rejects.toThrow("transient HTTP 503")
+    await expect(loadAgentRegistry(client)).rejects.toThrow(
+      "transient HTTP 503",
+    )
     const recovered = await loadAgentRegistry(client)
 
     expect(calls).toHaveLength(2)
@@ -559,10 +609,14 @@ describe("loadAgentRegistry — caching", () => {
 
   it("caches are scoped per client — two clients fetch independently", async () => {
     const fakeA = makeFakeClient({
-      agentsResponse: { data: [makeAgent({ name: "qa-fe-tester", mode: "subagent" })] },
+      agentsResponse: {
+        data: [makeAgent({ name: "qa-fe-tester", mode: "subagent" })],
+      },
     })
     const fakeB = makeFakeClient({
-      agentsResponse: { data: [makeAgent({ name: "qa-be-tester", mode: "subagent" })] },
+      agentsResponse: {
+        data: [makeAgent({ name: "qa-be-tester", mode: "subagent" })],
+      },
     })
 
     const a = await loadAgentRegistry(fakeA.client)

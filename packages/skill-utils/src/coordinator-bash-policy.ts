@@ -20,7 +20,8 @@ export function parseAllowedBashPrograms(frontmatter: string): string[] {
 // token[0]-only program check below (the parsed "program" is the harmless first
 // token while the shell still runs the second statement). They MUST stay in the
 // alternation; each has a reject test in coordinator-bash-policy.test.ts.
-const COMPOUND = /(\|\||&&|;|\||&|[\r\n]|`|\$\(|<|>|(?<![\w./-])(?:bash|sh|eval)\b)/
+const COMPOUND =
+  /(\|\||&&|;|\||&|[\r\n]|`|\$\(|<|>|(?<![\w./-])(?:bash|sh|eval)\b)/
 
 /**
  * True when the command contains a compound separator/operator/redirect or a
@@ -37,8 +38,23 @@ export interface BashClassification {
   program: string | null
 }
 
-/** Decide whether a coordinator bash command is permitted (allowlist + no compounds). */
-export function classifyCoordinatorBash(command: string, allowedPrograms: string[]): BashClassification {
+/**
+ * Decide whether a coordinator bash command is permitted (allowlist + no compounds).
+ *
+ * This allowlist is a workflow rail, NOT a security boundary. It is
+ * defense-in-depth that keeps the coordinator on its intended path (dispatch
+ * agents rather than inspect the repo directly) and raises the cost of a
+ * prompt-injection escalation; it is NOT a hardened control over shell
+ * execution. Per project doctrine (`docs/plugins/coordinator.md` — "Security
+ * model — code-enforced vs LLM-requested"): code-enforced rules are the
+ * security boundary; LLM-requested rails like this one are defense in depth.
+ * Real shell-execution boundaries (sandboxing, permission controls) live
+ * outside this plugin. Do not "harden" this into a fake boundary.
+ */
+export function classifyCoordinatorBash(
+  command: string,
+  allowedPrograms: string[],
+): BashClassification {
   const trimmed = command.trim()
   if (isCompoundCommand(trimmed)) return { allowed: false, program: null }
   const program = trimmed.split(/\s+/)[0] ?? ""
@@ -57,7 +73,10 @@ export interface ViolationInfo {
  * (so it surfaces in `info.error`, which the eval reads) and a human/LLM redirect (G).
  */
 export function buildViolationError(info: ViolationInfo): Error {
-  const payload = JSON.stringify({ marker: "COORDINATOR_POLICY_VIOLATION", ...info })
+  const payload = JSON.stringify({
+    marker: "COORDINATOR_POLICY_VIOLATION",
+    ...info,
+  })
   // A multi-line/compound command has no single resolvable program, so naming
   // `command.split(/\s+/)[0]` (e.g. `ls` for `ls\ngit log`) would misname the
   // rejection. Use a stable label instead; only single-program commands get the

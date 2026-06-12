@@ -47,10 +47,7 @@ describe("computeWaves", () => {
       scenario("BE-04", ["BE-01"], 3),
     ])
     expect(result.error).toBeUndefined()
-    expect(result.waves).toEqual([
-      ["BE-01"],
-      ["BE-02", "BE-03", "BE-04"],
-    ])
+    expect(result.waves).toEqual([["BE-01"], ["BE-02", "BE-03", "BE-04"]])
   })
 
   it("handles fan-in: many roots → one leaf", () => {
@@ -61,10 +58,7 @@ describe("computeWaves", () => {
       scenario("BE-04", ["BE-01", "BE-02", "BE-03"], 3),
     ])
     expect(result.error).toBeUndefined()
-    expect(result.waves).toEqual([
-      ["BE-01", "BE-02", "BE-03"],
-      ["BE-04"],
-    ])
+    expect(result.waves).toEqual([["BE-01", "BE-02", "BE-03"], ["BE-04"]])
   })
 
   it("rejects self-references with kind: self-ref", () => {

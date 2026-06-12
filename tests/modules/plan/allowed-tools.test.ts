@@ -24,7 +24,10 @@ describe("VELES_TOOLS", () => {
   })
   it("is a superset of the qa-plan-authoring skill's allowed-tools", () => {
     const skill = readFileSync(
-      path.resolve(__dirname, "../../../src/skills/qa/qa-plan-authoring/SKILL.md"),
+      path.resolve(
+        __dirname,
+        "../../../src/skills/qa/qa-plan-authoring/SKILL.md",
+      ),
       "utf8",
     )
     const skillTools = parseSkillFrontmatter(skill, "SKILL.md")!.allowedTools!

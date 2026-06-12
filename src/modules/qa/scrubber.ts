@@ -1,4 +1,8 @@
-import type { BindingsStore, BindingSnapshot, BindingEntry } from "./bindings-store.js"
+import type {
+  BindingsStore,
+  BindingSnapshot,
+  BindingEntry,
+} from "./bindings-store.js"
 
 const PARTIAL_MIN_LEN = 16
 const ENTROPY_MIN = 3.8
@@ -99,7 +103,11 @@ export function scrubSecrets(
     // the number of candidates so cost is bounded regardless of secret length.
     let budget = PARTIAL_SCAN_BUDGET
     let found = false
-    for (let len = v.length; len >= PARTIAL_MIN_LEN && budget > 0 && !found; len--) {
+    for (
+      let len = v.length;
+      len >= PARTIAL_MIN_LEN && budget > 0 && !found;
+      len--
+    ) {
       const win = new WindowEntropy()
       for (let i = 0; i < len; i++) win.add(v[i]!)
       for (let i = 0; i + len <= v.length; i++) {

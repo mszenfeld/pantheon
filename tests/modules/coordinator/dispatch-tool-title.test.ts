@@ -16,7 +16,10 @@ import type { SDKClient } from "../../../src/modules/coordinator/sdk-specialist.
  */
 
 function makeContext(
-  metadataSpy: (input: { title?: string; metadata?: Record<string, unknown> }) => void,
+  metadataSpy: (input: {
+    title?: string
+    metadata?: Record<string, unknown>
+  }) => void,
 ): ToolContext {
   return {
     sessionID: "session-1",
@@ -42,7 +45,8 @@ async function loadDispatchTool(client: SDKClient) {
     serverUrl: new URL("http://localhost"),
   } as never)
   const dispatch = hooks.tool?.["dispatch_parallel"]
-  if (dispatch === undefined) throw new Error("dispatch_parallel not registered")
+  if (dispatch === undefined)
+    throw new Error("dispatch_parallel not registered")
   return dispatch
 }
 

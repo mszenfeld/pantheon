@@ -10,9 +10,10 @@ interface FakeResponse {
   stdout: string
 }
 
-function createFakeShell(
-  responder: (cmd: string) => FakeResponse | "throw",
-): { $: ShellTag; calls: string[] } {
+function createFakeShell(responder: (cmd: string) => FakeResponse | "throw"): {
+  $: ShellTag
+  calls: string[]
+} {
   const calls: string[] = []
   const $: ShellTag = (parts, ...values) => {
     let cmd = ""
@@ -94,14 +95,18 @@ describe("escapeAppleScriptText", () => {
 describe("NotificationSender", () => {
   it("does nothing when ctx.$ is undefined", async () => {
     const sender = new NotificationSender({})
-    await expect(sender.send({ title: "T", message: "M" })).resolves.toBeUndefined()
+    await expect(
+      sender.send({ title: "T", message: "M" }),
+    ).resolves.toBeUndefined()
     await expect(sender.playSound("/sound")).resolves.toBeUndefined()
   })
 
   it("prefers terminal-notifier when which finds it", async () => {
     const { $, calls } = createFakeShell((cmd) => {
-      if (cmd.startsWith("which terminal-notifier")) return { exitCode: 0, stdout: "/usr/local/bin/terminal-notifier\n" }
-      if (cmd.startsWith("which osascript")) return { exitCode: 0, stdout: "/usr/bin/osascript\n" }
+      if (cmd.startsWith("which terminal-notifier"))
+        return { exitCode: 0, stdout: "/usr/local/bin/terminal-notifier\n" }
+      if (cmd.startsWith("which osascript"))
+        return { exitCode: 0, stdout: "/usr/bin/osascript\n" }
       return { exitCode: 0, stdout: "" }
     })
     const sender = new NotificationSender({ $ })
@@ -114,8 +119,10 @@ describe("NotificationSender", () => {
 
   it("falls back to osascript when terminal-notifier is missing", async () => {
     const { $, calls } = createFakeShell((cmd) => {
-      if (cmd.startsWith("which terminal-notifier")) return { exitCode: 1, stdout: "" }
-      if (cmd.startsWith("which osascript")) return { exitCode: 0, stdout: "/usr/bin/osascript\n" }
+      if (cmd.startsWith("which terminal-notifier"))
+        return { exitCode: 1, stdout: "" }
+      if (cmd.startsWith("which osascript"))
+        return { exitCode: 0, stdout: "/usr/bin/osascript\n" }
       return { exitCode: 0, stdout: "" }
     })
     const sender = new NotificationSender({ $ })
@@ -127,14 +134,18 @@ describe("NotificationSender", () => {
 
   it("escapes title and message when shelling out via osascript", async () => {
     const { $, calls } = createFakeShell((cmd) => {
-      if (cmd.startsWith("which terminal-notifier")) return { exitCode: 1, stdout: "" }
-      if (cmd.startsWith("which osascript")) return { exitCode: 0, stdout: "/usr/bin/osascript\n" }
+      if (cmd.startsWith("which terminal-notifier"))
+        return { exitCode: 1, stdout: "" }
+      if (cmd.startsWith("which osascript"))
+        return { exitCode: 0, stdout: "/usr/bin/osascript\n" }
       return { exitCode: 0, stdout: "" }
     })
     const sender = new NotificationSender({ $ })
     await sender.send({ title: 'T"X', message: 'M"Y' })
     const lastCall = calls[calls.length - 1] ?? ""
-    expect(lastCall).toContain('display notification "M\\"Y" with title "T\\"X"')
+    expect(lastCall).toContain(
+      'display notification "M\\"Y" with title "T\\"X"',
+    )
   })
 
   it("does nothing when neither terminal-notifier nor osascript is available", async () => {
@@ -149,18 +160,24 @@ describe("NotificationSender", () => {
 
   it("swallows shell errors", async () => {
     const { $ } = createFakeShell((cmd) => {
-      if (cmd.startsWith("which osascript")) return { exitCode: 0, stdout: "/usr/bin/osascript\n" }
-      if (cmd.startsWith("which terminal-notifier")) return { exitCode: 1, stdout: "" }
+      if (cmd.startsWith("which osascript"))
+        return { exitCode: 0, stdout: "/usr/bin/osascript\n" }
+      if (cmd.startsWith("which terminal-notifier"))
+        return { exitCode: 1, stdout: "" }
       return "throw"
     })
     const sender = new NotificationSender({ $ })
-    await expect(sender.send({ title: "T", message: "M" })).resolves.toBeUndefined()
+    await expect(
+      sender.send({ title: "T", message: "M" }),
+    ).resolves.toBeUndefined()
   })
 
   it("caches the probe result across calls", async () => {
     const { $, calls } = createFakeShell((cmd) => {
-      if (cmd.startsWith("which terminal-notifier")) return { exitCode: 1, stdout: "" }
-      if (cmd.startsWith("which osascript")) return { exitCode: 0, stdout: "/usr/bin/osascript\n" }
+      if (cmd.startsWith("which terminal-notifier"))
+        return { exitCode: 1, stdout: "" }
+      if (cmd.startsWith("which osascript"))
+        return { exitCode: 0, stdout: "/usr/bin/osascript\n" }
       return { exitCode: 0, stdout: "" }
     })
     const sender = new NotificationSender({ $ })
@@ -174,7 +191,9 @@ describe("NotificationSender", () => {
     const { $, calls } = createFakeShell(() => ({ exitCode: 0, stdout: "" }))
     const sender = new NotificationSender({ $ })
     await sender.playSound("/System/Library/Sounds/Glass.aiff")
-    expect(calls.some((c) => c.includes("afplay /System/Library/Sounds/Glass.aiff"))).toBe(true)
+    expect(
+      calls.some((c) => c.includes("afplay /System/Library/Sounds/Glass.aiff")),
+    ).toBe(true)
   })
 
   it("playSound is a no-op when ctx.$ is undefined", async () => {

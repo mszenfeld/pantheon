@@ -34,13 +34,17 @@ describe("AppVerkCoordinatorPlugin default_agent", () => {
     const plugin = await AppVerkCoordinatorPlugin({ client: {} } as never)
     const config: Config = { agent: {} }
     await plugin.config?.(config)
-    expect((config as { default_agent?: string }).default_agent).toBe("Perun - Coordinator")
+    expect((config as { default_agent?: string }).default_agent).toBe(
+      "Perun - Coordinator",
+    )
   })
 
   it("respects a user-provided default_agent (does not overwrite)", async () => {
     const plugin = await AppVerkCoordinatorPlugin({ client: {} } as never)
     const config = { agent: {}, default_agent: "my-agent" } as Config
     await plugin.config?.(config)
-    expect((config as { default_agent?: string }).default_agent).toBe("my-agent")
+    expect((config as { default_agent?: string }).default_agent).toBe(
+      "my-agent",
+    )
   })
 })

@@ -28,13 +28,18 @@ describe("build output assets", () => {
     const { AppVerkSwiftDeveloperPlugin } = await import("../dist/index.js")
     const plugin = await AppVerkSwiftDeveloperPlugin({} as never)
     const config = { command: {} } as {
-      command?: Record<string, { description?: string; template: string; agent?: string }>
+      command?: Record<
+        string,
+        { description?: string; template: string; agent?: string }
+      >
     }
 
     await plugin.config?.(config as never)
 
     expect(config.command?.swift?.template).toContain("agent: swift-developer")
-    expect(config.command?.swift?.template).toContain("Swift development workflow")
+    expect(config.command?.swift?.template).toContain(
+      "Swift development workflow",
+    )
   })
 
   it("does not register load_swift_skill tool in dist build", async () => {

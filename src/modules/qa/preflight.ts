@@ -49,7 +49,8 @@ export function makePreflightHandler(
   deps: PreflightHandlerDeps,
 ): (args: PreflightArgs, ctx: PreflightContext) => Promise<PreflightResult> {
   return async (args, ctx) => {
-    const parentID = (await deps.resolveParentID(ctx.sessionID)) ?? ctx.sessionID
+    const parentID =
+      (await deps.resolveParentID(ctx.sessionID)) ?? ctx.sessionID
 
     const missing: string[] = []
     const seen = new Set<string>()
@@ -66,6 +67,8 @@ export function makePreflightHandler(
       missing.push(name)
     }
 
-    return missing.length === 0 ? { status: "ok" } : { status: "missing", missing }
+    return missing.length === 0
+      ? { status: "ok" }
+      : { status: "missing", missing }
   }
 }

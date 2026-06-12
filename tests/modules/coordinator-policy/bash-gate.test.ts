@@ -5,7 +5,9 @@ import { makeBashGate } from "../../../src/modules/coordinator-policy/index.js"
 function client(agent: string | undefined) {
   return {
     session: {
-      messages: async () => ({ data: agent ? [{ info: { role: "user", agent }, parts: [] }] : [] }),
+      messages: async () => ({
+        data: agent ? [{ info: { role: "user", agent }, parts: [] }] : [],
+      }),
       get: async () => ({ data: { parentID: agent ? undefined : "p" } }),
     },
   } as never
@@ -19,25 +21,37 @@ describe("coordinator bash gate", () => {
   it("throws for a coordinator git call", async () => {
     const gate = makeBashGate(client(COORDINATOR_AGENT_NAME), ALLOW)
     await expect(
-      gate({ tool: "bash", sessionID: "s_coord_git", callID: "c" }, { args: { command: "git log" } }),
+      gate(
+        { tool: "bash", sessionID: "s_coord_git", callID: "c" },
+        { args: { command: "git log" } },
+      ),
     ).rejects.toThrow(/COORDINATOR_POLICY_VIOLATION/)
   })
   it("passes an allowlisted coordinator command", async () => {
     const gate = makeBashGate(client(COORDINATOR_AGENT_NAME), ALLOW)
     await expect(
-      gate({ tool: "bash", sessionID: "s_coord_ls", callID: "c" }, { args: { command: "ls docs" } }),
+      gate(
+        { tool: "bash", sessionID: "s_coord_ls", callID: "c" },
+        { args: { command: "ls docs" } },
+      ),
     ).resolves.toBeUndefined()
   })
   it("passes through for a dispatched specialist (fail-open)", async () => {
     const gate = makeBashGate(client("zmora-be"), ALLOW)
     await expect(
-      gate({ tool: "bash", sessionID: "s_specialist", callID: "c" }, { args: { command: "git log" } }),
+      gate(
+        { tool: "bash", sessionID: "s_specialist", callID: "c" },
+        { args: { command: "git log" } },
+      ),
     ).resolves.toBeUndefined()
   })
   it("passes through on unresolved identity (fail-open)", async () => {
     const gate = makeBashGate(client(undefined), ALLOW)
     await expect(
-      gate({ tool: "bash", sessionID: "s_unresolved", callID: "c" }, { args: { command: "git log" } }),
+      gate(
+        { tool: "bash", sessionID: "s_unresolved", callID: "c" },
+        { args: { command: "git log" } },
+      ),
     ).resolves.toBeUndefined()
   })
   it("ignores non-bash tools", async () => {

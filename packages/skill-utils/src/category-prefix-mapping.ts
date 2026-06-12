@@ -11,9 +11,7 @@
  * When adding a new category or prefix, update this mapping and then regenerate
  * the built assets in both plugins.
  */
-export const CATEGORY_PREFIX_MAPPING: Readonly<
-  Record<string, string>
-> = {
+export const CATEGORY_PREFIX_MAPPING: Readonly<Record<string, string>> = {
   Security: "SEC",
   Performance: "PERF",
   Architecture: "ARCH",

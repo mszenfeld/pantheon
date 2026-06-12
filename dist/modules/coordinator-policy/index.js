@@ -11,7 +11,12 @@ function makeBashGate(client, allowed) {
     if (!await isCoordinatorSession(input.sessionID, client)) return;
     const command = String(output.args?.command ?? "");
     const verdict = classifyCoordinatorBash(command, allowed);
-    if (!verdict.allowed) throw buildViolationError({ tool: "bash", command, reason: "not-allowlisted" });
+    if (!verdict.allowed)
+      throw buildViolationError({
+        tool: "bash",
+        command,
+        reason: "not-allowlisted"
+      });
   };
 }
 const AppVerkCoordinatorPolicyPlugin = async ({ client }) => {

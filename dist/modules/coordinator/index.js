@@ -7,16 +7,13 @@ import {
   neutralizeUntrustedOutput,
   deriveReportPath,
   normalizeVariantSuffix
-} from "./sanitize.js";
+} from "../_shared/sanitize.js";
 import {
   createSDKSpecialist,
   loadAgentRegistry,
   toPollerMessage
 } from "./sdk-specialist.js";
-import {
-  getLoadErrors,
-  pantheonConfigEmpty
-} from "../pantheon-config/index.js";
+import { getLoadErrors, pantheonConfigEmpty } from "../pantheon-config/index.js";
 import { loadModuleAsset } from "../_shared/load-asset.js";
 import {
   applyModelOverride,
@@ -26,12 +23,16 @@ import {
 import {
   buildDispatchableAllowlistSentence,
   buildPerunPrompt,
-  getAgentMetadataRegistry,
-  registerAgentMetadata
+  registerAgentMetadata,
+  snapshotAgentMetadataRegistry
 } from "../agent-registry/index.js";
 import { fixAutoSpecialistInfo } from "../agent-registry/fix-auto.metadata.js";
 import { getDispatchExtensions } from "../_shared/dispatch-extensions.js";
-import { COORDINATOR_AGENT, getDefaultAgent, setDefaultAgent } from "../agent-roster/index.js";
+import {
+  COORDINATOR_AGENT,
+  getDefaultAgent,
+  setDefaultAgent
+} from "../agent-roster/index.js";
 import { BackgroundTaskStore } from "./background-store.js";
 import { collectBackground, startBackgroundTask } from "./background.js";
 import { DISPATCH_TOOL_NAMES as DISPATCH_TOOL_NAMES2 } from "./dispatch-tool-names.js";
@@ -55,9 +56,13 @@ let cachedPerunPrompt;
 function getPerunPrompt() {
   if (cachedPerunPrompt === void 0) {
     const template = loadAgentPrompt("perun");
-    cachedPerunPrompt = buildPerunPrompt(template, getAgentMetadataRegistry(), {
-      dispatchableAllowlist: DISPATCHABLE_ALLOWLIST_NAMES
-    });
+    cachedPerunPrompt = buildPerunPrompt(
+      template,
+      snapshotAgentMetadataRegistry(),
+      {
+        dispatchableAllowlist: DISPATCHABLE_ALLOWLIST_NAMES
+      }
+    );
   }
   return cachedPerunPrompt;
 }
@@ -114,7 +119,9 @@ const AppVerkCoordinatorPlugin = async (input) => {
         }
       });
       if (context.sessionID.length === 0) {
-        throw new Error("dispatch_parallel: missing context.sessionID \u2014 cannot parent child sessions");
+        throw new Error(
+          "dispatch_parallel: missing context.sessionID \u2014 cannot parent child sessions"
+        );
       }
       const specialist = createSDKSpecialist(client, context.sessionID);
       const agentRegistry = await loadAgentRegistry(client);
@@ -187,8 +194,12 @@ const AppVerkCoordinatorPlugin = async (input) => {
       scenarios: tool.schema.array(
         tool.schema.object({
           id: tool.schema.string().describe('Scenario id, e.g. "BE-02"'),
-          dependsOn: tool.schema.array(tool.schema.string()).describe("Scenario ids this scenario depends on (empty array if none)"),
-          sourceOrder: tool.schema.number().describe("Scenario position in the plan (used as tie-breaker within a wave)")
+          dependsOn: tool.schema.array(tool.schema.string()).describe(
+            "Scenario ids this scenario depends on (empty array if none)"
+          ),
+          sourceOrder: tool.schema.number().describe(
+            "Scenario position in the plan (used as tie-breaker within a wave)"
+          )
         })
       ).describe("Flat scenario list with parsed dependencies")
     },
@@ -207,7 +218,9 @@ const AppVerkCoordinatorPlugin = async (input) => {
       '- Returns: { id, agent, status: "running" }.'
     ].join("\n"),
     args: {
-      agent: tool.schema.string().min(1).max(60).describe('Specialist agent name (e.g. "triglav"). Must be a subagent, or an allowlisted mode:all agent when the caller is a primary agent. ' + dispatchableAllowlistSentence),
+      agent: tool.schema.string().min(1).max(60).describe(
+        'Specialist agent name (e.g. "triglav"). Must be a subagent, or an allowlisted mode:all agent when the caller is a primary agent. ' + dispatchableAllowlistSentence
+      ),
       summary: tool.schema.string().min(1).max(80).describe("One-line label for the TUI (no prompts/PII)."),
       prompt: tool.schema.string().describe("Prompt for the specialist."),
       context: tool.schema.string().optional().describe("Optional extra context appended to the prompt.")
@@ -323,7 +336,13 @@ const AppVerkCoordinatorPlugin = async (input) => {
         // defense-in-depth.
         tools: { skill: false, load_appverk_skill: false }
       };
-      applyModelOverride(config, "perun", COORDINATOR_AGENT, void 0, userModels);
+      applyModelOverride(
+        config,
+        "perun",
+        COORDINATOR_AGENT,
+        void 0,
+        userModels
+      );
       if (getDefaultAgent(config) === void 0) {
         setDefaultAgent(config, COORDINATOR_AGENT);
       }
@@ -346,7 +365,9 @@ const AppVerkCoordinatorPlugin = async (input) => {
         if (typeof deletedID === "string" && deletedID.length > 0) {
           for (const t of backgroundStore.listByParent(deletedID)) {
             try {
-              await createSDKSpecialist(client, deletedID).abortTask(t.childSessionId);
+              await createSDKSpecialist(client, deletedID).abortTask(
+                t.childSessionId
+              );
             } catch {
             }
           }
@@ -358,9 +379,10 @@ const AppVerkCoordinatorPlugin = async (input) => {
       if (event.type !== "session.created") return;
       if (toastShown) return;
       try {
-        const errors = [...getLoadErrors(), ...getUnknownAgentDiagnostics()].map(
-          neutralizeUntrustedOutput
-        );
+        const errors = [
+          ...getLoadErrors(),
+          ...getUnknownAgentDiagnostics()
+        ].map(neutralizeUntrustedOutput);
         for (const e of errors) console.error(e);
         if (errors.length > 0) {
           await client.tui.showToast({

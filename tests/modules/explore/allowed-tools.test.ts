@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest"
 import { TRIGLAV_TOOLS } from "../../../src/modules/explore/allowed-tools.js"
 
-const WRITE_VERB = /create|replace|insert|rename|delete|write|edit|memory|execute_shell|activate|onboarding/i
+const WRITE_VERB =
+  /create|replace|insert|rename|delete|write|edit|memory|execute_shell|activate|onboarding/i
 
 describe("TRIGLAV_TOOLS", () => {
   it("includes the read-only serena LSP subset", () => {
@@ -19,7 +20,9 @@ describe("TRIGLAV_TOOLS", () => {
   })
 
   it("includes structured fallback search tools", () => {
-    expect(TRIGLAV_TOOLS).toEqual(expect.arrayContaining(["Read", "Glob", "Grep"]))
+    expect(TRIGLAV_TOOLS).toEqual(
+      expect.arrayContaining(["Read", "Glob", "Grep"]),
+    )
   })
 
   it("contains no structured write/mutation tool (deny-by-pattern)", () => {

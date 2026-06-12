@@ -1,5 +1,9 @@
 import { isAbsolute, resolve } from "node:path"
-import { STRIBOG_AGENT_KEY, STRIBOG_ALLOWED_TOOL_IDS, STRIBOG_EDIT_BUDGET } from "./stribog.metadata.js"
+import {
+  STRIBOG_AGENT_KEY,
+  STRIBOG_ALLOWED_TOOL_IDS,
+  STRIBOG_EDIT_BUDGET,
+} from "./stribog.metadata.js"
 
 const TOOL_DENIED = "STRIBOG_TOOL_DENIED"
 const SCOPE_VIOLATION = "STRIBOG_SCOPE_VIOLATION"
@@ -47,7 +51,9 @@ export interface StribogToolHookHandle {
  * map; tests achieve isolation by constructing a fresh hook (no module-global reset needed).
  * The returned `clearSession` is what the plugin's `session.deleted` handler calls.
  */
-export function makeStribogToolHook(deps: StribogToolHookDeps): StribogToolHookHandle {
+export function makeStribogToolHook(
+  deps: StribogToolHookDeps,
+): StribogToolHookHandle {
   /** Per-session set of distinct, resolved absolute paths modified via edit/write. */
   const editedPaths = new Map<string, Set<string>>()
 
@@ -103,7 +109,11 @@ export function makeStribogToolHook(deps: StribogToolHookDeps): StribogToolHookH
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : ""
-      if (message.startsWith(TOOL_DENIED) || message.startsWith(SCOPE_VIOLATION)) throw error
+      if (
+        message.startsWith(TOOL_DENIED) ||
+        message.startsWith(SCOPE_VIOLATION)
+      )
+        throw error
       // never throw from a hook on internal/attribution errors
     }
   }

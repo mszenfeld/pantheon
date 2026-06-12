@@ -12,7 +12,9 @@ const DEFAULT_SESSION_NOTIFICATION_CONFIG = {
   soundPath: "/System/Library/Sounds/Glass.aiff"
 };
 function readConfigFromEnv(env) {
-  const config = { ...DEFAULT_SESSION_NOTIFICATION_CONFIG };
+  const config = {
+    ...DEFAULT_SESSION_NOTIFICATION_CONFIG
+  };
   if (typeof env.AV_PANTHEON_NOTIFY_TITLE === "string") {
     config.title = env.AV_PANTHEON_NOTIFY_TITLE;
   }

@@ -12,7 +12,15 @@ const ALLOWED_COMMANDS = /* @__PURE__ */ new Set([
 ]);
 const FILE_READER_COMMANDS = /* @__PURE__ */ new Set(["grep", "cut", "head", "tail", "tr"]);
 const DSN_COMMANDS = /* @__PURE__ */ new Set(["psql", "sqlite3"]);
-const SQLITE_FORBIDDEN_DOT_COMMANDS = [".read", ".shell", ".system", ".import", ".save", ".output", ".log"];
+const SQLITE_FORBIDDEN_DOT_COMMANDS = [
+  ".read",
+  ".shell",
+  ".system",
+  ".import",
+  ".save",
+  ".output",
+  ".log"
+];
 const MAX_RECIPE_BYTES = 16 * 1024;
 const FORBIDDEN_TOKENS = [
   { pattern: /\$\(/, label: "$(...) command substitution" },
@@ -26,11 +34,17 @@ const FORBIDDEN_TOKENS = [
   { pattern: /(?:^|\s)\.\s+\//, label: ". /path (dot-sourcing)" },
   { pattern: /\bexport\b/, label: "export" },
   { pattern: /\bunset\b/, label: "unset" },
-  { pattern: /\b(declare|local|readonly|set)\s/, label: "declare/local/readonly/set" },
+  {
+    pattern: /\b(declare|local|readonly|set)\s/,
+    label: "declare/local/readonly/set"
+  },
   { pattern: /\bfunction\s/, label: "function" }
 ];
 const CURL_FORBIDDEN_FLAGS = [
-  { pattern: /(?:^|\s)(?:--upload-file|-T)(?:\s|=)/, label: "--upload-file/-T" },
+  {
+    pattern: /(?:^|\s)(?:--upload-file|-T)(?:\s|=)/,
+    label: "--upload-file/-T"
+  },
   { pattern: /(?:^|\s)(?:--form|-F)\s+["']?@/, label: "--form/-F with @file" },
   {
     pattern: /(?:^|\s)(?:--data|--data-binary|--data-raw|-d)\s+["']?@/,
@@ -52,11 +66,17 @@ const CURL_FORBIDDEN_FLAGS = [
     pattern: /(?:^|\s)(?:--remote-name-all|-J|--remote-header-name)\b/,
     label: "remote-name flags"
   },
-  { pattern: /(?:^|\s)(?:--write-out|-w)\s+["']?@/, label: "--write-out/-w with @file" },
+  {
+    pattern: /(?:^|\s)(?:--write-out|-w)\s+["']?@/,
+    label: "--write-out/-w with @file"
+  },
   // `--next` chains a second request whose URL bypasses the
   // single-URL extractCurlURL check. Refuse outright — recipes are
   // single-request by contract.
-  { pattern: /(?:^|\s)--next(?:\s|$)/, label: "--next (chains additional request)" },
+  {
+    pattern: /(?:^|\s)--next(?:\s|$)/,
+    label: "--next (chains additional request)"
+  },
   // `--url` is an alternative way to specify a target URL. Allowing
   // it would require us to validate every flag-value pair against the egress
   // host. Simpler: forbid it; the bare positional URL is the canonical form.
@@ -169,7 +189,9 @@ function hostOfURL(urlOrTemplate) {
     return varMatch[1] ?? null;
   }
   try {
-    const u = new URL(urlOrTemplate.includes("://") ? urlOrTemplate : `scheme://${urlOrTemplate}`);
+    const u = new URL(
+      urlOrTemplate.includes("://") ? urlOrTemplate : `scheme://${urlOrTemplate}`
+    );
     if (u.username !== "" || u.password !== "") return null;
     return u.hostname || null;
   } catch {
@@ -194,7 +216,11 @@ function extractDSNTarget(cmd) {
   }
   return null;
 }
-const FILE_READER_ALLOWED_DEV_PATHS = /* @__PURE__ */ new Set(["/dev/null", "/dev/stdin", "/dev/zero"]);
+const FILE_READER_ALLOWED_DEV_PATHS = /* @__PURE__ */ new Set([
+  "/dev/null",
+  "/dev/stdin",
+  "/dev/zero"
+]);
 function isAllowedFileReaderArg(token) {
   const unquoted = token.replace(/^["']|["']$/g, "");
   if (unquoted.startsWith("-") && unquoted !== "-") return true;
@@ -225,14 +251,23 @@ function validateRecipe(recipe, egress) {
   }
   for (const { pattern, label } of FORBIDDEN_TOKENS) {
     if (pattern.test(stmt)) {
-      return { status: "error", reason: `recipe contains forbidden construct: ${label}` };
+      return {
+        status: "error",
+        reason: `recipe contains forbidden construct: ${label}`
+      };
     }
   }
   if (/(?:^|\s)(?:>|>>|&>|2>>?)(?!\s*\/dev\/null\b)/.test(stmt)) {
-    return { status: "error", reason: "recipe contains redirect to non-/dev/null path" };
+    return {
+      status: "error",
+      reason: "recipe contains redirect to non-/dev/null path"
+    };
   }
   if (hasUnquotedBackgroundOperator(stmt)) {
-    return { status: "error", reason: "recipe contains & (background/job-control operator)" };
+    return {
+      status: "error",
+      reason: "recipe contains & (background/job-control operator)"
+    };
   }
   const cmds = tokenizePipeline(stmt);
   for (const cmd of cmds) {
@@ -243,7 +278,10 @@ function validateRecipe(recipe, egress) {
     if (head === "curl") {
       for (const { pattern, label } of CURL_FORBIDDEN_FLAGS) {
         if (pattern.test(" " + cmd + " ")) {
-          return { status: "error", reason: `curl uses forbidden flag: ${label}` };
+          return {
+            status: "error",
+            reason: `curl uses forbidden flag: ${label}`
+          };
         }
       }
     }
@@ -283,7 +321,10 @@ function validateRecipe(recipe, egress) {
     if (head === "curl") {
       const url = extractCurlURL(cmd);
       if (url === null) {
-        return { status: "error", reason: "curl invocation without a URL argument" };
+        return {
+          status: "error",
+          reason: "curl invocation without a URL argument"
+        };
       }
       const host = hostOfURL(url);
       if (host !== egressHost) {

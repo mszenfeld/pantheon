@@ -51,7 +51,9 @@ export class PollerAbortError extends Error {
   }
 }
 
-export async function pollUntilIdle(options: PollUntilIdleOptions): Promise<string> {
+export async function pollUntilIdle(
+  options: PollUntilIdleOptions,
+): Promise<string> {
   const { fetchMessages, timeoutMs, pollIntervalMs, signal, maxBytes } = options
   const startTime = Date.now()
 
@@ -69,7 +71,9 @@ export async function pollUntilIdle(options: PollUntilIdleOptions): Promise<stri
     const last: PollerMessage | undefined = messages[messages.length - 1]
 
     if (last !== undefined && last.role === "assistant" && last.finish_reason) {
-      return maxBytes === undefined ? last.content : truncateBytes(last.content, maxBytes)
+      return maxBytes === undefined
+        ? last.content
+        : truncateBytes(last.content, maxBytes)
     }
 
     // Bound the size of the LAST assistant message between polls so each
@@ -102,7 +106,11 @@ export async function pollUntilIdle(options: PollUntilIdleOptions): Promise<stri
  * during the wait. Using `addEventListener` (not a polling check) means we
  * react to aborts immediately rather than waiting out the full poll interval.
  */
-function sleepOrAbort(ms: number, signal: AbortSignal | undefined, startTime: number): Promise<void> {
+function sleepOrAbort(
+  ms: number,
+  signal: AbortSignal | undefined,
+  startTime: number,
+): Promise<void> {
   return new Promise<void>((resolve, reject) => {
     if (signal?.aborted === true) {
       reject(new PollerAbortError(Date.now() - startTime))

@@ -46,28 +46,38 @@ describe("applyModelOverride", () => {
   }
 
   it("applies the override to a single agent key when slug==key", () => {
-    writeUserGlobal(`{ "agents": { "triglav": { "model": "anthropic/claude-opus-4-7" } } }`)
+    writeUserGlobal(
+      `{ "agents": { "triglav": { "model": "anthropic/claude-opus-4-7" } } }`,
+    )
     const config: ModelConfigLike = { agent: { triglav: {} } }
     applyModelOverride(config, "triglav", "triglav")
     expect(config.agent!.triglav!.model).toBe("anthropic/claude-opus-4-7")
   })
 
   it("maps a slug to a different display-name key (veles → 'Veles - Planner')", () => {
-    writeUserGlobal(`{ "agents": { "veles": { "model": "anthropic/claude-sonnet-4-6" } } }`)
+    writeUserGlobal(
+      `{ "agents": { "veles": { "model": "anthropic/claude-sonnet-4-6" } } }`,
+    )
     const config: ModelConfigLike = { agent: { "Veles - Planner": {} } }
     applyModelOverride(config, "veles", "Veles - Planner")
-    expect(config.agent!["Veles - Planner"]!.model).toBe("anthropic/claude-sonnet-4-6")
+    expect(config.agent!["Veles - Planner"]!.model).toBe(
+      "anthropic/claude-sonnet-4-6",
+    )
   })
 
   it("fans one slug out to multiple keys (zmora → zmora-fe/be/setup)", () => {
-    writeUserGlobal(`{ "agents": { "zmora": { "model": "anthropic/claude-sonnet-4-6" } } }`)
+    writeUserGlobal(
+      `{ "agents": { "zmora": { "model": "anthropic/claude-sonnet-4-6" } } }`,
+    )
     const config: ModelConfigLike = {
       agent: { "zmora-fe": {}, "zmora-be": {}, "zmora-setup": {} },
     }
     applyModelOverride(config, "zmora", ["zmora-fe", "zmora-be", "zmora-setup"])
     expect(config.agent!["zmora-fe"]!.model).toBe("anthropic/claude-sonnet-4-6")
     expect(config.agent!["zmora-be"]!.model).toBe("anthropic/claude-sonnet-4-6")
-    expect(config.agent!["zmora-setup"]!.model).toBe("anthropic/claude-sonnet-4-6")
+    expect(config.agent!["zmora-setup"]!.model).toBe(
+      "anthropic/claude-sonnet-4-6",
+    )
   })
 
   it("leaves model unset when no override and no default", () => {
@@ -83,7 +93,9 @@ describe("applyModelOverride", () => {
   })
 
   it("override wins over the default model", () => {
-    writeUserGlobal(`{ "agents": { "stribog": { "model": "anthropic/claude-opus-4-7" } } }`)
+    writeUserGlobal(
+      `{ "agents": { "stribog": { "model": "anthropic/claude-opus-4-7" } } }`,
+    )
     const config: ModelConfigLike = { agent: { stribog: {} } }
     applyModelOverride(config, "stribog", "stribog", "openai/gpt-5.4")
     expect(config.agent!.stribog!.model).toBe("anthropic/claude-opus-4-7")
@@ -97,13 +109,17 @@ describe("applyModelOverride", () => {
 
   it("does not throw when a mapped key is missing from config.agent", () => {
     const config: ModelConfigLike = { agent: {} }
-    writeUserGlobal(`{ "agents": { "triglav": { "model": "anthropic/claude-opus-4-7" } } }`)
+    writeUserGlobal(
+      `{ "agents": { "triglav": { "model": "anthropic/claude-opus-4-7" } } }`,
+    )
     expect(() => applyModelOverride(config, "triglav", "triglav")).not.toThrow()
   })
 
   it("does not throw when config.agent is undefined", () => {
     const config: ModelConfigLike = {}
-    writeUserGlobal(`{ "agents": { "triglav": { "model": "anthropic/claude-opus-4-7" } } }`)
+    writeUserGlobal(
+      `{ "agents": { "triglav": { "model": "anthropic/claude-opus-4-7" } } }`,
+    )
     expect(() => applyModelOverride(config, "triglav", "triglav")).not.toThrow()
   })
 
@@ -112,22 +128,38 @@ describe("applyModelOverride", () => {
   // module takes (captureUserModels) BEFORE its wholesale replace.
   describe("opencode.json precedence (M11)", () => {
     it("user opencode.json model wins over a pantheon.json override", () => {
-      writeUserGlobal(`{ "agents": { "stribog": { "model": "anthropic/claude-opus-4-7" } } }`)
+      writeUserGlobal(
+        `{ "agents": { "stribog": { "model": "anthropic/claude-opus-4-7" } } }`,
+      )
       const config: ModelConfigLike = { agent: { stribog: {} } }
       const userModels = new Map([["stribog", "openrouter/openai/gpt-5.5"]])
-      applyModelOverride(config, "stribog", "stribog", "openai/gpt-5.4", userModels)
+      applyModelOverride(
+        config,
+        "stribog",
+        "stribog",
+        "openai/gpt-5.4",
+        userModels,
+      )
       expect(config.agent!.stribog!.model).toBe("openrouter/openai/gpt-5.5")
     })
 
     it("user opencode.json model wins over the harness default", () => {
       const config: ModelConfigLike = { agent: { stribog: {} } }
       const userModels = new Map([["stribog", "anthropic/claude-sonnet-4-6"]])
-      applyModelOverride(config, "stribog", "stribog", "openai/gpt-5.4", userModels)
+      applyModelOverride(
+        config,
+        "stribog",
+        "stribog",
+        "openai/gpt-5.4",
+        userModels,
+      )
       expect(config.agent!.stribog!.model).toBe("anthropic/claude-sonnet-4-6")
     })
 
     it("falls back to pantheon override when no user model was captured", () => {
-      writeUserGlobal(`{ "agents": { "triglav": { "model": "anthropic/claude-opus-4-7" } } }`)
+      writeUserGlobal(
+        `{ "agents": { "triglav": { "model": "anthropic/claude-opus-4-7" } } }`,
+      )
       const config: ModelConfigLike = { agent: { triglav: {} } }
       applyModelOverride(config, "triglav", "triglav", undefined, new Map())
       expect(config.agent!.triglav!.model).toBe("anthropic/claude-opus-4-7")
@@ -135,14 +167,22 @@ describe("applyModelOverride", () => {
 
     it("falls back to the harness default when neither user nor override is set", () => {
       const config: ModelConfigLike = { agent: { stribog: {} } }
-      applyModelOverride(config, "stribog", "stribog", "openai/gpt-5.4", new Map())
+      applyModelOverride(
+        config,
+        "stribog",
+        "stribog",
+        "openai/gpt-5.4",
+        new Map(),
+      )
       expect(config.agent!.stribog!.model).toBe("openai/gpt-5.4")
     })
 
     it("resolves precedence per key for a fanned-out slug (zmora)", () => {
       // User pins only zmora-be; pantheon overrides the slug. zmora-be keeps the
       // user value, the other two take the override.
-      writeUserGlobal(`{ "agents": { "zmora": { "model": "anthropic/claude-sonnet-4-6" } } }`)
+      writeUserGlobal(
+        `{ "agents": { "zmora": { "model": "anthropic/claude-sonnet-4-6" } } }`,
+      )
       const config: ModelConfigLike = {
         agent: { "zmora-fe": {}, "zmora-be": {}, "zmora-setup": {} },
       }
@@ -155,15 +195,21 @@ describe("applyModelOverride", () => {
         userModels,
       )
       expect(config.agent!["zmora-be"]!.model).toBe("anthropic/claude-opus-4-7")
-      expect(config.agent!["zmora-fe"]!.model).toBe("anthropic/claude-sonnet-4-6")
-      expect(config.agent!["zmora-setup"]!.model).toBe("anthropic/claude-sonnet-4-6")
+      expect(config.agent!["zmora-fe"]!.model).toBe(
+        "anthropic/claude-sonnet-4-6",
+      )
+      expect(config.agent!["zmora-setup"]!.model).toBe(
+        "anthropic/claude-sonnet-4-6",
+      )
     })
   })
 })
 
 describe("captureUserModels", () => {
   it("snapshots a single key's pre-existing model", () => {
-    const config: ModelConfigLike = { agent: { stribog: { model: "anthropic/claude-opus-4-7" } } }
+    const config: ModelConfigLike = {
+      agent: { stribog: { model: "anthropic/claude-opus-4-7" } },
+    }
     expect(captureUserModels(config, "stribog")).toEqual(
       new Map([["stribog", "anthropic/claude-opus-4-7"]]),
     )
@@ -177,7 +223,11 @@ describe("captureUserModels", () => {
         "zmora-setup": { model: "openai/gpt-5.4" },
       },
     }
-    const captured = captureUserModels(config, ["zmora-fe", "zmora-be", "zmora-setup"])
+    const captured = captureUserModels(config, [
+      "zmora-fe",
+      "zmora-be",
+      "zmora-setup",
+    ])
     expect(captured).toEqual(
       new Map([
         ["zmora-fe", "anthropic/claude-sonnet-4-6"],
@@ -234,29 +284,39 @@ describe("getUnknownAgentDiagnostics", () => {
   }
 
   it("returns no diagnostics when every configured agent is a known slug", () => {
-    writeUserGlobal(`{ "agents": { "perun": { "model": "anthropic/claude-opus-4-7" } } }`)
+    writeUserGlobal(
+      `{ "agents": { "perun": { "model": "anthropic/claude-opus-4-7" } } }`,
+    )
     registerKnownSlug("perun")
     expect(getUnknownAgentDiagnostics()).toEqual([])
   })
 
   it("flags an unknown slug (typo) with the known-slug list", () => {
-    writeUserGlobal(`{ "agents": { "strigob": { "model": "anthropic/claude-opus-4-7" } } }`)
+    writeUserGlobal(
+      `{ "agents": { "strigob": { "model": "anthropic/claude-opus-4-7" } } }`,
+    )
     registerKnownSlug("perun")
     registerKnownSlug("stribog")
     const diagnostics = getUnknownAgentDiagnostics()
     expect(diagnostics).toHaveLength(1)
-    expect(diagnostics[0]).toBe(`[pantheon] unknown agent "strigob" — known: perun, stribog`)
+    expect(diagnostics[0]).toBe(
+      `[pantheon] unknown agent "strigob" — known: perun, stribog`,
+    )
   })
 
   it("flags a display-name typo even when the matching slug is known", () => {
     // `veles` is the slug; `Veles - Planner` is the display name. A user who
     // writes the display name into pantheon.json is silently ignored today —
     // this is exactly the M6 failure mode.
-    writeUserGlobal(`{ "agents": { "Veles - Planner": { "model": "anthropic/claude-opus-4-7" } } }`)
+    writeUserGlobal(
+      `{ "agents": { "Veles - Planner": { "model": "anthropic/claude-opus-4-7" } } }`,
+    )
     registerKnownSlug("veles")
     const diagnostics = getUnknownAgentDiagnostics()
     expect(diagnostics).toHaveLength(1)
-    expect(diagnostics[0]).toBe(`[pantheon] unknown agent "Veles - Planner" — known: veles`)
+    expect(diagnostics[0]).toBe(
+      `[pantheon] unknown agent "Veles - Planner" — known: veles`,
+    )
   })
 
   it("flags multiple unknown slugs", () => {
@@ -265,8 +325,12 @@ describe("getUnknownAgentDiagnostics", () => {
     )
     registerKnownSlug("perun")
     const diagnostics = getUnknownAgentDiagnostics()
-    expect(diagnostics).toContain(`[pantheon] unknown agent "foo" — known: perun`)
-    expect(diagnostics).toContain(`[pantheon] unknown agent "bar" — known: perun`)
+    expect(diagnostics).toContain(
+      `[pantheon] unknown agent "foo" — known: perun`,
+    )
+    expect(diagnostics).toContain(
+      `[pantheon] unknown agent "bar" — known: perun`,
+    )
     expect(diagnostics).toHaveLength(2)
   })
 

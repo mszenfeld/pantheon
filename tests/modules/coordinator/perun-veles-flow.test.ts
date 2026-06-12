@@ -42,7 +42,10 @@ describe("perun.md Veles no-plan flow", () => {
       const parseLine = md
         .split("\n")
         .find((line) => /Parse Veles'?s result as JSON/i.test(line))
-      expect(parseLine, "Perun must document the Veles JSON parse list").toBeDefined()
+      expect(
+        parseLine,
+        "Perun must document the Veles JSON parse list",
+      ).toBeDefined()
 
       const braced = parseLine?.match(/\{([^}]*)\}/)?.[1]
       expect(braced, "parse list must be a `{ ... }` field set").toBeDefined()

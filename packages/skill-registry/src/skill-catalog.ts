@@ -9,7 +9,10 @@ export interface SkillEntry {
   allowedTools?: string[]
 }
 
-export function parseSkillFrontmatter(content: string, fileName: string): SkillEntry | null {
+export function parseSkillFrontmatter(
+  content: string,
+  fileName: string,
+): SkillEntry | null {
   const frontmatterMatch = content.match(/^---\r?\n([\s\S]*?)\r?\n---/)
   if (!frontmatterMatch) {
     return null
@@ -28,18 +31,26 @@ export function parseSkillFrontmatter(content: string, fileName: string): SkillE
     const key = line.slice(0, colonIndex).trim()
     let value = line.slice(colonIndex + 1).trim()
     // Remove surrounding quotes if present
-    if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+    if (
+      (value.startsWith('"') && value.endsWith('"')) ||
+      (value.startsWith("'") && value.endsWith("'"))
+    ) {
       value = value.slice(1, -1)
     }
     fields[key] = value
   }
 
   if (!fields.name) {
-    throw new Error(`Skill file ${fileName} is missing required 'name' in frontmatter`)
+    throw new Error(
+      `Skill file ${fileName} is missing required 'name' in frontmatter`,
+    )
   }
 
   const allowedTools = fields["allowed-tools"]
-    ? fields["allowed-tools"].split(",").map((t) => t.trim()).filter(Boolean)
+    ? fields["allowed-tools"]
+        .split(",")
+        .map((t) => t.trim())
+        .filter(Boolean)
     : undefined
 
   return {
@@ -59,8 +70,13 @@ export function parseSkillFrontmatter(content: string, fileName: string): SkillE
  * Matching is exact (after trimming). Future enhancements could add
  * wildcard-aware comparison for Bash tool patterns.
  */
-export function isToolSubset(subset: readonly string[], superset: readonly string[]): boolean {
-  const supersetNormalized = new Set(superset.map((t) => t.trim()).filter(Boolean))
+export function isToolSubset(
+  subset: readonly string[],
+  superset: readonly string[],
+): boolean {
+  const supersetNormalized = new Set(
+    superset.map((t) => t.trim()).filter(Boolean),
+  )
   for (const tool of subset) {
     const normalized = tool.trim()
     if (!normalized) continue
@@ -71,7 +87,9 @@ export function isToolSubset(subset: readonly string[], superset: readonly strin
   return true
 }
 
-export function buildSkillCatalog(directories: readonly string[]): Map<string, SkillEntry> {
+export function buildSkillCatalog(
+  directories: readonly string[],
+): Map<string, SkillEntry> {
   const catalog = new Map<string, SkillEntry>()
 
   for (const dir of directories) {

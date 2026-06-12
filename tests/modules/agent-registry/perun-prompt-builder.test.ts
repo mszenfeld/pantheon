@@ -10,7 +10,9 @@ import {
 } from "../../../src/modules/agent-registry/perun-prompt-builder.js"
 import type { SpecialistInfo } from "../../../src/modules/agent-registry/agent-metadata.js"
 
-function info(over: Partial<SpecialistInfo> & { name: string }): SpecialistInfo {
+function info(
+  over: Partial<SpecialistInfo> & { name: string },
+): SpecialistInfo {
   return {
     name: over.name,
     mode: over.mode ?? "subagent",
@@ -25,9 +27,15 @@ describe("buildSpecialistsTable", () => {
   })
 
   it("renders one row", () => {
-    const out = buildSpecialistsTable([info({ name: "zmora", description: "QA work" })])
+    const out = buildSpecialistsTable([
+      info({ name: "zmora", description: "QA work" }),
+    ])
     expect(out).toBe(
-      ["| Name | Mode | Purpose |", "|---|---|---|", "| `zmora` | subagent | QA work |"].join("\n"),
+      [
+        "| Name | Mode | Purpose |",
+        "|---|---|---|",
+        "| `zmora` | subagent | QA work |",
+      ].join("\n"),
     )
   })
 
@@ -73,7 +81,11 @@ describe("buildKeyTriggersSection", () => {
       }),
     ])
     expect(out).toBe(
-      ["### Key Triggers (check BEFORE classification):", "", "- user asks where X is"].join("\n"),
+      [
+        "### Key Triggers (check BEFORE classification):",
+        "",
+        "- user asks where X is",
+      ].join("\n"),
     )
   })
 })
@@ -123,9 +135,9 @@ describe("buildUseAvoidSection", () => {
   })
 
   it("throws for an unknown agent target", () => {
-    expect(() => buildUseAvoidSection("ghost", [info({ name: "zmora" })])).toThrow(
-      /Unknown agent in placeholder: ghost/,
-    )
+    expect(() =>
+      buildUseAvoidSection("ghost", [info({ name: "zmora" })]),
+    ).toThrow(/Unknown agent in placeholder: ghost/)
   })
 
   it("renders use and avoid bullets", () => {
@@ -144,13 +156,15 @@ describe("buildUseAvoidSection", () => {
 
 describe("buildWorkflowContribution", () => {
   it("returns empty string for an agent without a workflowContribution", () => {
-    expect(buildWorkflowContribution("zmora", [info({ name: "zmora" })])).toBe("")
+    expect(buildWorkflowContribution("zmora", [info({ name: "zmora" })])).toBe(
+      "",
+    )
   })
 
   it("throws for an unknown agent target", () => {
-    expect(() => buildWorkflowContribution("ghost", [info({ name: "zmora" })])).toThrow(
-      /Unknown agent in placeholder: ghost/,
-    )
+    expect(() =>
+      buildWorkflowContribution("ghost", [info({ name: "zmora" })]),
+    ).toThrow(/Unknown agent in placeholder: ghost/)
   })
 
   it("renders the contribution prose verbatim", () => {
@@ -158,7 +172,8 @@ describe("buildWorkflowContribution", () => {
       name: "stribog",
       metadata: {
         triggers: [],
-        workflowContribution: "### Stribog routing\n\n- prefer for build/deploy actuation",
+        workflowContribution:
+          "### Stribog routing\n\n- prefer for build/deploy actuation",
       },
     })
     expect(buildWorkflowContribution("stribog", [withWorkflow])).toBe(
@@ -181,7 +196,10 @@ describe("buildDispatchableAllowlistSentence", () => {
   })
 
   it("joins two entries with 'and' and uses a plural verb", () => {
-    const out = buildDispatchableAllowlistSentence(["Veles - Planner", "Mokosh - Archivist"])
+    const out = buildDispatchableAllowlistSentence([
+      "Veles - Planner",
+      "Mokosh - Archivist",
+    ])
     expect(out).toContain("`Veles - Planner` and `Mokosh - Archivist`")
     expect(out).toContain(" are ")
   })
@@ -227,9 +245,10 @@ describe("buildPerunPrompt", () => {
   })
 
   it("collapses blank-line runs left by empty sections", () => {
-    const out = buildPerunPrompt("A\n\n{KEY_TRIGGERS}\n\n{DELEGATION_TABLE}\n\nB", [
-      info({ name: "zmora" }),
-    ])
+    const out = buildPerunPrompt(
+      "A\n\n{KEY_TRIGGERS}\n\n{DELEGATION_TABLE}\n\nB",
+      [info({ name: "zmora" })],
+    )
     expect(out).not.toMatch(/\n{3,}/)
     expect(out).toContain("A")
     expect(out).toContain("B")

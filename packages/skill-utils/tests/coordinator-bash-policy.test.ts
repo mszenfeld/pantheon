@@ -11,7 +11,11 @@ const FRONTMATTER =
 
 describe("parseAllowedBashPrograms", () => {
   it("extracts the Bash(<prog>:*) programs incl. the path form", () => {
-    expect(parseAllowedBashPrograms(FRONTMATTER)).toEqual(["mkdir", "ls", "./scripts/qa-preflight.sh"])
+    expect(parseAllowedBashPrograms(FRONTMATTER)).toEqual([
+      "mkdir",
+      "ls",
+      "./scripts/qa-preflight.sh",
+    ])
   })
 })
 
@@ -19,7 +23,9 @@ describe("classifyCoordinatorBash", () => {
   const allowed = ["mkdir", "ls", "./scripts/qa-preflight.sh"]
   it("allows an allowlisted program", () => {
     expect(classifyCoordinatorBash("ls -la docs", allowed).allowed).toBe(true)
-    expect(classifyCoordinatorBash("./scripts/qa-preflight.sh foo", allowed).allowed).toBe(true)
+    expect(
+      classifyCoordinatorBash("./scripts/qa-preflight.sh foo", allowed).allowed,
+    ).toBe(true)
   })
   it("denies git", () => {
     const r = classifyCoordinatorBash("git log --oneline", allowed)
@@ -27,9 +33,15 @@ describe("classifyCoordinatorBash", () => {
     expect(r.program).toBe("git")
   })
   it("denies compound commands even if the first program is allowed", () => {
-    expect(classifyCoordinatorBash("mkdir x && git log", allowed).allowed).toBe(false)
-    expect(classifyCoordinatorBash("ls; curl http://x", allowed).allowed).toBe(false)
-    expect(classifyCoordinatorBash('bash -c "git log"', allowed).allowed).toBe(false)
+    expect(classifyCoordinatorBash("mkdir x && git log", allowed).allowed).toBe(
+      false,
+    )
+    expect(classifyCoordinatorBash("ls; curl http://x", allowed).allowed).toBe(
+      false,
+    )
+    expect(classifyCoordinatorBash('bash -c "git log"', allowed).allowed).toBe(
+      false,
+    )
   })
   // Table-driven coverage of EVERY separator/operator the COMPOUND regex must
   // reject. Each row smuggles a second statement (or a redirect) past an
@@ -59,19 +71,31 @@ describe("classifyCoordinatorBash", () => {
 
 describe("buildViolationError", () => {
   it("carries a structured payload AND the instructive redirect", () => {
-    const err = buildViolationError({ tool: "bash", command: "git log", reason: "not-allowlisted" })
+    const err = buildViolationError({
+      tool: "bash",
+      command: "git log",
+      reason: "not-allowlisted",
+    })
     expect(err.message).toContain("COORDINATOR_POLICY_VIOLATION")
     expect(err.message).toContain("git log")
     expect(err.message).toMatch(/Veles|Triglav/)
   })
 
   it("names the program for a single-program command", () => {
-    const err = buildViolationError({ tool: "bash", command: "git log --oneline", reason: "not-allowlisted" })
+    const err = buildViolationError({
+      tool: "bash",
+      command: "git log --oneline",
+      reason: "not-allowlisted",
+    })
     expect(err.message).toContain("may not run `git`.")
   })
 
   it("uses a stable label instead of misnaming the first token of a compound command", () => {
-    const err = buildViolationError({ tool: "bash", command: "ls docs\ngit log --all", reason: "not-allowlisted" })
+    const err = buildViolationError({
+      tool: "bash",
+      command: "ls docs\ngit log --all",
+      reason: "not-allowlisted",
+    })
     // Must NOT claim the coordinator may not run `ls` (the harmless first token).
     expect(err.message).not.toContain("may not run `ls`.")
     expect(err.message).toContain("may not run a compound command.")

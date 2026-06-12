@@ -5,9 +5,7 @@ const DISALLOWED_FOOTERS = [/^co-authored-by:/i]
 
 function sanitizeTaskId(taskId: string): string {
   if (/[\r\n]/.test(taskId)) {
-    throw new Error(
-      "Task ID must not contain newlines or carriage returns.",
-    )
+    throw new Error("Task ID must not contain newlines or carriage returns.")
   }
   return taskId.trim()
 }
@@ -22,7 +20,10 @@ function assertNoDisallowedFooters(lines: string[]): void {
   }
 }
 
-export function normalizeCommitMessage(message: string, taskId?: string): string {
+export function normalizeCommitMessage(
+  message: string,
+  taskId?: string,
+): string {
   const normalized = message.trim()
 
   if (!normalized) {

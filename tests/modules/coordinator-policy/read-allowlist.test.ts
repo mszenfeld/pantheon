@@ -14,7 +14,9 @@ import {
  * checks below pin the security-relevant contract.
  */
 const SRC_PERUN_PROGRAMS = parseAllowedBashPrograms(
-  readFileSync("src/agents/perun.md", "utf8").match(/^allowed-tools:.*$/m)?.[0] ?? "",
+  readFileSync("src/agents/perun.md", "utf8").match(
+    /^allowed-tools:.*$/m,
+  )?.[0] ?? "",
 )
 
 describe("readCoordinatorBashAllowlist (happy path against real perun.md frontmatter)", () => {

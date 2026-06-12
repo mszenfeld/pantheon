@@ -49,11 +49,15 @@ describe("AppVerkPlanPlugin veles model injection", () => {
   }
 
   it("sets model on 'veles' when pantheon.json provides veles.model", async () => {
-    writeUserGlobal(`{ "agents": { "veles": { "model": "opencode/claude-haiku-4-5" } } }`)
+    writeUserGlobal(
+      `{ "agents": { "veles": { "model": "opencode/claude-haiku-4-5" } } }`,
+    )
     const plugin = await AppVerkPlanPlugin(fakeInput())
     const config: Config = { agent: {} }
     await plugin.config?.(config)
-    expect(config.agent![VELES_AGENT_KEY]!.model).toBe("opencode/claude-haiku-4-5")
+    expect(config.agent![VELES_AGENT_KEY]!.model).toBe(
+      "opencode/claude-haiku-4-5",
+    )
   })
 
   it("leaves model unset when no pantheon.json exists", async () => {
@@ -64,7 +68,9 @@ describe("AppVerkPlanPlugin veles model injection", () => {
   })
 
   it("leaves model unset when veles key is absent", async () => {
-    writeUserGlobal(`{ "agents": { "perun": { "model": "anthropic/claude-opus-4-7" } } }`)
+    writeUserGlobal(
+      `{ "agents": { "perun": { "model": "anthropic/claude-opus-4-7" } } }`,
+    )
     const plugin = await AppVerkPlanPlugin(fakeInput())
     const config: Config = { agent: {} }
     await plugin.config?.(config)
@@ -77,7 +83,9 @@ describe("AppVerkPlanPlugin veles model injection", () => {
   // CWE-117/CWE-1188 — an ANSI/BiDi/control-byte payload must never reach
   // `config.agent[VELES_AGENT_KEY].model` and downstream TUI sinks.
   it("leaves model unset when pantheon.json provides an invalid model", async () => {
-    writeUserGlobal(`{ "agents": { "veles": { "model": "bad model\\u001b[31m" } } }`)
+    writeUserGlobal(
+      `{ "agents": { "veles": { "model": "bad model\\u001b[31m" } } }`,
+    )
     const plugin = await AppVerkPlanPlugin(fakeInput())
     const config: Config = { agent: {} }
     await plugin.config?.(config)

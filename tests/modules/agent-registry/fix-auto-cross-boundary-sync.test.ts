@@ -27,7 +27,10 @@ import { fixAutoSpecialistInfo } from "../../../src/modules/agent-registry/fix-a
  * metadata.
  */
 describe("cross-boundary sync: fix-auto metadata mirrors the code-review registration", () => {
-  async function registeredFixAutoAgent(): Promise<{ mode?: string; description?: string }> {
+  async function registeredFixAutoAgent(): Promise<{
+    mode?: string
+    description?: string
+  }> {
     const plugin = await AppVerkCodeReviewPlugin({ client: {} } as never)
     const config: Config = { agent: {} }
     await plugin.config?.(config)

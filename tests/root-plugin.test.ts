@@ -1,12 +1,22 @@
 import { execFileSync } from "node:child_process"
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync } from "node:fs"
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  statSync,
+} from "node:fs"
 import { tmpdir } from "node:os"
 import path from "node:path"
 import { fileURLToPath, pathToFileURL } from "node:url"
 import { describe, expect, it } from "vitest"
 import type { Hooks } from "@opencode-ai/plugin"
 
-const rootDirectory = path.resolve(fileURLToPath(new URL("..", import.meta.url)))
+const rootDirectory = path.resolve(
+  fileURLToPath(new URL("..", import.meta.url)),
+)
 const packageJsonPath = path.join(rootDirectory, "package.json")
 
 function readRootPackageJson() {
@@ -57,12 +67,20 @@ function deriveExpectedFilesFromPackageJson(
       continue
     }
     // Directory — recurse
-    const dirEntries = readdirSync(absPath, { recursive: true, withFileTypes: true })
+    const dirEntries = readdirSync(absPath, {
+      recursive: true,
+      withFileTypes: true,
+    })
     for (const dirent of dirEntries) {
       if (dirent.isDirectory()) continue
       if (isSkippable(dirent.name)) continue
-      const relativePath = path.relative(absPath, path.join(dirent.parentPath, dirent.name))
-      result.push(path.posix.join(entry, relativePath.split(path.sep).join("/")))
+      const relativePath = path.relative(
+        absPath,
+        path.join(dirent.parentPath, dirent.name),
+      )
+      result.push(
+        path.posix.join(entry, relativePath.split(path.sep).join("/")),
+      )
     }
   }
 
@@ -86,7 +104,9 @@ describe("AppVerkPlugins", () => {
       "Create a git commit with the AppVerk commit workflow",
     )
     expect(config.command?.commit?.template).toContain("## Context")
-    expect(config.command?.commit?.template).toContain("Use the `av_commit` tool")
+    expect(config.command?.commit?.template).toContain(
+      "Use the `av_commit` tool",
+    )
     expect(plugin.tool?.av_commit).toBeDefined()
   })
 
@@ -94,8 +114,14 @@ describe("AppVerkPlugins", () => {
     const { AppVerkPlugins } = await loadRootModule()
     const plugin = await AppVerkPlugins({} as never)
     const config = {} as {
-      command?: Record<string, { description?: string; template: string; agent?: string }>
-      agent?: Record<string, { description?: string; prompt: string; mode?: string }>
+      command?: Record<
+        string,
+        { description?: string; template: string; agent?: string }
+      >
+      agent?: Record<
+        string,
+        { description?: string; prompt: string; mode?: string }
+      >
     }
 
     await plugin.config?.(config as never)
@@ -111,7 +137,10 @@ describe("AppVerkPlugins", () => {
     const { AppVerkPlugins } = await loadRootModule()
     const plugin = await AppVerkPlugins({} as never)
     const config = {} as {
-      agent?: Record<string, { description?: string; prompt: string; mode?: string }>
+      agent?: Record<
+        string,
+        { description?: string; prompt: string; mode?: string }
+      >
     }
 
     await plugin.config?.(config as never)
@@ -128,15 +157,23 @@ describe("AppVerkPlugins", () => {
     const { AppVerkPlugins } = await loadRootModule()
     const plugin = await AppVerkPlugins({} as never)
     const config = {} as {
-      command?: Record<string, { description?: string; template: string; agent?: string }>
-      agent?: Record<string, { description?: string; prompt: string; mode?: string }>
+      command?: Record<
+        string,
+        { description?: string; template: string; agent?: string }
+      >
+      agent?: Record<
+        string,
+        { description?: string; prompt: string; mode?: string }
+      >
     }
 
     await plugin.config?.(config as never)
 
     expect(config.command?.frontend?.description).toContain("TypeScript")
     expect(config.command?.frontend?.agent).toBe("frontend-developer")
-    expect(config.agent?.["frontend-developer"]?.description).toContain("TypeScript")
+    expect(config.agent?.["frontend-developer"]?.description).toContain(
+      "TypeScript",
+    )
     expect(config.agent?.["frontend-developer"]?.mode).toBe("primary")
     expect(plugin.tool?.load_appverk_skill).toBeDefined()
   })
@@ -150,11 +187,7 @@ describe("AppVerkPlugins", () => {
     expect(packageJson.dependencies).not.toHaveProperty(
       "@appverk/opencode-commit",
     )
-    expect(packageJson.files).toEqual(
-      expect.arrayContaining([
-        "dist",
-      ]),
-    )
+    expect(packageJson.files).toEqual(expect.arrayContaining(["dist"]))
 
     const tmpDir = mkdtempSync(path.join(tmpdir(), "bun-pack-"))
     try {
@@ -195,7 +228,10 @@ describe("AppVerkPlugins", () => {
 
       // Fine-grained check: derive expected files from package.json `files` so
       // any new path added to `files` is auto-asserted without test maintenance.
-      const expectedFiles = deriveExpectedFilesFromPackageJson(packageJson, rootDirectory)
+      const expectedFiles = deriveExpectedFilesFromPackageJson(
+        packageJson,
+        rootDirectory,
+      )
       expect(packedFiles).toEqual(expect.arrayContaining(expectedFiles))
 
       // Regression guard (H4): the shipped artifact must carry a resolvable
@@ -234,9 +270,13 @@ describe("AppVerkPlugins", () => {
       // `package/` path component that npm/bun tarballs use).
       const extractDir = path.join(tmpDir, "extracted")
       mkdirSync(extractDir, { recursive: true })
-      execFileSync("tar", ["-xzf", tarballPath, "-C", extractDir, "--strip-components=1"], {
-        encoding: "utf8",
-      })
+      execFileSync(
+        "tar",
+        ["-xzf", tarballPath, "-C", extractDir, "--strip-components=1"],
+        {
+          encoding: "utf8",
+        },
+      )
 
       // Install the extracted package's own dependencies. This must link
       // `@appverk/opencode-skill-utils` from the shipped `packages/skill-utils`
@@ -285,9 +325,15 @@ describe("AppVerkPlugins", () => {
     expect(typeof plugin.event).toBe("function")
     // Smoke: feed a synthetic event; must not throw.
     const eventHandler = plugin.event
-    if (typeof eventHandler !== "function") throw new Error("expected event handler")
+    if (typeof eventHandler !== "function")
+      throw new Error("expected event handler")
     await expect(
-      eventHandler({ event: { type: "session.idle", properties: { sessionID: "ses_unknown" } } } as never),
+      eventHandler({
+        event: {
+          type: "session.idle",
+          properties: { sessionID: "ses_unknown" },
+        },
+      } as never),
     ).resolves.toBeUndefined()
   })
 
@@ -316,7 +362,10 @@ describe("AppVerkPlugins", () => {
 
     await expect(
       plugin["tool.execute.before"]?.(
-        { tool: "bash", args: { command: 'git commit -m "feat: bypass"' } } as never,
+        {
+          tool: "bash",
+          args: { command: 'git commit -m "feat: bypass"' },
+        } as never,
         { args: { command: 'git commit -m "feat: bypass"' } } as never,
       ),
     ).rejects.toThrow(/use \/commit/i)
@@ -343,13 +392,17 @@ describe("AppVerkPlugins", () => {
 
     await hooks.config?.(config)
 
-    const agent = (config as { agent: Record<string, { mode?: string; hidden?: boolean }> }).agent
+    const agent = (
+      config as { agent: Record<string, { mode?: string; hidden?: boolean }> }
+    ).agent
     expect(agent.build!.hidden).toBe(true)
     expect(agent.plan!.hidden).toBe(true)
     expect(agent["user-agent"]!.hidden).toBe(true)
     expect(agent["Perun - Coordinator"]!.hidden).toBeUndefined()
     expect(agent["Perun - Coordinator"]!.mode).toBe("primary")
-    expect((config as { default_agent?: string }).default_agent).toBe("Perun - Coordinator")
+    expect((config as { default_agent?: string }).default_agent).toBe(
+      "Perun - Coordinator",
+    )
   })
 
   it("survives a second invocation on the same config (does not hide its own agents)", async () => {
@@ -368,7 +421,8 @@ describe("AppVerkPlugins", () => {
     await hooks.config?.(config)
     await hooks.config?.(config) // second pass on the SAME object
 
-    const agent = (config as { agent: Record<string, { hidden?: boolean }> }).agent
+    const agent = (config as { agent: Record<string, { hidden?: boolean }> })
+      .agent
     expect(agent["Perun - Coordinator"]!.hidden).toBeUndefined()
     expect(agent.build!.hidden).toBe(true)
   })
@@ -380,7 +434,9 @@ describe("AppVerkPlugins", () => {
 
     await plugin.config?.(config)
 
-    expect((config as { default_agent?: string }).default_agent).toBe("Perun - Coordinator")
+    expect((config as { default_agent?: string }).default_agent).toBe(
+      "Perun - Coordinator",
+    )
   })
 
   it("respects a user-provided default_agent that resolves to a visible primary", async () => {
@@ -393,7 +449,9 @@ describe("AppVerkPlugins", () => {
 
     await plugin.config?.(config)
 
-    expect((config as { default_agent?: string }).default_agent).toBe("frontend-developer")
+    expect((config as { default_agent?: string }).default_agent).toBe(
+      "frontend-developer",
+    )
   })
 
   it("composes non-tool hook keys generically", async () => {
@@ -427,7 +485,10 @@ describe("AppVerkPlugins", () => {
     const envOutput = { env: {} as Record<string, string> }
     const headersOutput = { headers: {} as Record<string, string> }
 
-    await hooks["shell.env"]?.({ cwd: rootDirectory } as never, envOutput as never)
+    await hooks["shell.env"]?.(
+      { cwd: rootDirectory } as never,
+      envOutput as never,
+    )
     await hooks["chat.headers"]?.(
       {
         sessionID: "session",

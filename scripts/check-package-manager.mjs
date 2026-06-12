@@ -10,7 +10,10 @@ const MIN_BUN_STR = MIN_BUN.join(".")
 
 const ua = process.env.npm_config_user_agent ?? ""
 if (!ua.startsWith("bun/")) {
-  console.error(`This project requires bun (>= ${MIN_BUN_STR}). Detected:`, ua || "<unset>")
+  console.error(
+    `This project requires bun (>= ${MIN_BUN_STR}). Detected:`,
+    ua || "<unset>",
+  )
   console.error("Install: https://bun.sh")
   console.error("See README.md Prerequisites for details.")
   process.exit(1)
@@ -30,7 +33,9 @@ if (m) {
   // parse a version, so we can't prove >= MIN_BUN_STR. Warn rather than fail —
   // this guard is best-effort (see header), and blocking canary builds would be
   // more disruptive than the unlikely case of an outdated source build.
-  console.warn(`Could not parse a bun version from "${ua}"; cannot verify >= ${MIN_BUN_STR}. Proceeding.`)
+  console.warn(
+    `Could not parse a bun version from "${ua}"; cannot verify >= ${MIN_BUN_STR}. Proceeding.`,
+  )
 }
 
 // Lexicographic [major, minor, patch] comparison: version >= min.

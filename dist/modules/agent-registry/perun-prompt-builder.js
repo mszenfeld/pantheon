@@ -27,7 +27,11 @@ function buildKeyTriggersSection(registry) {
   const withTrigger = [...registry].sort(byName).filter((a) => a.metadata.keyTrigger !== void 0);
   if (withTrigger.length === 0) return "";
   const bullets = withTrigger.map((a) => `- ${a.metadata.keyTrigger}`);
-  return ["### Key Triggers (check BEFORE classification):", "", ...bullets].join("\n");
+  return [
+    "### Key Triggers (check BEFORE classification):",
+    "",
+    ...bullets
+  ].join("\n");
 }
 function buildDelegationTable(registry) {
   const rows = [];

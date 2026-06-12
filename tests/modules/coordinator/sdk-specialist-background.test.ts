@@ -21,13 +21,26 @@ describe("createSDKSpecialist.startBackground", () => {
     const id = await specialist.startBackground("triglav", "explore X")
     expect(id).toBe("child-1")
     // It uses the async (fire-and-forget) endpoint, NOT the blocking prompt.
-    expect((client as never as { session: { promptAsync: ReturnType<typeof vi.fn> } }).session.promptAsync).toHaveBeenCalledTimes(1)
-    expect((client as never as { session: { prompt: ReturnType<typeof vi.fn> } }).session.prompt).not.toHaveBeenCalled()
+    expect(
+      (
+        client as never as {
+          session: { promptAsync: ReturnType<typeof vi.fn> }
+        }
+      ).session.promptAsync,
+    ).toHaveBeenCalledTimes(1)
+    expect(
+      (client as never as { session: { prompt: ReturnType<typeof vi.fn> } })
+        .session.prompt,
+    ).not.toHaveBeenCalled()
   })
 
   it("throws when session creation yields no id", async () => {
-    const client = fakeClient({ create: vi.fn(async () => ({ data: { id: "" } })) })
+    const client = fakeClient({
+      create: vi.fn(async () => ({ data: { id: "" } })),
+    })
     const specialist = createSDKSpecialist(client, "parent-1")
-    await expect(specialist.startBackground("triglav", "x")).rejects.toThrow(/no session id/)
+    await expect(specialist.startBackground("triglav", "x")).rejects.toThrow(
+      /no session id/,
+    )
   })
 })

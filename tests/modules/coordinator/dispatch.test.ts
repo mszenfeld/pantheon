@@ -123,7 +123,9 @@ describe("dispatchParallel", () => {
   it("throws on unknown agent before creating any session", async () => {
     const { specialist, calls } = makeSpecialistRecorder()
 
-    const tasks: DispatchTask[] = [{ name: "unknown-agent", prompt: "do something" }]
+    const tasks: DispatchTask[] = [
+      { name: "unknown-agent", prompt: "do something" },
+    ]
 
     await expect(
       dispatchParallel({ tasks, agentRegistry: defaultRegistry, specialist }),
@@ -155,7 +157,9 @@ describe("dispatchParallel", () => {
       "dual-use-agent": { mode: "all" },
     }
 
-    const tasks: DispatchTask[] = [{ name: "dual-use-agent", prompt: "do work" }]
+    const tasks: DispatchTask[] = [
+      { name: "dual-use-agent", prompt: "do work" },
+    ]
 
     await expect(
       dispatchParallel({ tasks, agentRegistry: registry, specialist }),
@@ -189,7 +193,9 @@ describe("dispatchParallel", () => {
       sessionIdSequence: ["s1"],
     })
 
-    const tasks: DispatchTask[] = [{ name: "qa-fe-tester", prompt: "test the UI" }]
+    const tasks: DispatchTask[] = [
+      { name: "qa-fe-tester", prompt: "test the UI" },
+    ]
 
     const results = await dispatchParallel({
       tasks,
@@ -213,7 +219,9 @@ describe("dispatchParallel", () => {
 
     const { specialist } = makeSpecialistRecorder({
       startTaskHandler: async (agentName: string): Promise<string> => agentName,
-      fetchMessagesHandler: async (sessionId: string): Promise<PollerMessage[]> => {
+      fetchMessagesHandler: async (
+        sessionId: string,
+      ): Promise<PollerMessage[]> => {
         if (sessionId === "qa-fe-tester") {
           await feGate
           return [finishedMessage("frontend result")]
@@ -304,7 +312,9 @@ describe("dispatchParallel", () => {
         }
         return "s2"
       },
-      fetchMessagesHandler: async (sessionId: string): Promise<PollerMessage[]> => {
+      fetchMessagesHandler: async (
+        sessionId: string,
+      ): Promise<PollerMessage[]> => {
         return sessionMap[sessionId]?.messages ?? []
       },
     })
@@ -337,7 +347,9 @@ describe("dispatchParallel", () => {
       fetchMessagesHandler: async (): Promise<PollerMessage[]> => [],
     })
 
-    const tasks: DispatchTask[] = [{ name: "qa-fe-tester", prompt: "will timeout" }]
+    const tasks: DispatchTask[] = [
+      { name: "qa-fe-tester", prompt: "will timeout" },
+    ]
 
     const promise = dispatchParallel({
       tasks,
@@ -413,7 +425,9 @@ describe("dispatchParallel", () => {
       sessionIdSequence: ["s1"],
     })
 
-    const tasks: DispatchTask[] = [{ name: "qa-fe-tester", prompt: "multi-byte" }]
+    const tasks: DispatchTask[] = [
+      { name: "qa-fe-tester", prompt: "multi-byte" },
+    ]
 
     const results = await dispatchParallel({
       tasks,
@@ -437,7 +451,7 @@ describe("dispatchParallel", () => {
     expect(body).not.toContain("�")
   })
 
-  it("propagates AbortSignal: aborting mid-poll resolves with status \"aborted\" and calls abortTask", async () => {
+  it('propagates AbortSignal: aborting mid-poll resolves with status "aborted" and calls abortTask', async () => {
     vi.useFakeTimers()
 
     const abortController = new AbortController()
@@ -448,7 +462,9 @@ describe("dispatchParallel", () => {
       fetchMessagesHandler: async (): Promise<PollerMessage[]> => [],
     })
 
-    const tasks: DispatchTask[] = [{ name: "qa-fe-tester", prompt: "long-running" }]
+    const tasks: DispatchTask[] = [
+      { name: "qa-fe-tester", prompt: "long-running" },
+    ]
 
     const promise = dispatchParallel({
       tasks,
@@ -492,13 +508,22 @@ describe("dispatchParallel", () => {
       },
     })
 
-    const tasks: DispatchTask[] = Array.from({ length: DISPATCH_CONCURRENCY }, (_, i) => ({
-      name: "worker",
-      prompt: `t${i}`,
-    }))
-    const agentRegistry: Record<string, AgentInfo> = { worker: { mode: "subagent" } }
+    const tasks: DispatchTask[] = Array.from(
+      { length: DISPATCH_CONCURRENCY },
+      (_, i) => ({
+        name: "worker",
+        prompt: `t${i}`,
+      }),
+    )
+    const agentRegistry: Record<string, AgentInfo> = {
+      worker: { mode: "subagent" },
+    }
 
-    await dispatchParallel({ tasks, agentRegistry, specialist: recorder.specialist })
+    await dispatchParallel({
+      tasks,
+      agentRegistry,
+      specialist: recorder.specialist,
+    })
     // Upper bound: pool must never exceed DISPATCH_CONCURRENCY.
     expect(inFlight.peak).toBeLessThanOrEqual(DISPATCH_CONCURRENCY)
     // Lower bound: pool must actually parallelise. With `tasks.length ==
@@ -514,9 +539,15 @@ describe("dispatchParallel", () => {
       name: "worker",
       prompt: `t${i}`,
     }))
-    const agentRegistry: Record<string, AgentInfo> = { worker: { mode: "subagent" } }
+    const agentRegistry: Record<string, AgentInfo> = {
+      worker: { mode: "subagent" },
+    }
     await expect(
-      dispatchParallel({ tasks, agentRegistry, specialist: recorder.specialist }),
+      dispatchParallel({
+        tasks,
+        agentRegistry,
+        specialist: recorder.specialist,
+      }),
     ).rejects.toThrow(
       new RegExp(`exceeds DISPATCH_MAX_TASKS \\(${DISPATCH_MAX_TASKS}\\)`),
     )
@@ -525,14 +556,22 @@ describe("dispatchParallel", () => {
 
   it("completes DISPATCH_MAX_TASKS tasks (the cap) through the pool", async () => {
     const recorder = makeSpecialistRecorder({
-      sessionIdSequence: Array.from({ length: DISPATCH_MAX_TASKS }, (_, i) => `s${i}`),
+      sessionIdSequence: Array.from(
+        { length: DISPATCH_MAX_TASKS },
+        (_, i) => `s${i}`,
+      ),
       fetchMessagesHandler: async () => [finishedMessage("ok")],
     })
-    const tasks: DispatchTask[] = Array.from({ length: DISPATCH_MAX_TASKS }, (_, i) => ({
-      name: "worker",
-      prompt: `t${i}`,
-    }))
-    const agentRegistry: Record<string, AgentInfo> = { worker: { mode: "subagent" } }
+    const tasks: DispatchTask[] = Array.from(
+      { length: DISPATCH_MAX_TASKS },
+      (_, i) => ({
+        name: "worker",
+        prompt: `t${i}`,
+      }),
+    )
+    const agentRegistry: Record<string, AgentInfo> = {
+      worker: { mode: "subagent" },
+    }
     const results = await dispatchParallel({
       tasks,
       agentRegistry,
@@ -572,7 +611,9 @@ describe("dispatchParallel", () => {
         opLog.push(`start:${agentName}`)
         return agentName
       },
-      fetchMessagesHandler: async (sessionId: string): Promise<PollerMessage[]> => {
+      fetchMessagesHandler: async (
+        sessionId: string,
+      ): Promise<PollerMessage[]> => {
         opLog.push(`fetch:${sessionId}`)
         return [finishedMessage(`${sessionId} done`)]
       },
@@ -618,7 +659,9 @@ describe("dispatchParallel", () => {
         sessionIdSequence: ["s1"],
       })
 
-      const tasks: DispatchTask[] = [{ name: "zmora-fe", prompt: "fe scenario" }]
+      const tasks: DispatchTask[] = [
+        { name: "zmora-fe", prompt: "fe scenario" },
+      ]
 
       const results = await dispatchParallel({
         tasks,
@@ -641,7 +684,9 @@ describe("dispatchParallel", () => {
         sessionIdSequence: ["s1"],
       })
 
-      const tasks: DispatchTask[] = [{ name: "zmora-be", prompt: "be scenario" }]
+      const tasks: DispatchTask[] = [
+        { name: "zmora-be", prompt: "be scenario" },
+      ]
 
       const results = await dispatchParallel({
         tasks,
@@ -682,7 +727,9 @@ describe("dispatchParallel", () => {
         },
       })
 
-      const tasks: DispatchTask[] = [{ name: "zmora-be", prompt: "be scenario" }]
+      const tasks: DispatchTask[] = [
+        { name: "zmora-be", prompt: "be scenario" },
+      ]
 
       const results = await dispatchParallel({
         tasks,
@@ -699,8 +746,11 @@ describe("dispatchParallel", () => {
 
     it("normalises a mixed batch of fe + be tasks while preserving order", async () => {
       const { specialist } = makeSpecialistRecorder({
-        startTaskHandler: async (agentName: string): Promise<string> => agentName,
-        fetchMessagesHandler: async (sessionId: string): Promise<PollerMessage[]> => {
+        startTaskHandler: async (agentName: string): Promise<string> =>
+          agentName,
+        fetchMessagesHandler: async (
+          sessionId: string,
+        ): Promise<PollerMessage[]> => {
           return [finishedMessage(`${sessionId} done`)]
         },
       })
@@ -719,11 +769,7 @@ describe("dispatchParallel", () => {
       })
 
       expect(results).toHaveLength(3)
-      expect(results.map((r) => r.name)).toEqual([
-        "zmora",
-        "zmora",
-        "zmora",
-      ])
+      expect(results.map((r) => r.name)).toEqual(["zmora", "zmora", "zmora"])
       expect(results.every((r) => r.status === "success")).toBe(true)
     })
 
@@ -737,7 +783,9 @@ describe("dispatchParallel", () => {
         sessionIdSequence: ["s1"],
       })
 
-      const tasks: DispatchTask[] = [{ name: "fix-auto", prompt: "fix something" }]
+      const tasks: DispatchTask[] = [
+        { name: "fix-auto", prompt: "fix something" },
+      ]
 
       const results = await dispatchParallel({
         tasks,
@@ -782,9 +830,8 @@ describe("dispatchParallel", () => {
       // Plumbing check for the QA `shell.env` hook: every dispatched task
       // must surface (childSessionID → agent name) in the registry so the
       // hook can resolve which agent owns a given session.
-      const { SessionAgentRegistry } = await import(
-        "../../../src/modules/qa/shell-env-hook.js"
-      )
+      const { SessionAgentRegistry } =
+        await import("../../../src/modules/qa/shell-env-hook.js")
       const registry = new SessionAgentRegistry()
       const { specialist } = makeSpecialistRecorder({
         sessionIdSequence: ["s1"],
@@ -873,18 +920,24 @@ describe("dispatchParallel", () => {
       // First task spends the whole budget and is returned whole.
       expect(results[0]?.status).toBe("success")
       expect(bytesOf(results[0]?.result)).toBe(cap)
-      expect(results[0]?.result.endsWith(AGGREGATE_TRUNCATION_MARKER)).toBe(false)
+      expect(results[0]?.result.endsWith(AGGREGATE_TRUNCATION_MARKER)).toBe(
+        false,
+      )
 
       // Second task: budget exhausted → trimmed to the marker (zero body bytes
       // remained) and pointed at the child session.
       expect(results[1]?.status).toBe("success")
-      expect(results[1]?.result.endsWith(AGGREGATE_TRUNCATION_MARKER)).toBe(true)
+      expect(results[1]?.result.endsWith(AGGREGATE_TRUNCATION_MARKER)).toBe(
+        true,
+      )
 
       // The combined SUCCESSFUL bodies (marker bytes excluded) never exceed the
       // aggregate budget — the core invariant.
       const body0 = bytesOf(results[0]?.result)
       const r1 = results[1]?.result ?? ""
-      const body1 = bytesOf(r1.slice(0, r1.length - AGGREGATE_TRUNCATION_MARKER.length))
+      const body1 = bytesOf(
+        r1.slice(0, r1.length - AGGREGATE_TRUNCATION_MARKER.length),
+      )
       expect(body0 + body1).toBeLessThanOrEqual(cap)
     })
 
@@ -987,7 +1040,9 @@ describe("dispatchParallel", () => {
       // body survives unmarked.
       expect(results[1]?.status).toBe("success")
       expect(bytesOf(results[1]?.result)).toBe(cap)
-      expect(results[1]?.result.endsWith(AGGREGATE_TRUNCATION_MARKER)).toBe(false)
+      expect(results[1]?.result.endsWith(AGGREGATE_TRUNCATION_MARKER)).toBe(
+        false,
+      )
     })
   })
 })

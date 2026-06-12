@@ -36,7 +36,9 @@ export function createSDKSpecialist(
       })
       const sessionId: string = created.data?.id ?? ""
       if (sessionId.length === 0) {
-        throw new Error(`createSession returned no session id for agent ${agentName}`)
+        throw new Error(
+          `createSession returned no session id for agent ${agentName}`,
+        )
       }
 
       // Fire the created-callback BEFORE prompting. The turn runs server-side
@@ -61,7 +63,9 @@ export function createSDKSpecialist(
               service: "perun/dispatch",
               level: "warn",
               message: `onSessionCreated callback threw for agent ${agentName} (session ${sessionId}); binding injection may not occur — continuing dispatch`,
-              extra: { error: err instanceof Error ? err.message : String(err) },
+              extra: {
+                error: err instanceof Error ? err.message : String(err),
+              },
             },
           })
           .catch(() => {})
@@ -127,7 +131,9 @@ export function createSDKSpecialist(
       })
       const sessionId: string = created.data?.id ?? ""
       if (sessionId.length === 0) {
-        throw new Error(`startBackground returned no session id for agent ${agentName}`)
+        throw new Error(
+          `startBackground returned no session id for agent ${agentName}`,
+        )
       }
       // Fire-and-forget: promptAsync returns 204 immediately; the server runs
       // the LLM turn autonomously. We do NOT await the turn — completion is

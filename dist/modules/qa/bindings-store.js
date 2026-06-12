@@ -75,7 +75,10 @@ function valueIsValid(value) {
   for (let i = 0; i < trimmed.length; i++) {
     const c = trimmed.charCodeAt(i);
     if (c < 32 || c === 127) {
-      return { ok: false, reason: `value contains control byte 0x${c.toString(16).padStart(2, "0")} at position ${i}` };
+      return {
+        ok: false,
+        reason: `value contains control byte 0x${c.toString(16).padStart(2, "0")} at position ${i}`
+      };
     }
   }
   return { ok: true };
@@ -135,17 +138,29 @@ class BindingsStore {
   writeBinding(parentID, name, value, type, source, opts = {}) {
     if (source === "minted-recipe") {
       if (!QA_BIND_RE.test(name)) {
-        return { status: "error", reason: `minted bindings must match ^QA_BIND_[A-Z][A-Z0-9_]*$ (got '${name}')` };
+        return {
+          status: "error",
+          reason: `minted bindings must match ^QA_BIND_[A-Z][A-Z0-9_]*$ (got '${name}')`
+        };
       }
     } else {
       if (!ENV_NAME_RE.test(name)) {
-        return { status: "error", reason: `name must match ^[A-Z_][A-Z0-9_]*$ (got '${name}')` };
+        return {
+          status: "error",
+          reason: `name must match ^[A-Z_][A-Z0-9_]*$ (got '${name}')`
+        };
       }
       if (nameInProcessControlDenylist(name)) {
-        return { status: "error", reason: `name '${name}' is in the process-control denylist` };
+        return {
+          status: "error",
+          reason: `name '${name}' is in the process-control denylist`
+        };
       }
       if (opts.declaredInput !== true && nameMatchesCredentialPrefix(name)) {
-        return { status: "error", reason: `name '${name}' matches a credential-prefix denylist (declare it as a binding Input to use it)` };
+        return {
+          status: "error",
+          reason: `name '${name}' matches a credential-prefix denylist (declare it as a binding Input to use it)`
+        };
       }
     }
     const vCheck = valueIsValid(value);
@@ -162,7 +177,10 @@ class BindingsStore {
       return { status: "duplicate" };
     }
     if (parentMap.size >= PER_PARENT_CAP) {
-      return { status: "error", reason: `per-parent cap of ${PER_PARENT_CAP} reached` };
+      return {
+        status: "error",
+        reason: `per-parent cap of ${PER_PARENT_CAP} reached`
+      };
     }
     if (this.#globalCount >= GLOBAL_CAP) {
       return { status: "error", reason: `global cap of ${GLOBAL_CAP} reached` };

@@ -47,7 +47,9 @@ describe("AppVerkStribogPlugin model injection", () => {
   // leg actually fires (the provider-absent degraded path has its own tests
   // below). Custom-provider-config presence is the config-time availability
   // signal the plugin probes — see _shared/provider-detect.ts.
-  async function runConfig(provider: Record<string, unknown> = { openai: {} }): Promise<Config> {
+  async function runConfig(
+    provider: Record<string, unknown> = { openai: {} },
+  ): Promise<Config> {
     const plugin = await AppVerkStribogPlugin({} as never)
     const config: Config = { agent: {}, provider } as Config
     await plugin.config?.(config)
@@ -60,13 +62,19 @@ describe("AppVerkStribogPlugin model injection", () => {
   })
 
   it("honours a valid agents.stribog.model override", async () => {
-    writeUserGlobal(`{ "agents": { "stribog": { "model": "opencode/claude-haiku-4-5" } } }`)
+    writeUserGlobal(
+      `{ "agents": { "stribog": { "model": "opencode/claude-haiku-4-5" } } }`,
+    )
     const config = await runConfig()
-    expect(config.agent![STRIBOG_AGENT_KEY]!.model).toBe("opencode/claude-haiku-4-5")
+    expect(config.agent![STRIBOG_AGENT_KEY]!.model).toBe(
+      "opencode/claude-haiku-4-5",
+    )
   })
 
   it("falls back to the default when the stribog key is absent", async () => {
-    writeUserGlobal(`{ "agents": { "perun": { "model": "anthropic/claude-opus-4-7" } } }`)
+    writeUserGlobal(
+      `{ "agents": { "perun": { "model": "anthropic/claude-opus-4-7" } } }`,
+    )
     const config = await runConfig()
     expect(config.agent![STRIBOG_AGENT_KEY]!.model).toBe(DEFAULT_STRIBOG_MODEL)
   })
@@ -109,9 +117,13 @@ describe("AppVerkStribogPlugin model injection", () => {
   })
 
   it("still honours a valid pantheon override even when the openai provider is absent", async () => {
-    writeUserGlobal(`{ "agents": { "stribog": { "model": "opencode/claude-haiku-4-5" } } }`)
+    writeUserGlobal(
+      `{ "agents": { "stribog": { "model": "opencode/claude-haiku-4-5" } } }`,
+    )
     const config = await runConfig({})
-    expect(config.agent![STRIBOG_AGENT_KEY]!.model).toBe("opencode/claude-haiku-4-5")
+    expect(config.agent![STRIBOG_AGENT_KEY]!.model).toBe(
+      "opencode/claude-haiku-4-5",
+    )
   })
 
   // M11 precedence contract: a user's opencode.json `agent.stribog.model` is the
@@ -124,16 +136,22 @@ describe("AppVerkStribogPlugin model injection", () => {
       agent: { [STRIBOG_AGENT_KEY]: { model: "anthropic/claude-opus-4-7" } },
     }
     await plugin.config?.(config)
-    expect(config.agent![STRIBOG_AGENT_KEY]!.model).toBe("anthropic/claude-opus-4-7")
+    expect(config.agent![STRIBOG_AGENT_KEY]!.model).toBe(
+      "anthropic/claude-opus-4-7",
+    )
   })
 
   it("user opencode.json agent.stribog.model wins over a pantheon.json override", async () => {
-    writeUserGlobal(`{ "agents": { "stribog": { "model": "openai/gpt-5.4" } } }`)
+    writeUserGlobal(
+      `{ "agents": { "stribog": { "model": "openai/gpt-5.4" } } }`,
+    )
     const plugin = await AppVerkStribogPlugin({} as never)
     const config: Config = {
       agent: { [STRIBOG_AGENT_KEY]: { model: "anthropic/claude-opus-4-7" } },
     }
     await plugin.config?.(config)
-    expect(config.agent![STRIBOG_AGENT_KEY]!.model).toBe("anthropic/claude-opus-4-7")
+    expect(config.agent![STRIBOG_AGENT_KEY]!.model).toBe(
+      "anthropic/claude-opus-4-7",
+    )
   })
 })

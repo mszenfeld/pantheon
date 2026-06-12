@@ -28,7 +28,9 @@ describe("buildVelesPrompt", () => {
     expect(prompt).toContain('"topic"')
     expect(prompt).toContain("(reserved)")
     // v5 gate + Section D (ST decomposition aid)
-    expect(prompt).toContain("Wrong-but-confident is worse than honestly-unverified")
+    expect(prompt).toContain(
+      "Wrong-but-confident is worse than honestly-unverified",
+    )
     expect(prompt).toContain("(unverified — confirm at run time)")
     expect(prompt).toContain("read-then-cite beats")
     expect(prompt).toContain("targeted refute pass")
@@ -46,15 +48,23 @@ describe("buildVelesPrompt", () => {
     // R-A (2026-06-05): surface-coverage anchor, scoped to the ≥2-status matrix condition.
     // Two contiguous substrings (the wrapped bullet can't be matched as one span):
     // the surface phrase proves the edit; the opener proves it lives in the ≥2-status bullet.
-    expect(prompt).toContain("per changed external surface named in the Changes Summary")
-    expect(prompt).toContain('names ≥2 statuses, the `## Coverage Matrix` has one row per such')
+    expect(prompt).toContain(
+      "per changed external surface named in the Changes Summary",
+    )
+    expect(prompt).toContain(
+      "names ≥2 statuses, the `## Coverage Matrix` has one row per such",
+    )
   })
 
   it("hard-stop requires order/branch evidence for envelope + rate-limit (L1)", () => {
-    expect(prompt).toContain("the refute is satisfied only when the order/branch evidence is shown")
+    expect(prompt).toContain(
+      "the refute is satisfied only when the order/branch evidence is shown",
+    )
   })
 
   it("hard-stop fails a reachable surface dispositioned out-of-scope (L2)", () => {
-    expect(prompt).toContain("a reachable changed surface (curl/psql/Playwright interface or effect) dispositioned")
+    expect(prompt).toContain(
+      "a reachable changed surface (curl/psql/Playwright interface or effect) dispositioned",
+    )
   })
 })

@@ -20,7 +20,11 @@
 export interface ToastClientLike {
   tui: {
     showToast: (input?: {
-      body: { variant: "success" | "error" | "warning" | "info"; title: string; message: string }
+      body: {
+        variant: "success" | "error" | "warning" | "info"
+        title: string
+        message: string
+      }
     }) => Promise<unknown>
   }
 }

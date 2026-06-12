@@ -1,6 +1,9 @@
 import type { Plugin } from "@opencode-ai/plugin"
 import { registerAgentMetadata } from "../agent-registry/index.js"
-import { applyModelOverride, captureUserModels } from "../_shared/apply-model-override.js"
+import {
+  applyModelOverride,
+  captureUserModels,
+} from "../_shared/apply-model-override.js"
 import { TRIGLAV_AGENT_KEY, triglavSpecialistInfo } from "./triglav.metadata.js"
 import { buildTriglavPrompt } from "./prompt.js"
 import { isSerenaAvailable } from "../_shared/serena-detect.js"
@@ -36,7 +39,13 @@ export const AppVerkExplorePlugin: Plugin = async ({ client }) => {
       // unset Triglav inherits OpenCode's session default. Model already
       // validated by MODEL_REGEX — see src/modules/pantheon-config/schema.ts for
       // the CWE-117 rationale.
-      applyModelOverride(config, "triglav", TRIGLAV_AGENT_KEY, undefined, userModels)
+      applyModelOverride(
+        config,
+        "triglav",
+        TRIGLAV_AGENT_KEY,
+        undefined,
+        userModels,
+      )
       serenaNotifier.markSerenaMissing(!isSerenaAvailable(config))
     },
     event: serenaNotifier.onEvent,

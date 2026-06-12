@@ -56,7 +56,10 @@ function isVisibleSessionTarget(entry: AgentEntry | undefined): boolean {
  *  - the NATIVE_BUILTINS backstop hides build/plan (natives are never in
  *    config.agent, so only override-by-key can reach them).
  */
-export function applyRosterPolicy(config: Config, preExisting: Set<string>): void {
+export function applyRosterPolicy(
+  config: Config,
+  preExisting: Set<string>,
+): void {
   config.agent ??= {}
   const agents = config.agent as AgentMap
 
@@ -64,7 +67,10 @@ export function applyRosterPolicy(config: Config, preExisting: Set<string>): voi
   // mechanisms below — which remain a union, not redundant (see doc comment):
   // snapshot-diff hides agents present in config.agent; the backstop reaches
   // natives that are never in config.agent. Same merge, different reach.
-  const hidden = (entry: AgentEntry | undefined): AgentEntry => ({ ...(entry ?? {}), ...HIDE })
+  const hidden = (entry: AgentEntry | undefined): AgentEntry => ({
+    ...(entry ?? {}),
+    ...HIDE,
+  })
 
   // 1. snapshot-diff: hide user/project agents that pre-existed our hooks.
   for (const key of Object.keys(agents)) {
@@ -126,7 +132,9 @@ function isNative(agent: RuntimeAgent): boolean {
  * backstop. Pure (no I/O); the caller decides how to surface the result.
  * Returns a sorted, de-duplicated list of uncovered native keys.
  */
-export function findUncoveredNatives(agents: readonly RuntimeAgent[]): string[] {
+export function findUncoveredNatives(
+  agents: readonly RuntimeAgent[],
+): string[] {
   const covered = new Set<string>(NATIVE_BUILTINS)
   const uncovered = new Set<string>()
   for (const agent of agents) {

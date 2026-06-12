@@ -16,7 +16,10 @@ function isVisibleSessionTarget(entry) {
 function applyRosterPolicy(config, preExisting) {
   config.agent ??= {};
   const agents = config.agent;
-  const hidden = (entry) => ({ ...entry ?? {}, ...HIDE });
+  const hidden = (entry) => ({
+    ...entry ?? {},
+    ...HIDE
+  });
   for (const key of Object.keys(agents)) {
     if (!preExisting.has(key)) continue;
     if (agents[key].hidden === true) continue;

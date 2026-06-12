@@ -15,7 +15,9 @@ describe("AppVerkPythonDeveloperPlugin", () => {
 
     expect(config.agent?.["python-developer"]).toBeDefined()
     expect(config.agent!["python-developer"]!.description).toContain("Python")
-    expect(config.agent!["python-developer"]!.prompt).toContain("Python Developer Agent")
+    expect(config.agent!["python-developer"]!.prompt).toContain(
+      "Python Developer Agent",
+    )
     expect(config.agent!["python-developer"]!.mode).toBe("primary")
   })
 
@@ -27,7 +29,9 @@ describe("AppVerkPythonDeveloperPlugin", () => {
 
     expect(config.command?.python).toBeDefined()
     expect(config.command!.python!.description).toContain("Python")
-    expect(config.command!.python!.template).toContain("Python Development Workflow")
+    expect(config.command!.python!.template).toContain(
+      "Python Development Workflow",
+    )
     expect(config.command!.python!.agent).toBe("python-developer")
   })
 

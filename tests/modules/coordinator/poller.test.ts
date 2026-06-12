@@ -1,5 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
-import { pollUntilIdle, PollerAbortError } from "../../../src/modules/coordinator/poller.js"
+import {
+  pollUntilIdle,
+  PollerAbortError,
+} from "../../../src/modules/coordinator/poller.js"
 import type { PollerMessage } from "../../../src/modules/coordinator/poller.js"
 
 describe("pollUntilIdle", () => {
@@ -48,7 +51,13 @@ describe("pollUntilIdle", () => {
       if (callCount < 3) {
         return []
       }
-      return [{ role: "assistant", content: "final answer", finish_reason: "end_turn" }]
+      return [
+        {
+          role: "assistant",
+          content: "final answer",
+          finish_reason: "end_turn",
+        },
+      ]
     })
 
     const pollIntervalMs = 100
@@ -88,7 +97,9 @@ describe("pollUntilIdle", () => {
       if (callCount === 1) {
         return [{ role: "user", content: "test" }]
       }
-      return [{ role: "assistant", content: "response", finish_reason: "end_turn" }]
+      return [
+        { role: "assistant", content: "response", finish_reason: "end_turn" },
+      ]
     })
 
     const pollIntervalMs = 100
@@ -113,7 +124,9 @@ describe("pollUntilIdle", () => {
       if (callCount === 1) {
         return [{ role: "assistant", content: "partial", finish_reason: null }]
       }
-      return [{ role: "assistant", content: "complete", finish_reason: "end_turn" }]
+      return [
+        { role: "assistant", content: "complete", finish_reason: "end_turn" },
+      ]
     })
 
     const pollIntervalMs = 100

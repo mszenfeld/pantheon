@@ -27,7 +27,10 @@ describe("skill-activation injection suppression", () => {
   // Map keyed by sessionID (a session's agent is immutable), so reusing one key would
   // bleed a resolved identity from one test into the next.
   it("suppresses for the coordinator (Perun)", async () => {
-    const system = await runTransform(fakeClient(COORDINATOR_AGENT_NAME), "s_coordinator")
+    const system = await runTransform(
+      fakeClient(COORDINATOR_AGENT_NAME),
+      "s_coordinator",
+    )
     expect(system).toHaveLength(0)
   })
 

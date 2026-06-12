@@ -10,5 +10,5 @@ copyAssets(
     { from: "src/agents", to: "dist/agents", type: "dir" },
     { from: "src/skills", to: "dist/skills", type: "dir" },
   ],
-  path.resolve(root, "..")
+  path.resolve(root, ".."),
 )

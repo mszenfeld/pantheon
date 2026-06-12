@@ -140,10 +140,7 @@ export function computeWaves(scenarios: Scenario[]): ComputeWavesResult {
  * a stall, so a cycle is guaranteed to exist among `remaining`. Traverses
  * in source order to make the named cycle deterministic across runs.
  */
-function findCycle(
-  ordered: Scenario[],
-  remaining: Set<string>,
-): string[] {
+function findCycle(ordered: Scenario[], remaining: Set<string>): string[] {
   const byId = new Map<string, Scenario>()
   for (const scenario of ordered) {
     byId.set(scenario.id, scenario)
@@ -152,9 +149,7 @@ function findCycle(
   // Pick the earliest-in-source-order remaining scenario whose deps land
   // inside `remaining` (those are the nodes participating in cycles).
   const start = ordered.find(
-    (s) =>
-      remaining.has(s.id) &&
-      s.dependsOn.some((dep) => remaining.has(dep)),
+    (s) => remaining.has(s.id) && s.dependsOn.some((dep) => remaining.has(dep)),
   )
   if (!start) {
     // Defensive: should be unreachable because Kahn stalled.

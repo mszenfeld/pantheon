@@ -32,11 +32,28 @@ const GLOBAL_CAP = 256
  * subsequent Zmora bash invocations.
  */
 const NAME_DENYLIST = new Set([
-  "PATH", "LD_PRELOAD", "LD_LIBRARY_PATH", "LD_AUDIT",
-  "DYLD_INSERT_LIBRARIES", "DYLD_LIBRARY_PATH", "DYLD_FALLBACK_LIBRARY_PATH",
-  "NODE_OPTIONS", "BASH_ENV", "ENV", "IFS", "PS4", "SHELLOPTS",
-  "PROMPT_COMMAND", "HOME", "USER", "LOGNAME", "TMPDIR", "TEMP", "TMP",
-  "SSH_AUTH_SOCK", "SSH_AGENT_PID",
+  "PATH",
+  "LD_PRELOAD",
+  "LD_LIBRARY_PATH",
+  "LD_AUDIT",
+  "DYLD_INSERT_LIBRARIES",
+  "DYLD_LIBRARY_PATH",
+  "DYLD_FALLBACK_LIBRARY_PATH",
+  "NODE_OPTIONS",
+  "BASH_ENV",
+  "ENV",
+  "IFS",
+  "PS4",
+  "SHELLOPTS",
+  "PROMPT_COMMAND",
+  "HOME",
+  "USER",
+  "LOGNAME",
+  "TMPDIR",
+  "TEMP",
+  "TMP",
+  "SSH_AUTH_SOCK",
+  "SSH_AGENT_PID",
 ])
 
 /**
@@ -49,19 +66,34 @@ const NAME_DENYLIST = new Set([
  */
 const DENYLIST_PREFIXES = [
   // Cloud providers
-  "AWS_", "GCP_", "AZURE_",
+  "AWS_",
+  "GCP_",
+  "AZURE_",
   // VCS / hosting
-  "GIT_", "GH_", "GITHUB_", "GITLAB_",
+  "GIT_",
+  "GH_",
+  "GITHUB_",
+  "GITLAB_",
   // LLM / agent platforms
-  "ANTHROPIC_", "OPENAI_", "OPENCODE_",
+  "ANTHROPIC_",
+  "OPENAI_",
+  "OPENCODE_",
   // Databases / data stores
-  "DATABASE_", "REDIS_", "MONGO_", "POSTGRES_",
+  "DATABASE_",
+  "REDIS_",
+  "MONGO_",
+  "POSTGRES_",
   // PaaS / BaaS
-  "SUPABASE_", "FIREBASE_", "VERCEL_",
+  "SUPABASE_",
+  "FIREBASE_",
+  "VERCEL_",
   // Secret managers
-  "OP_", "VAULT_", "DOPPLER_",
+  "OP_",
+  "VAULT_",
+  "DOPPLER_",
   // Kubernetes (note: "KUBE" with no trailing _ catches KUBECONFIG)
-  "K8S_", "KUBE",
+  "K8S_",
+  "KUBE",
 ]
 
 /**
@@ -89,7 +121,9 @@ function nameMatchesCredentialPrefix(name: string): boolean {
   return false
 }
 
-function valueIsValid(value: string): { ok: true } | { ok: false; reason: string } {
+function valueIsValid(
+  value: string,
+): { ok: true } | { ok: false; reason: string } {
   if (value.length > 4096) {
     return { ok: false, reason: "value exceeds 4 KB size cap" }
   }
@@ -100,7 +134,10 @@ function valueIsValid(value: string): { ok: true } | { ok: false; reason: string
   for (let i = 0; i < trimmed.length; i++) {
     const c = trimmed.charCodeAt(i)
     if (c < 0x20 || c === 0x7f) {
-      return { ok: false, reason: `value contains control byte 0x${c.toString(16).padStart(2, "0")} at position ${i}` }
+      return {
+        ok: false,
+        reason: `value contains control byte 0x${c.toString(16).padStart(2, "0")} at position ${i}`,
+      }
     }
   }
   return { ok: true }
@@ -108,8 +145,11 @@ function valueIsValid(value: string): { ok: true } | { ok: false; reason: string
 
 export class BindingsStore {
   readonly #map = new Map<string, Map<string, BindingEntry>>()
-  readonly #pinCounts = new Map<string, Map<string, number>>()  // parentID → name → count
-  readonly #snapshotIds = new Map<string, { parentID: string; names: string[] }>()
+  readonly #pinCounts = new Map<string, Map<string, number>>() // parentID → name → count
+  readonly #snapshotIds = new Map<
+    string,
+    { parentID: string; names: string[] }
+  >()
   #snapshotCounter = 0
   #globalCount = 0
 
@@ -174,20 +214,32 @@ export class BindingsStore {
   ): WriteResult {
     if (source === "minted-recipe") {
       if (!QA_BIND_RE.test(name)) {
-        return { status: "error", reason: `minted bindings must match ^QA_BIND_[A-Z][A-Z0-9_]*$ (got '${name}')` }
+        return {
+          status: "error",
+          reason: `minted bindings must match ^QA_BIND_[A-Z][A-Z0-9_]*$ (got '${name}')`,
+        }
       }
     } else {
       if (!ENV_NAME_RE.test(name)) {
-        return { status: "error", reason: `name must match ^[A-Z_][A-Z0-9_]*$ (got '${name}')` }
+        return {
+          status: "error",
+          reason: `name must match ^[A-Z_][A-Z0-9_]*$ (got '${name}')`,
+        }
       }
       if (nameInProcessControlDenylist(name)) {
-        return { status: "error", reason: `name '${name}' is in the process-control denylist` }
+        return {
+          status: "error",
+          reason: `name '${name}' is in the process-control denylist`,
+        }
       }
       // The credential-prefix denylist is skipped only for names the plan
       // declares as a recipe input — those are authorised by the consented
       // plan and its validated egress.
       if (opts.declaredInput !== true && nameMatchesCredentialPrefix(name)) {
-        return { status: "error", reason: `name '${name}' matches a credential-prefix denylist (declare it as a binding Input to use it)` }
+        return {
+          status: "error",
+          reason: `name '${name}' matches a credential-prefix denylist (declare it as a binding Input to use it)`,
+        }
       }
     }
 
@@ -206,7 +258,10 @@ export class BindingsStore {
       return { status: "duplicate" }
     }
     if (parentMap.size >= PER_PARENT_CAP) {
-      return { status: "error", reason: `per-parent cap of ${PER_PARENT_CAP} reached` }
+      return {
+        status: "error",
+        reason: `per-parent cap of ${PER_PARENT_CAP} reached`,
+      }
     }
     if (this.#globalCount >= GLOBAL_CAP) {
       return { status: "error", reason: `global cap of ${GLOBAL_CAP} reached` }

@@ -7,26 +7,42 @@ const STRIBOG = "stribog"
 // which is what gives per-test isolation now that state is no longer module-global.
 const hook = (agent: string | undefined) =>
   makeStribogToolHook({ resolveAgent: async () => agent }).hook
-const input = (tool: string, sessionID = "s1") => ({ tool, sessionID, callID: "c" })
-const out = (filePath?: string) => ({ args: filePath === undefined ? {} : { filePath } })
+const input = (tool: string, sessionID = "s1") => ({
+  tool,
+  sessionID,
+  callID: "c",
+})
+const out = (filePath?: string) => ({
+  args: filePath === undefined ? {} : { filePath },
+})
 
 describe("stribog tool-budget hook", () => {
   it("passes through for a non-stribog session (fail-open)", async () => {
-    await expect(hook("Perun - Coordinator")(input("execute_recipe"), out())).resolves.toBeUndefined()
+    await expect(
+      hook("Perun - Coordinator")(input("execute_recipe"), out()),
+    ).resolves.toBeUndefined()
   })
 
   it("passes through for an unknown/undefined agent (fail-open)", async () => {
-    await expect(hook(undefined)(input("execute_recipe"), out())).resolves.toBeUndefined()
+    await expect(
+      hook(undefined)(input("execute_recipe"), out()),
+    ).resolves.toBeUndefined()
   })
 
   it("denies a non-allow-listed tool for a stribog session", async () => {
     const h = hook(STRIBOG)
-    await expect(h(input("execute_recipe"), out())).rejects.toThrow(/STRIBOG_TOOL_DENIED/)
+    await expect(h(input("execute_recipe"), out())).rejects.toThrow(
+      /STRIBOG_TOOL_DENIED/,
+    )
     await expect(h(input("task"), out())).rejects.toThrow(/STRIBOG_TOOL_DENIED/)
-    await expect(h(input("webfetch"), out())).rejects.toThrow(/STRIBOG_TOOL_DENIED/)
+    await expect(h(input("webfetch"), out())).rejects.toThrow(
+      /STRIBOG_TOOL_DENIED/,
+    )
     // Degenerate inputs: empty and arbitrary-unknown ids are absent from the allow-list too.
     await expect(h(input(""), out())).rejects.toThrow(/STRIBOG_TOOL_DENIED/)
-    await expect(h(input("some_unknown_tool"), out())).rejects.toThrow(/STRIBOG_TOOL_DENIED/)
+    await expect(h(input("some_unknown_tool"), out())).rejects.toThrow(
+      /STRIBOG_TOOL_DENIED/,
+    )
   })
 
   it("allows read/glob/grep/bash for a stribog session", async () => {
@@ -63,21 +79,27 @@ describe("stribog tool-budget hook", () => {
         return STRIBOG
       },
     })
-    await expect(h(input("execute_recipe"), out())).rejects.toThrow(/STRIBOG_TOOL_DENIED/)
+    await expect(h(input("execute_recipe"), out())).rejects.toThrow(
+      /STRIBOG_TOOL_DENIED/,
+    )
     await expect(h(input("write"), out("/repo/a.ts"))).resolves.toBeUndefined()
     await expect(h(input("edit"), out("/repo/b.ts"))).resolves.toBeUndefined()
     expect(calls).toBe(3)
   })
 
   it("matches lowercase runtime ids only (capital Edit is NOT allow-listed)", async () => {
-    await expect(hook(STRIBOG)(input("Edit"), out("/repo/a.ts"))).rejects.toThrow(/STRIBOG_TOOL_DENIED/)
+    await expect(
+      hook(STRIBOG)(input("Edit"), out("/repo/a.ts")),
+    ).rejects.toThrow(/STRIBOG_TOOL_DENIED/)
   })
 
   it("allows up to the budget of distinct files, then denies the next", async () => {
     const h = hook(STRIBOG)
     await expect(h(input("write"), out("/repo/a.ts"))).resolves.toBeUndefined()
     await expect(h(input("edit"), out("/repo/b.ts"))).resolves.toBeUndefined()
-    await expect(h(input("write"), out("/repo/c.ts"))).rejects.toThrow(/STRIBOG_SCOPE_VIOLATION/)
+    await expect(h(input("write"), out("/repo/c.ts"))).rejects.toThrow(
+      /STRIBOG_SCOPE_VIOLATION/,
+    )
     expect(STRIBOG_EDIT_BUDGET).toBe(2)
   })
 
@@ -93,7 +115,9 @@ describe("stribog tool-budget hook", () => {
     await h(input("write"), out("/repo/a.ts"))
     await h(input("edit"), out("/repo/a.ts"))
     await expect(h(input("edit"), out("/repo/b.ts"))).resolves.toBeUndefined()
-    await expect(h(input("write"), out("/repo/c.ts"))).rejects.toThrow(/STRIBOG_SCOPE_VIOLATION/)
+    await expect(h(input("write"), out("/repo/c.ts"))).rejects.toThrow(
+      /STRIBOG_SCOPE_VIOLATION/,
+    )
   })
 
   it("normalizes lexical spellings of the same absolute path (counts once)", async () => {
@@ -107,7 +131,9 @@ describe("stribog tool-budget hook", () => {
     const h = hook(STRIBOG)
     await h(input("write"), out("/repo/a.ts"))
     await h(input("edit"), out("/repo/b.ts"))
-    await expect(h(input("write"), out("/repo/c.ts"))).rejects.toThrow(/STRIBOG_SCOPE_VIOLATION/)
+    await expect(h(input("write"), out("/repo/c.ts"))).rejects.toThrow(
+      /STRIBOG_SCOPE_VIOLATION/,
+    )
     await expect(h(input("edit"), out("/repo/a.ts"))).resolves.toBeUndefined()
   })
 
@@ -120,7 +146,11 @@ describe("stribog tool-budget hook", () => {
   })
 
   it("fails open when attribution throws", async () => {
-    const { hook: h } = makeStribogToolHook({ resolveAgent: async () => { throw new Error("boom") } })
+    const { hook: h } = makeStribogToolHook({
+      resolveAgent: async () => {
+        throw new Error("boom")
+      },
+    })
     await expect(h(input("execute_recipe"), out())).resolves.toBeUndefined()
   })
 
@@ -128,11 +158,15 @@ describe("stribog tool-budget hook", () => {
     const h = hook(STRIBOG)
     await h(input("write", "s1"), out("/repo/a.ts"))
     await h(input("edit", "s1"), out("/repo/b.ts"))
-    await expect(h(input("write", "s2"), out("/repo/c.ts"))).resolves.toBeUndefined()
+    await expect(
+      h(input("write", "s2"), out("/repo/c.ts")),
+    ).resolves.toBeUndefined()
   })
 
   it("clearSession resets a session's budget", async () => {
-    const { hook: h, clearSession } = makeStribogToolHook({ resolveAgent: async () => STRIBOG })
+    const { hook: h, clearSession } = makeStribogToolHook({
+      resolveAgent: async () => STRIBOG,
+    })
     await h(input("write"), out("/repo/a.ts"))
     await h(input("edit"), out("/repo/b.ts"))
     clearSession("s1")

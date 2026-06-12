@@ -1,6 +1,9 @@
 import { describe, it, expect, beforeEach } from "vitest"
 import { BindingsStore } from "../../../src/modules/qa/bindings-store.js"
-import { SessionAgentRegistry, makeShellEnvHook } from "../../../src/modules/qa/shell-env-hook.js"
+import {
+  SessionAgentRegistry,
+  makeShellEnvHook,
+} from "../../../src/modules/qa/shell-env-hook.js"
 
 describe("SessionAgentRegistry", () => {
   it("set + get round-trip", () => {
@@ -25,10 +28,17 @@ describe("shell.env hook", () => {
   })
 
   it("injects bindings for zmora-* agent", async () => {
-    store.writeBinding("perun1", "QA_BIND_TOKEN", "eyJ...", "secret", "minted-recipe")
+    store.writeBinding(
+      "perun1",
+      "QA_BIND_TOKEN",
+      "eyJ...",
+      "secret",
+      "minted-recipe",
+    )
     registry.register("zmora-child", "zmora-be")
     const hook = makeShellEnvHook({
-      store, registry,
+      store,
+      registry,
       resolveParentID: async () => "perun1",
     })
     const env: Record<string, string> = {}
@@ -37,10 +47,17 @@ describe("shell.env hook", () => {
   })
 
   it("does NOT inject for non-zmora agent", async () => {
-    store.writeBinding("perun1", "QA_BIND_TOKEN", "eyJ...", "secret", "minted-recipe")
+    store.writeBinding(
+      "perun1",
+      "QA_BIND_TOKEN",
+      "eyJ...",
+      "secret",
+      "minted-recipe",
+    )
     registry.register("other-child", "Perun - Coordinator")
     const hook = makeShellEnvHook({
-      store, registry,
+      store,
+      registry,
       resolveParentID: async () => "perun1",
     })
     const env: Record<string, string> = {}
@@ -49,9 +66,16 @@ describe("shell.env hook", () => {
   })
 
   it("does NOT inject when session not registered", async () => {
-    store.writeBinding("perun1", "QA_BIND_TOKEN", "eyJ...", "secret", "minted-recipe")
+    store.writeBinding(
+      "perun1",
+      "QA_BIND_TOKEN",
+      "eyJ...",
+      "secret",
+      "minted-recipe",
+    )
     const hook = makeShellEnvHook({
-      store, registry,
+      store,
+      registry,
       resolveParentID: async () => "perun1",
     })
     const env: Record<string, string> = {}
@@ -60,10 +84,17 @@ describe("shell.env hook", () => {
   })
 
   it("inverted override: does not overwrite existing env key", async () => {
-    store.writeBinding("perun1", "MY_VAR", "from-binding", "plain", "user-paste")
+    store.writeBinding(
+      "perun1",
+      "MY_VAR",
+      "from-binding",
+      "plain",
+      "user-paste",
+    )
     registry.register("zmora-child", "zmora-be")
     const hook = makeShellEnvHook({
-      store, registry,
+      store,
+      registry,
       resolveParentID: async () => "perun1",
     })
     const env: Record<string, string> = { MY_VAR: "from-shell" }
@@ -73,7 +104,8 @@ describe("shell.env hook", () => {
 
   it("silently returns when sessionID missing", async () => {
     const hook = makeShellEnvHook({
-      store, registry,
+      store,
+      registry,
       resolveParentID: async () => undefined,
     })
     const env: Record<string, string> = {}

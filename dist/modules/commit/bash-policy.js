@@ -9,7 +9,9 @@ const GIT_GLOBAL_OPTIONS_WITH_VALUES = /* @__PURE__ */ new Set([
   "--work-tree"
 ]);
 function tokenizeShellCommand(command) {
-  const matches = command.match(/"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|&&|\|\||[;|()]|[^\s;|()]+/g);
+  const matches = command.match(
+    /"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|&&|\|\||[;|()]|[^\s;|()]+/g
+  );
   return matches ?? [];
 }
 function normalizeToken(token) {

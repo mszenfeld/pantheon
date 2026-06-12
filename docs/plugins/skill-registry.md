@@ -22,8 +22,10 @@ Load these skills: python-coding-standards, python-tdd-workflow, fastapi-pattern
 
 1. **Scans skill directories** at plugin initialization — reads
    `packages/python-developer/dist/skills/`,
-   `packages/frontend-developer/dist/skills/`, and
-   `packages/code-review/dist/skills/`.
+   `packages/frontend-developer/dist/skills/`,
+   `packages/code-review/dist/skills/`,
+   `dist/skills/qa/`, and
+   `packages/swift-developer/dist/skills/`.
 2. **Parses frontmatter** from every `.md` file to extract `name`, `description`, and `activation` fields.
 3. **Validates uniqueness** — throws if two skills share the same `name`.
 4. **Registers `load_appverk_skill`** as a global OpenCode tool available to all agents.
@@ -79,6 +81,17 @@ If the skill name is unknown, the tool returns an error listing all available sk
 | `form-patterns` | When React Hook Form is detected |
 | `tanstack-router-patterns` | When TanStack Router is detected |
 | `pnpm-package-manager` | When managing TypeScript dependencies |
+
+### Swift Stack
+| Skill | Activation |
+|---|---|
+| `swift-coding-standards` | Load when writing or reviewing Swift code |
+| `swift-tdd-workflow` | Load when writing tests, fixing bugs, or refactoring Swift code |
+| `swiftui-patterns` | Load when writing or reviewing SwiftUI views, state management, or UI code |
+| `swift-concurrency-patterns` | Load when writing async/await code, actors, or concurrent Swift code |
+| `swift-data-persistence` | Load when implementing data storage or persistence in Swift |
+| `swift-networking-patterns` | Load when building network layers or API clients in Swift |
+| `swift-package-manager` | Load when managing Swift package dependencies or project configuration |
 
 ## Limitations
 

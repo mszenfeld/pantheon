@@ -40,7 +40,9 @@ export interface CallerGate {
 
 export function makeCallerGate(deps: CallerGateDeps): CallerGate {
   return {
-    isSetupCaller: (sessionID) => deps.registry.lookup(sessionID) === deps.setupAgentKey,
-    isCoordinatorCaller: (sessionID) => deps.registry.lookup(sessionID) === undefined,
+    isSetupCaller: (sessionID) =>
+      deps.registry.lookup(sessionID) === deps.setupAgentKey,
+    isCoordinatorCaller: (sessionID) =>
+      deps.registry.lookup(sessionID) === undefined,
   }
 }

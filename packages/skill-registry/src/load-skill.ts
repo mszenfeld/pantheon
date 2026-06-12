@@ -1,7 +1,9 @@
 import { readFileSync } from "node:fs"
 import type { SkillEntry } from "./skill-catalog.js"
 
-export function createSkillLoader(catalog: Map<string, SkillEntry>): (name: string) => string {
+export function createSkillLoader(
+  catalog: Map<string, SkillEntry>,
+): (name: string) => string {
   const cache = new Map<string, string>()
   const availableNames = Array.from(catalog.keys()).sort()
 

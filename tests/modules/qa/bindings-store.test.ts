@@ -19,28 +19,65 @@ describe("BindingsStore — empty state", () => {
 
 describe("BindingsStore.writeBinding — validation", () => {
   let store: BindingsStore
-  beforeEach(() => { store = new BindingsStore() })
+  beforeEach(() => {
+    store = new BindingsStore()
+  })
 
   it("accepts a valid QA_BIND_* name from minted-recipe source", () => {
-    const result = store.writeBinding("perun1", "QA_BIND_TOKEN", "eyJ...", "secret", "minted-recipe")
+    const result = store.writeBinding(
+      "perun1",
+      "QA_BIND_TOKEN",
+      "eyJ...",
+      "secret",
+      "minted-recipe",
+    )
     expect(result).toEqual({ status: "ok" })
-    expect(store.getBinding("perun1", "QA_BIND_TOKEN")?.value.unwrap()).toBe("eyJ...")
+    expect(store.getBinding("perun1", "QA_BIND_TOKEN")?.value.unwrap()).toBe(
+      "eyJ...",
+    )
   })
 
   it("accepts a non-QA_BIND_ name from user-paste source", () => {
-    const result = store.writeBinding("perun1", "TEST_USER_EMAIL", "foo@bar.com", "secret", "user-paste")
+    const result = store.writeBinding(
+      "perun1",
+      "TEST_USER_EMAIL",
+      "foo@bar.com",
+      "secret",
+      "user-paste",
+    )
     expect(result).toEqual({ status: "ok" })
   })
 
   it("rejects non-QA_BIND_ name from minted-recipe", () => {
-    const result = store.writeBinding("perun1", "PATH", "/tmp", "plain", "minted-recipe")
+    const result = store.writeBinding(
+      "perun1",
+      "PATH",
+      "/tmp",
+      "plain",
+      "minted-recipe",
+    )
     expect(result.status).toBe("error")
     if (result.status === "error") expect(result.reason).toContain("QA_BIND_")
   })
 
   it("rejects process-control env names from user-paste", () => {
-    for (const name of ["PATH", "LD_PRELOAD", "NODE_OPTIONS", "BASH_ENV", "HOME", "USER", "AWS_PROFILE", "GIT_SSH_COMMAND"]) {
-      const result = store.writeBinding("perun1", name, "x", "plain", "user-paste")
+    for (const name of [
+      "PATH",
+      "LD_PRELOAD",
+      "NODE_OPTIONS",
+      "BASH_ENV",
+      "HOME",
+      "USER",
+      "AWS_PROFILE",
+      "GIT_SSH_COMMAND",
+    ]) {
+      const result = store.writeBinding(
+        "perun1",
+        name,
+        "x",
+        "plain",
+        "user-paste",
+      )
       expect(result.status, `expected reject for ${name}`).toBe("error")
     }
   })
@@ -82,7 +119,13 @@ describe("BindingsStore.writeBinding — validation", () => {
       "KUBECTL_CONTEXT",
     ]
     for (const name of names) {
-      const result = store.writeBinding("perun1", name, "x", "plain", "user-paste")
+      const result = store.writeBinding(
+        "perun1",
+        name,
+        "x",
+        "plain",
+        "user-paste",
+      )
       expect(result.status, `expected reject for ${name}`).toBe("error")
       if (result.status === "error") {
         expect(result.reason).toContain("denylist")
@@ -94,13 +137,29 @@ describe("BindingsStore.writeBinding — validation", () => {
     // SUPABASE_ANON_KEY matches the SUPABASE_ prefix but is a public,
     // plan-declared recipe input — the user consented to the plan and the
     // egress is validated, so the prefix denylist must not block it.
-    const result = store.writeBinding("perun1", "SUPABASE_ANON_KEY", "anon-key", "secret", "user-paste", { declaredInput: true })
+    const result = store.writeBinding(
+      "perun1",
+      "SUPABASE_ANON_KEY",
+      "anon-key",
+      "secret",
+      "user-paste",
+      { declaredInput: true },
+    )
     expect(result).toEqual({ status: "ok" })
-    expect(store.getBinding("perun1", "SUPABASE_ANON_KEY")?.value.unwrap()).toBe("anon-key")
+    expect(
+      store.getBinding("perun1", "SUPABASE_ANON_KEY")?.value.unwrap(),
+    ).toBe("anon-key")
   })
 
   it("still rejects a credential-prefix name when NOT a declared input", () => {
-    const result = store.writeBinding("perun1", "SUPABASE_ANON_KEY", "anon-key", "secret", "user-paste", { declaredInput: false })
+    const result = store.writeBinding(
+      "perun1",
+      "SUPABASE_ANON_KEY",
+      "anon-key",
+      "secret",
+      "user-paste",
+      { declaredInput: false },
+    )
     expect(result.status).toBe("error")
     if (result.status === "error") expect(result.reason).toContain("denylist")
   })
@@ -108,40 +167,85 @@ describe("BindingsStore.writeBinding — validation", () => {
   it("NEVER exempts a process-control name, even when declared as an input", () => {
     // PATH overriding the recipe's child env would let a malicious plan
     // hijack binary resolution — process-control names stay denied regardless.
-    const result = store.writeBinding("perun1", "PATH", "/tmp/evil", "secret", "user-paste", { declaredInput: true })
+    const result = store.writeBinding(
+      "perun1",
+      "PATH",
+      "/tmp/evil",
+      "secret",
+      "user-paste",
+      { declaredInput: true },
+    )
     expect(result.status).toBe("error")
     if (result.status === "error") expect(result.reason).toContain("denylist")
   })
 
   it("rejects names not matching identifier regex", () => {
-    for (const name of ["", "lowercase", "1LEADING_DIGIT", "has-dash", "has space"]) {
-      const result = store.writeBinding("perun1", name, "x", "plain", "user-paste")
+    for (const name of [
+      "",
+      "lowercase",
+      "1LEADING_DIGIT",
+      "has-dash",
+      "has space",
+    ]) {
+      const result = store.writeBinding(
+        "perun1",
+        name,
+        "x",
+        "plain",
+        "user-paste",
+      )
       expect(result.status, `expected reject for '${name}'`).toBe("error")
     }
   })
 
   it("rejects value >4KB", () => {
     const big = "x".repeat(4097)
-    const result = store.writeBinding("perun1", "QA_BIND_X", big, "plain", "minted-recipe")
+    const result = store.writeBinding(
+      "perun1",
+      "QA_BIND_X",
+      big,
+      "plain",
+      "minted-recipe",
+    )
     expect(result.status).toBe("error")
     if (result.status === "error") expect(result.reason).toContain("size")
   })
 
   it("rejects value containing control bytes (non-trailing newline)", () => {
-    const result = store.writeBinding("perun1", "QA_BIND_X", "ab\x00cd", "plain", "minted-recipe")
+    const result = store.writeBinding(
+      "perun1",
+      "QA_BIND_X",
+      "ab\x00cd",
+      "plain",
+      "minted-recipe",
+    )
     expect(result.status).toBe("error")
     if (result.status === "error") expect(result.reason).toContain("control")
   })
 
   it("allows value with trailing newline (trimmed)", () => {
-    const result = store.writeBinding("perun1", "QA_BIND_X", "value\n", "plain", "minted-recipe")
+    const result = store.writeBinding(
+      "perun1",
+      "QA_BIND_X",
+      "value\n",
+      "plain",
+      "minted-recipe",
+    )
     expect(result.status).toBe("ok")
-    expect(store.getBinding("perun1", "QA_BIND_X")?.value.unwrap()).toBe("value")
+    expect(store.getBinding("perun1", "QA_BIND_X")?.value.unwrap()).toBe(
+      "value",
+    )
   })
 
   it("returns duplicate and keeps existing on second write", () => {
     store.writeBinding("perun1", "QA_BIND_X", "v1", "plain", "minted-recipe")
-    const result = store.writeBinding("perun1", "QA_BIND_X", "v2", "plain", "minted-recipe")
+    const result = store.writeBinding(
+      "perun1",
+      "QA_BIND_X",
+      "v2",
+      "plain",
+      "minted-recipe",
+    )
     expect(result.status).toBe("duplicate")
     expect(store.getBinding("perun1", "QA_BIND_X")?.value.unwrap()).toBe("v1")
   })
@@ -149,7 +253,9 @@ describe("BindingsStore.writeBinding — validation", () => {
 
 describe("BindingsStore — snapshot pin/release", () => {
   let store: BindingsStore
-  beforeEach(() => { store = new BindingsStore() })
+  beforeEach(() => {
+    store = new BindingsStore()
+  })
 
   it("pinSnapshot returns immutable view of current state", () => {
     store.writeBinding("perun1", "QA_BIND_X", "v1", "plain", "minted-recipe")
@@ -182,14 +288,28 @@ describe("BindingsStore — snapshot pin/release", () => {
 
 describe("BindingsStore — caps", () => {
   let store: BindingsStore
-  beforeEach(() => { store = new BindingsStore() })
+  beforeEach(() => {
+    store = new BindingsStore()
+  })
 
   it("rejects 33rd write to same parent", () => {
     for (let i = 0; i < 32; i++) {
-      const r = store.writeBinding("p1", `QA_BIND_X${i}`, "v", "plain", "minted-recipe")
+      const r = store.writeBinding(
+        "p1",
+        `QA_BIND_X${i}`,
+        "v",
+        "plain",
+        "minted-recipe",
+      )
       expect(r.status).toBe("ok")
     }
-    const r33 = store.writeBinding("p1", "QA_BIND_OVERFLOW", "v", "plain", "minted-recipe")
+    const r33 = store.writeBinding(
+      "p1",
+      "QA_BIND_OVERFLOW",
+      "v",
+      "plain",
+      "minted-recipe",
+    )
     expect(r33.status).toBe("error")
     if (r33.status === "error") {
       expect(r33.reason).toMatch(/cap|limit/i)
@@ -200,11 +320,23 @@ describe("BindingsStore — caps", () => {
     // 256 entries spread across 8 parents (32 each = at-cap).
     for (let p = 0; p < 8; p++) {
       for (let i = 0; i < 32; i++) {
-        store.writeBinding(`p${p}`, `QA_BIND_X${i}`, "v", "plain", "minted-recipe")
+        store.writeBinding(
+          `p${p}`,
+          `QA_BIND_X${i}`,
+          "v",
+          "plain",
+          "minted-recipe",
+        )
       }
     }
     // New parent's first write fails — global cap reached, nothing expired to evict.
-    const r = store.writeBinding("p99", "QA_BIND_NEW", "v", "plain", "minted-recipe")
+    const r = store.writeBinding(
+      "p99",
+      "QA_BIND_NEW",
+      "v",
+      "plain",
+      "minted-recipe",
+    )
     expect(r.status).toBe("error")
     if (r.status === "error") {
       expect(r.reason).toMatch(/global|cap|limit/i)
@@ -214,7 +346,9 @@ describe("BindingsStore — caps", () => {
 
 describe("BindingsStore — TTL sweep + clearParent", () => {
   let store: BindingsStore
-  beforeEach(() => { store = new BindingsStore() })
+  beforeEach(() => {
+    store = new BindingsStore()
+  })
 
   it("sweep purges entries past TTL", () => {
     store.writeBinding("p1", "QA_BIND_X", "v", "plain", "minted-recipe")
@@ -256,7 +390,13 @@ describe("BindingsStore — TTL sweep + clearParent", () => {
     // Fill near cap.
     for (let p = 0; p < 7; p++) {
       for (let i = 0; i < 32; i++) {
-        store.writeBinding(`p${p}`, `QA_BIND_X${i}`, "v", "plain", "minted-recipe")
+        store.writeBinding(
+          `p${p}`,
+          `QA_BIND_X${i}`,
+          "v",
+          "plain",
+          "minted-recipe",
+        )
       }
     }
     // 7*32 = 224. Add 32 more for p7 → 256 (at cap).
@@ -264,19 +404,37 @@ describe("BindingsStore — TTL sweep + clearParent", () => {
       store.writeBinding("p7", `QA_BIND_X${i}`, "v", "plain", "minted-recipe")
     }
     // Refused at cap.
-    expect(store.writeBinding("p99", "QA_BIND_NEW", "v", "plain", "minted-recipe").status).toBe("error")
+    expect(
+      store.writeBinding("p99", "QA_BIND_NEW", "v", "plain", "minted-recipe")
+        .status,
+    ).toBe("error")
     // Clear one parent's 32 — now room.
     expect(store.clearParent("p0")).toBe(32)
-    expect(store.writeBinding("p99", "QA_BIND_NEW", "v", "plain", "minted-recipe").status).toBe("ok")
+    expect(
+      store.writeBinding("p99", "QA_BIND_NEW", "v", "plain", "minted-recipe")
+        .status,
+    ).toBe("ok")
   })
 
   it("clearParent skips pinned entries", () => {
     // Two entries for the same parent: one will be pinned via snapshot, one will not.
     store.writeBinding("p1", "QA_BIND_PINNED", "vpin", "plain", "minted-recipe")
-    store.writeBinding("p1", "QA_BIND_LOOSE", "vloose", "plain", "minted-recipe")
+    store.writeBinding(
+      "p1",
+      "QA_BIND_LOOSE",
+      "vloose",
+      "plain",
+      "minted-recipe",
+    )
     const snap = store.pinSnapshot("p1") // pins both names captured at snapshot time
     // Add another binding AFTER snapshot (not pinned).
-    store.writeBinding("p1", "QA_BIND_AFTER", "vafter", "plain", "minted-recipe")
+    store.writeBinding(
+      "p1",
+      "QA_BIND_AFTER",
+      "vafter",
+      "plain",
+      "minted-recipe",
+    )
 
     const purged = store.clearParent("p1")
     // Two pinned entries (PINNED + LOOSE) survive; AFTER is purged.
@@ -300,7 +458,13 @@ describe("BindingsStore — TTL sweep + clearParent", () => {
     // Fill cap minus 1.
     for (let p = 0; p < 7; p++) {
       for (let i = 0; i < 32; i++) {
-        store.writeBinding(`p${p}`, `QA_BIND_X${i}`, "v", "plain", "minted-recipe")
+        store.writeBinding(
+          `p${p}`,
+          `QA_BIND_X${i}`,
+          "v",
+          "plain",
+          "minted-recipe",
+        )
       }
     }
     // Add 31 to p7 (255 total).
@@ -314,9 +478,15 @@ describe("BindingsStore — TTL sweep + clearParent", () => {
     // Now clearParent("p7") — only the unpinned QA_BIND_LAST should be purged.
     expect(store.clearParent("p7")).toBe(1)
     // p7 still has 31 pinned entries; cap should reflect 255 used; one slot free.
-    expect(store.writeBinding("p99", "QA_BIND_NEW", "v", "plain", "minted-recipe").status).toBe("ok")
+    expect(
+      store.writeBinding("p99", "QA_BIND_NEW", "v", "plain", "minted-recipe")
+        .status,
+    ).toBe("ok")
     // Cap reached again at 256 — next write should fail.
-    expect(store.writeBinding("p99", "QA_BIND_NEW2", "v", "plain", "minted-recipe").status).toBe("error")
+    expect(
+      store.writeBinding("p99", "QA_BIND_NEW2", "v", "plain", "minted-recipe")
+        .status,
+    ).toBe("error")
     store.releaseSnapshot(snap.id)
   })
 })

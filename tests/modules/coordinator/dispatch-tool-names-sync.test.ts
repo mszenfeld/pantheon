@@ -31,7 +31,9 @@ function fakePlanInput() {
 
 async function getVelesEnabledToolNames(): Promise<string[]> {
   const hooks = await AppVerkPlanPlugin(fakePlanInput())
-  const config: { agent?: Record<string, { tools?: Record<string, boolean> }> } = {}
+  const config: {
+    agent?: Record<string, { tools?: Record<string, boolean> }>
+  } = {}
   await hooks.config?.(config as never)
   const tools = config.agent?.["Veles - Planner"]?.tools ?? {}
   // Only the opted-IN (true) entries are "enabled" dispatch tools.

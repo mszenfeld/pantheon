@@ -55,7 +55,8 @@ export const stribogSpecialistInfo: SpecialistInfo = {
   mode: "subagent",
   description: STRIBOG_DESCRIPTION,
   metadata: {
-    keyTrigger: "Environment down, or a tiny mechanical change needed → dispatch `stribog`",
+    keyTrigger:
+      "Environment down, or a tiny mechanical change needed → dispatch `stribog`",
     useWhen: [
       "Bring up / fix a downed environment for QA (docker compose / make / start a service)",
       "A small mechanical change (add a config field, change a value)",
@@ -69,11 +70,13 @@ export const stribogSpecialistInfo: SpecialistInfo = {
     triggers: [
       {
         domain: "Environment ops",
-        trigger: "Bring up, restart, or fix a service/environment so QA can run against it",
+        trigger:
+          "Bring up, restart, or fix a service/environment so QA can run against it",
       },
       {
         domain: "Small mechanical change",
-        trigger: "Apply a narrow, deterministic edit (config field/value) and verify it",
+        trigger:
+          "Apply a narrow, deterministic edit (config field/value) and verify it",
       },
     ],
   },

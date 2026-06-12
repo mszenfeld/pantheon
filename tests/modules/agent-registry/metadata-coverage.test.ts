@@ -20,7 +20,9 @@ const BEFORE = path.resolve(here, "__fixtures__/perun-prompt-before.md")
 
 function specialistNames(markdown: string): string[] {
   const names = new Set<string>()
-  for (const m of markdown.matchAll(/^\|\s*`([a-z0-9-]+)`\s*\|\s*subagent\s*\|/gim)) {
+  for (const m of markdown.matchAll(
+    /^\|\s*`([a-z0-9-]+)`\s*\|\s*subagent\s*\|/gim,
+  )) {
     const name = m[1]
     if (name !== undefined) names.add(name)
   }
@@ -58,8 +60,12 @@ describe("anti-drift: every registered subagent has metadata", () => {
   it("covers each mode:subagent agent registered by QA + coordinator", async () => {
     const fakeClient = {} as never
     const qa = await AppVerkQAPlugin({ client: fakeClient } as never)
-    const coord = await AppVerkCoordinatorPlugin({ client: fakeClient } as never)
-    await AppVerkExplorePlugin({ client: { tui: { showToast: async () => {} } } } as never)
+    const coord = await AppVerkCoordinatorPlugin({
+      client: fakeClient,
+    } as never)
+    await AppVerkExplorePlugin({
+      client: { tui: { showToast: async () => {} } },
+    } as never)
 
     const config: { agent?: Record<string, { mode?: string }> } = {}
     await qa.config?.(config as never)

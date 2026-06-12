@@ -59,12 +59,7 @@ export const BE_TOOLS = [
 // `execute_recipe` tool is the sole channel that mints/refreshes bindings.
 // Read/Glob/Grep are permitted only for inspecting project context when
 // diagnosing recipe failures — not for executing anything.
-export const SETUP_TOOLS = [
-  "Read",
-  "Glob",
-  "Grep",
-  "execute_recipe",
-]
+export const SETUP_TOOLS = ["Read", "Glob", "Grep", "execute_recipe"]
 
 export type QaTesterStack = "fe" | "be" | "setup"
 

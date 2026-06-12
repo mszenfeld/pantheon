@@ -24,7 +24,9 @@ describe("createSkillLoader", () => {
 
   it("throws for unknown skill name", () => {
     expect(() => loadSkill("nonexistent-skill")).toThrow(/not found/)
-    expect(() => loadSkill("nonexistent-skill")).toThrow(/python-coding-standards/)
+    expect(() => loadSkill("nonexistent-skill")).toThrow(
+      /python-coding-standards/,
+    )
   })
 
   it("lists available skills in error", () => {
