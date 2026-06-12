@@ -10,6 +10,19 @@
 // decoupled from the exact SDK shape; we only read the three fields that decide
 // whether a provider is usable. opencode is default-ALLOW for providers, so a
 // provider counts as available unless the user explicitly turned it off.
+//
+// Two positive signals feed the probe:
+//   1. `config.provider` — providers the user declared in opencode.json;
+//   2. opencode's auth.json — providers wired via `opencode auth login`
+//      (OAuth or API key). These are auto-loaded by the server and NEVER
+//      appear under `config.provider`, so without this leg the probe
+//      false-negatived on the most common setup path and unpinned the
+//      default for users whose provider worked fine. Same approach as
+//      oh-my-openagent's opencode-provider-auth module.
+
+import { readFileSync } from "node:fs"
+import { homedir } from "node:os"
+import path from "node:path"
 
 export interface ProviderConfigLike {
   // `config.provider` is "Custom provider configurations and model overrides"
@@ -34,6 +47,42 @@ export function providerIdOf(model: string): string {
   return slash === -1 ? model : model.slice(0, slash)
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value)
+}
+
+/** opencode's auth store: `${XDG_DATA_HOME:-~/.local/share}/opencode/auth.json`. */
+function defaultAuthFilePath(): string {
+  const dataDir =
+    process.env["XDG_DATA_HOME"] ?? path.join(homedir(), ".local", "share")
+  return path.join(dataDir, "opencode", "auth.json")
+}
+
+/**
+ * Provider ids with an entry in opencode's auth.json (`opencode auth login`).
+ * An entry counts when it is a record with a string `type` ("oauth", "api",
+ * ...) — the shape the opencode CLI writes. Any read/parse failure degrades to
+ * an empty set: the probe then behaves exactly as it did before this signal
+ * existed (advisory-only, never throws into the config hook).
+ */
+export function loadAuthConfiguredProviders(
+  authFilePath: string = defaultAuthFilePath(),
+): Set<string> {
+  try {
+    const parsed: unknown = JSON.parse(readFileSync(authFilePath, "utf-8"))
+    if (!isRecord(parsed)) return new Set()
+    const ids = new Set<string>()
+    for (const [providerId, entry] of Object.entries(parsed)) {
+      if (isRecord(entry) && typeof entry["type"] === "string") {
+        ids.add(providerId)
+      }
+    }
+    return ids
+  } catch {
+    return new Set()
+  }
+}
+
 /**
  * Best-effort: is the given provider id usable for this config?
  *
@@ -42,14 +91,16 @@ export function providerIdOf(model: string): string {
  *   - `enabled_providers` is a non-empty allow-list that omits it.
  *
  * Otherwise we treat it as available IF the user wired it under
- * `config.provider`. Auto-loaded providers (env keys / OAuth) need not appear
- * there, so a bare absence is NOT conclusive — but for the harness's single
- * pinned default the safe degraded action is to NOT pin (fall back to the
- * session default) and surface a one-time toast, which this enables.
+ * `config.provider` OR it has an auth.json entry (`opencode auth login`).
+ * Env-key-only providers (e.g. a bare OPENAI_API_KEY) still need not appear
+ * in either, so a double absence is NOT conclusive — but for the harness's
+ * single pinned default the safe degraded action is to NOT pin (fall back to
+ * the session default) and surface a one-time toast, which this enables.
  */
 export function isProviderConfigured(
   config: ProviderConfigLike,
   providerId: string,
+  authProviders: ReadonlySet<string> = loadAuthConfiguredProviders(),
 ): boolean {
   const disabled = config.disabled_providers
   if (Array.isArray(disabled) && disabled.includes(providerId)) return false
@@ -63,6 +114,12 @@ export function isProviderConfigured(
     return false
 
   const providers = config.provider
-  if (providers === null || typeof providers !== "object") return false
-  return Object.prototype.hasOwnProperty.call(providers, providerId)
+  if (
+    providers !== null &&
+    typeof providers === "object" &&
+    Object.prototype.hasOwnProperty.call(providers, providerId)
+  )
+    return true
+
+  return authProviders.has(providerId)
 }

@@ -1,4 +1,7 @@
-import { beforeEach, describe, expect, it, vi } from "vitest"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import { mkdtempSync, rmSync } from "node:fs"
+import path from "node:path"
+import { tmpdir } from "node:os"
 import { AppVerkStribogPlugin } from "../../../src/modules/stribog/index.js"
 import { STRIBOG_TOOLS } from "../../../src/modules/stribog/allowed-tools.js"
 import {
@@ -45,14 +48,29 @@ const beforeInput = (tool: string, sessionID: string) => ({
 const beforeOutput = (filePath: string) => ({ args: { filePath } })
 
 describe("AppVerkStribogPlugin", () => {
+  let tmpData: string
+  let origXdgData: string | undefined
+
   beforeEach(() => {
     clearAgentMetadataRegistry()
     __resetCacheForTests()
+    // The provider probe also reads ${XDG_DATA_HOME:-~/.local/share}/opencode/
+    // auth.json; point it at an empty temp dir so the developer's live
+    // `opencode auth login` state can't flip the provider-absent toast tests.
+    tmpData = mkdtempSync(path.join(tmpdir(), "pantheon-stribog-data-"))
+    origXdgData = process.env["XDG_DATA_HOME"]
+    process.env["XDG_DATA_HOME"] = tmpData
     // Edit-budget state is now factory-scoped: each AppVerkStribogPlugin(...) call
     // builds a fresh closure-bound map, so the session.deleted wiring test below
     // gets a clean budget without any module-global reset. The test still proves
     // clearing happens via the real event handler (it drives the budget to full on
     // one plugin instance, then dispatches session.deleted on that same instance).
+  })
+
+  afterEach(() => {
+    if (origXdgData === undefined) delete process.env["XDG_DATA_HOME"]
+    else process.env["XDG_DATA_HOME"] = origXdgData
+    rmSync(tmpData, { recursive: true, force: true })
   })
 
   it("registers stribog metadata in the factory body", async () => {

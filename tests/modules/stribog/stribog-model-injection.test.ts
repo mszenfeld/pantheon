@@ -14,6 +14,7 @@ import { clearAgentMetadataRegistry } from "../../../src/modules/agent-registry/
 describe("AppVerkStribogPlugin model injection", () => {
   let tmpHome: string
   let origHome: string | undefined
+  let origXdgData: string | undefined
   let origCwd: string
 
   beforeEach(() => {
@@ -22,6 +23,12 @@ describe("AppVerkStribogPlugin model injection", () => {
     tmpHome = mkdtempSync(path.join(tmpdir(), "pantheon-stribog-"))
     origHome = process.env.HOME
     process.env.HOME = tmpHome
+    // Pin the auth.json lookup to the temp home too: the provider probe also
+    // reads ${XDG_DATA_HOME:-~/.local/share}/opencode/auth.json, and a real
+    // XDG_DATA_HOME on the host would leak the developer's live auth state
+    // into the provider-absent tests below.
+    origXdgData = process.env["XDG_DATA_HOME"]
+    process.env["XDG_DATA_HOME"] = path.join(tmpHome, ".local", "share")
     origCwd = process.cwd()
     const projectDir = path.join(tmpHome, "project")
     mkdirSync(projectDir, { recursive: true })
@@ -32,6 +39,8 @@ describe("AppVerkStribogPlugin model injection", () => {
     process.chdir(origCwd)
     if (origHome === undefined) delete process.env.HOME
     else process.env.HOME = origHome
+    if (origXdgData === undefined) delete process.env["XDG_DATA_HOME"]
+    else process.env["XDG_DATA_HOME"] = origXdgData
     rmSync(tmpHome, { recursive: true, force: true })
     __resetCacheForTests()
     clearAgentMetadataRegistry()
@@ -45,8 +54,9 @@ describe("AppVerkStribogPlugin model injection", () => {
 
   // The pinned default needs the `openai` provider; declare it so the default
   // leg actually fires (the provider-absent degraded path has its own tests
-  // below). Custom-provider-config presence is the config-time availability
-  // signal the plugin probes — see _shared/provider-detect.ts.
+  // below). The plugin probes two config-time availability signals — custom
+  // provider config AND opencode's auth.json — see _shared/provider-detect.ts;
+  // this helper exercises the former, the auth.json test below the latter.
   async function runConfig(
     provider: Record<string, unknown> = { openai: {} },
   ): Promise<Config> {
@@ -92,6 +102,22 @@ describe("AppVerkStribogPlugin model injection", () => {
   it("does NOT pin the default when the openai provider is absent (no pantheon override)", async () => {
     const config = await runConfig({})
     expect(config.agent![STRIBOG_AGENT_KEY]!.model).toBeUndefined()
+  })
+
+  // The common real-world path: `opencode auth login openai` writes an OAuth
+  // entry to auth.json, but the provider never appears under config.provider.
+  // The probe must count that as configured — before this leg existed the
+  // plugin warned "provider not configured" and unpinned the default even
+  // though dispatching openai/gpt-5.4 worked fine.
+  it("pins the default when openai is configured via auth.json only", async () => {
+    const authDir = path.join(tmpHome, ".local", "share", "opencode")
+    mkdirSync(authDir, { recursive: true })
+    writeFileSync(
+      path.join(authDir, "auth.json"),
+      JSON.stringify({ openai: { type: "oauth" } }),
+    )
+    const config = await runConfig({})
+    expect(config.agent![STRIBOG_AGENT_KEY]!.model).toBe(DEFAULT_STRIBOG_MODEL)
   })
 
   it("does NOT pin the default when openai is in disabled_providers", async () => {
