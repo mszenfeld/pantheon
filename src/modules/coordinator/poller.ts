@@ -1,3 +1,4 @@
+import { probeSessionActive } from "./session-active.js"
 import { truncateBytes } from "./truncate-bytes.js"
 
 export interface PollerMessage {
@@ -103,7 +104,7 @@ export async function pollUntilIdle(
       // message observed while the session is still active is the inter-step
       // (or compaction) race, not completion — keep polling. See the
       // `isSessionActive` option doc for the failure-mode rationale.
-      if (!(await sessionStillActive(isSessionActive))) {
+      if (!(await probeSessionActive(isSessionActive))) {
         return maxBytes === undefined
           ? last.content
           : truncateBytes(last.content, maxBytes)
@@ -132,25 +133,6 @@ export async function pollUntilIdle(
     }
 
     await sleepOrAbort(Math.min(pollIntervalMs, remaining), signal, startTime)
-  }
-}
-
-/**
- * Defensive wrapper around the `isSessionActive` probe: absent probe ⇒
- * inactive (message-only completion, the pre-status-gate contract), and a
- * thrown/rejected probe ⇒ inactive — a broken status endpoint must degrade
- * gracefully, never wedge the poll until timeout.
- */
-async function sessionStillActive(
-  isSessionActive: (() => Promise<boolean>) | undefined,
-): Promise<boolean> {
-  if (isSessionActive === undefined) {
-    return false
-  }
-  try {
-    return await isSessionActive()
-  } catch {
-    return false
   }
 }
 

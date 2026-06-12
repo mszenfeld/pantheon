@@ -15,6 +15,7 @@ import {
   neutralizeUntrustedOutput,
   normalizeVariantSuffix,
 } from "../_shared/sanitize.js"
+import { probeSessionActive } from "./session-active.js"
 import { truncateBytes } from "./truncate-bytes.js"
 import type { BackgroundTaskStore } from "./background-store.js"
 import type { SessionAgentRegistry } from "../_shared/session-agent-registry.js"
@@ -220,23 +221,6 @@ export async function collectBackground(
   }
 }
 
-/**
- * Defensive wrapper around `specialist.isSessionActive` for the non-blocking
- * poll path: a thrown/rejected probe reads as inactive, so a broken status
- * endpoint degrades the completion check to message-only rather than failing
- * the poll. Mirrors `pollUntilIdle`'s internal handling on the blocking path.
- */
-async function sessionStillActive(
-  specialist: DispatchSpecialist,
-  childSessionId: string,
-): Promise<boolean> {
-  try {
-    return await specialist.isSessionActive(childSessionId)
-  } catch {
-    return false
-  }
-}
-
 async function collectOne(
   id: string,
   input: CollectBackgroundInput,
@@ -305,7 +289,9 @@ async function collectOne(
       // after every step, so a terminal-looking message while the session is
       // still active is the inter-step race — report "running", don't
       // collect. A failing probe reads as inactive (degrade to message-only).
-      !(await sessionStillActive(specialist, task.childSessionId))
+      !(await probeSessionActive(() =>
+        specialist.isSessionActive(task.childSessionId),
+      ))
     ) {
       // A successful poll is TERMINAL — it returns the full result AND removes
       // the task, exactly like `wait_background` (one-time retrieval). This is

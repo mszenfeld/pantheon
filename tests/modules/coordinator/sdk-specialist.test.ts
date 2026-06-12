@@ -522,6 +522,38 @@ describe("createSDKSpecialist.isSessionActive", () => {
     await expect(specialist.isSessionActive("sess-child-1")).resolves.toBe(
       false,
     )
+
+    // The degraded path is observable: a single warn-level breadcrumb names the
+    // session and carries the underlying status-endpoint error in `extra` (same
+    // shape as the startTask breadcrumb), so a status outage is not silent.
+    expect(fake.calls.appLog).toHaveLength(1)
+    const logged = fake.calls.appLog[0]?.body as {
+      service: string
+      level: string
+      message: string
+      extra?: { error?: string }
+    }
+    expect(logged.service).toBe("perun/dispatch")
+    expect(logged.level).toBe("warn")
+    expect(logged.message).toContain("sess-child-1")
+    expect(logged.extra?.error).toBe("HTTP 503 from /session/status")
+  })
+
+  it("still returns false when the degraded-mode breadcrumb itself fails to log", async () => {
+    // The breadcrumb is fire-and-forget: if `client.app.log` rejects, the
+    // rejection must not resurface (no unhandled rejection) and the probe must
+    // still degrade to `false`. Guards the observability fix from re-introducing
+    // a throw on the very path it set out to keep safe.
+    const fake = makeFakeClient({
+      statusResponse: new Error("HTTP 503 from /session/status"),
+      logRejectsWith: new Error("log endpoint 500"),
+    })
+    const specialist = createSDKSpecialist(fake.client, "parent-session-42")
+
+    await expect(specialist.isSessionActive("sess-child-1")).resolves.toBe(
+      false,
+    )
+    expect(fake.calls.appLog).toHaveLength(1)
   })
 })
 

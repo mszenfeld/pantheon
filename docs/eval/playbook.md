@@ -595,8 +595,17 @@ procedure looks the way it does.
 1. **`promptAsync` is the right primitive** — `session.prompt` blocks for
    the full LLM turn; `session.promptAsync` returns ~immediately and the
    child session progresses autonomously.
-2. **Completion signal is `info.time.completed`**, not `finish_reason`.
-   Intermediate `tool-calls` pauses set a truthy `finish_reason` mid-turn.
+2. **Completion needs two signals, not one.** A truthy `finish_reason`
+   alone is insufficient — the OpenCode server persists `finish` after
+   *every* LLM step, so intermediate `tool-calls` (and `unknown`) finishes
+   look terminal mid-turn. The production coordinator gates collection on a
+   *terminal* `finish_reason` (non-terminal reasons mapped out by
+   `NON_TERMINAL_FINISH_REASONS` in
+   `src/modules/coordinator/sdk-specialist.ts`) **AND** an inactive
+   `GET /session/status` probe (`DispatchSpecialist.isSessionActive`,
+   `src/modules/coordinator/dispatch.ts`). For this eval probe,
+   `info.time.completed` is an equivalent terminal signal — do not collect
+   on `finish_reason` alone.
 3. **Check auth before testing a provider.** `openai/*` models complete in
    ~4.5 s with 0 chars when the `openai` provider is unauthed; the failure
    is silent (no `info.error`). Empty turn + 0 chars from a fresh model on

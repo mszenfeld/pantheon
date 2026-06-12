@@ -53,9 +53,18 @@ export interface DispatchSpecialist {
    * detection needs BOTH signals: the server persists `finish` on the
    * assistant message after every step, so a terminal-looking transcript
    * observed while the session is still active is the inter-step (or
-   * auto-compaction) race, not completion. Implementations must never throw —
-   * report `false` on status-endpoint failure so completion degrades to the
-   * message-only predicate instead of failing the dispatch.
+   * auto-compaction) race, not completion.
+   *
+   * Degraded-mode contract (two intentional layers, not a redundancy):
+   *  - Producer SHOULD degrade to `false` on status-endpoint failure rather
+   *    than propagate, so a flaky status call reads as "idle" and completion
+   *    falls back to the message-only predicate instead of failing the dispatch.
+   *  - Callers do NOT rely on that alone: every consumer routes this probe
+   *    through the shared `probeSessionActive` primitive (`session-active.js`),
+   *    which is the single authoritative consumer-side degraded-mode gate
+   *    (rejection ⇒ inactive). That defence-in-depth means a future
+   *    implementation that DOES throw cannot wedge or fail the poll — it
+   *    degrades to message-only completion exactly as if it had returned `false`.
    */
   isSessionActive(sessionId: string): Promise<boolean>
   /**

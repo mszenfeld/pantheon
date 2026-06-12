@@ -50,7 +50,18 @@ function createSDKSpecialist(client, parentSessionID) {
         const result = await client.session.status();
         const status = (result.data ?? {})[sessionId];
         return status !== void 0 && ACTIVE_SESSION_STATUS_TYPES.has(status.type);
-      } catch {
+      } catch (err) {
+        void client.app.log({
+          body: {
+            service: "perun/dispatch",
+            level: "warn",
+            message: `session.status probe failed for session ${sessionId}; completion degraded to message-only \u2014 mid-turn collection possible until status recovers`,
+            extra: {
+              error: err instanceof Error ? err.message : String(err)
+            }
+          }
+        }).catch(() => {
+        });
         return false;
       }
     },

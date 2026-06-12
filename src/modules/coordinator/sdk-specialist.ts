@@ -122,13 +122,39 @@ export function createSDKSpecialist(
       // swallowed to `false` so a broken status endpoint degrades the
       // completion check to message-only instead of failing the dispatch —
       // same contract as oh-my-openagent's `isSessionActive`.
+      //
+      // This inner try/catch is the PRODUCER honouring the DispatchSpecialist
+      // "degrade to false" contract at the source. It is intentionally NOT the
+      // only safety layer: callers ALSO route this probe through the shared
+      // `probeSessionActive` primitive (session-active.ts) as defence-in-depth,
+      // so the two swallows are deliberate, not accidental duplication.
       try {
         const result = await client.session.status()
         const status = (result.data ?? {})[sessionId]
         return (
           status !== undefined && ACTIVE_SESSION_STATUS_TYPES.has(status.type)
         )
-      } catch {
+      } catch (err) {
+        // Best-effort breadcrumb: a failed status probe degrades completion to
+        // the message-only predicate (see session-active.ts probeSessionActive),
+        // which silently narrows back toward the inter-step/compaction race this
+        // gate closes. Surface it — without this, a status-endpoint outage is
+        // invisible. Non-awaited + `.catch` so logging never blocks or breaks
+        // the degraded path; the `false` return below is unaffected. Mirrors the
+        // `startTask` onSessionCreated breadcrumb above (same service/level/extra
+        // shape) so the two best-effort log sites stay consistent.
+        void client.app
+          .log({
+            body: {
+              service: "perun/dispatch",
+              level: "warn",
+              message: `session.status probe failed for session ${sessionId}; completion degraded to message-only — mid-turn collection possible until status recovers`,
+              extra: {
+                error: err instanceof Error ? err.message : String(err),
+              },
+            },
+          })
+          .catch(() => {})
         return false
       }
     },

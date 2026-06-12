@@ -1,3 +1,4 @@
+import { probeSessionActive } from "./session-active.js";
 import { truncateBytes } from "./truncate-bytes.js";
 class PollerTimeoutError extends Error {
   kind = "timeout";
@@ -38,7 +39,7 @@ async function pollUntilIdle(options) {
     const messages = await fetchMessages();
     const last = messages[messages.length - 1];
     if (last !== void 0 && last.role === "assistant" && last.finish_reason) {
-      if (!await sessionStillActive(isSessionActive)) {
+      if (!await probeSessionActive(isSessionActive)) {
         return maxBytes === void 0 ? last.content : truncateBytes(last.content, maxBytes);
       }
     }
@@ -50,16 +51,6 @@ async function pollUntilIdle(options) {
       throw new PollerTimeoutError(Date.now() - startTime);
     }
     await sleepOrAbort(Math.min(pollIntervalMs, remaining), signal, startTime);
-  }
-}
-async function sessionStillActive(isSessionActive) {
-  if (isSessionActive === void 0) {
-    return false;
-  }
-  try {
-    return await isSessionActive();
-  } catch {
-    return false;
   }
 }
 function sleepOrAbort(ms, signal, startTime) {

@@ -14,6 +14,7 @@ import {
   neutralizeUntrustedOutput,
   normalizeVariantSuffix
 } from "../_shared/sanitize.js";
+import { probeSessionActive } from "./session-active.js";
 import { truncateBytes } from "./truncate-bytes.js";
 const BACKGROUND_MAX_CONCURRENT = 4;
 async function startBackgroundTask(input) {
@@ -72,13 +73,6 @@ async function collectBackground(input) {
     }
   }
 }
-async function sessionStillActive(specialist, childSessionId) {
-  try {
-    return await specialist.isSessionActive(childSessionId);
-  } catch {
-    return false;
-  }
-}
 async function collectOne(id, input, scrubber) {
   const {
     store,
@@ -114,7 +108,9 @@ async function collectOne(id, input, scrubber) {
     // after every step, so a terminal-looking message while the session is
     // still active is the inter-step race — report "running", don't
     // collect. A failing probe reads as inactive (degrade to message-only).
-    !await sessionStillActive(specialist, task.childSessionId)) {
+    !await probeSessionActive(
+      () => specialist.isSessionActive(task.childSessionId)
+    )) {
       store.remove(id);
       return {
         id,
