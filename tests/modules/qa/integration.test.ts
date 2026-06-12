@@ -412,6 +412,10 @@ describe("wire-up: parse_plan + dispatch + shell.env + scrub", () => {
       async startBackground(): Promise<string> {
         return childSessionID
       },
+      async isSessionActive(): Promise<boolean> {
+        // Always inactive: this test models only the message transcript.
+        return false
+      },
     }
 
     // Seed the BindingsStore via the BindingsStore behind the singleton.
@@ -500,6 +504,10 @@ describe("wire-up: parse_plan + dispatch + shell.env + scrub", () => {
       },
       async startBackground(): Promise<string> {
         return childSessionID
+      },
+      async isSessionActive(): Promise<boolean> {
+        // Always inactive: this test models only the message transcript.
+        return false
       },
     }
 

@@ -186,6 +186,10 @@ ${task.context}` : task.prompt;
     );
     const rawResult = await pollUntilIdle({
       fetchMessages: () => specialist.fetchMessages(id),
+      // Status gate: only collect once the child session reports inactive —
+      // a terminal-looking message alone can be the inter-step finish race
+      // (see DispatchSpecialist.isSessionActive).
+      isSessionActive: () => specialist.isSessionActive(id),
       timeoutMs: options.taskTimeoutMs,
       pollIntervalMs: options.pollIntervalMs,
       signal: options.signal,

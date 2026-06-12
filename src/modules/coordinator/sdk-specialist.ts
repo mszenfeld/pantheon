@@ -113,6 +113,25 @@ export function createSDKSpecialist(
       // so this remains best-effort end to end.
       await client.session.abort({ path: { id: sessionId } })
     },
+    async isSessionActive(sessionId: string): Promise<boolean> {
+      // GET /session/status returns a map of NON-idle sessions only — the
+      // server deletes an entry when it sets the session idle, so absence
+      // from the map means idle. `busy` covers the whole turn loop (set at
+      // every step) and `retry` covers provider backoff between attempts;
+      // both mean "the turn is still in flight, do not collect". Errors are
+      // swallowed to `false` so a broken status endpoint degrades the
+      // completion check to message-only instead of failing the dispatch —
+      // same contract as oh-my-openagent's `isSessionActive`.
+      try {
+        const result = await client.session.status()
+        const status = (result.data ?? {})[sessionId]
+        return (
+          status !== undefined && ACTIVE_SESSION_STATUS_TYPES.has(status.type)
+        )
+      } catch {
+        return false
+      }
+    },
     async startBackground(agentName: string, prompt: string): Promise<string> {
       // NOTE: unlike `startTask`, `startBackground` takes no `onSessionCreated`
       // callback — the background turn is fire-and-forget (`promptAsync`) and
@@ -151,6 +170,34 @@ export function createSDKSpecialist(
 }
 
 /**
+ * Session-status types that mean "the turn loop is still in flight". The
+ * server's status map only ever contains non-idle sessions, so this set is
+ * matched against present entries; `"running"` is not emitted by the current
+ * SDK but is included for forward compatibility (mirrors oh-my-openagent's
+ * `ACTIVE_SESSION_STATUSES`).
+ */
+export const ACTIVE_SESSION_STATUS_TYPES: ReadonlySet<string> = new Set([
+  "busy",
+  "retry",
+  "running",
+])
+
+/**
+ * Finish reasons the OpenCode turn loop does NOT treat as terminal. The server
+ * persists `finish` on the assistant message after EVERY LLM step —
+ * `"tool-calls"` for an intermediate step — and its own loop-exit predicate is
+ * `finish && !["tool-calls", "unknown"].includes(finish) && !hasToolCalls`
+ * (packages/opencode/src/session/prompt.ts in sst/opencode). Treating any
+ * truthy finish as terminal made dispatch collect mid-turn with an empty
+ * result while the child kept running; this set keeps the adapter pinned to
+ * the server's semantics.
+ */
+const NON_TERMINAL_FINISH_REASONS: ReadonlySet<string> = new Set([
+  "tool-calls",
+  "unknown",
+])
+
+/**
  * Type guard that narrows `Message` (UserMessage | AssistantMessage) down to
  * `AssistantMessage` via the SDK's discriminated `role` field. Using a guard
  * — instead of `as AssistantMessage` — lets the compiler verify the narrowing
@@ -163,16 +210,34 @@ function isAssistant(message: Message): message is AssistantMessage {
 
 export function toPollerMessage(raw: {
   info: Message
-  parts: Array<{ type: string; text?: string }>
+  parts: Array<{
+    type: string
+    text?: string
+    metadata?: Record<string, unknown>
+  }>
 }): PollerMessage {
   const role: string = raw.info.role
   const text = raw.parts
     .filter((p) => p.type === "text")
     .map((p) => p.text ?? "")
     .join("")
-  const finishReason: string | null =
+  const rawFinish: string | null =
     isAssistant(raw.info) && typeof raw.info.finish === "string"
       ? raw.info.finish
+      : null
+  // Some providers return "stop" even when the message contains tool calls —
+  // the server keeps the loop running so tool results can be sent back, and
+  // excludes provider-executed tools (which never produce a follow-up step).
+  // Mirror both rules so `finish_reason` is truthy ONLY for a finish the
+  // server's own loop would exit on.
+  const hasClientToolCalls = raw.parts.some(
+    (p) => p.type === "tool" && !p.metadata?.["providerExecuted"],
+  )
+  const finishReason: string | null =
+    rawFinish !== null &&
+    !NON_TERMINAL_FINISH_REASONS.has(rawFinish) &&
+    !hasClientToolCalls
+      ? rawFinish
       : null
   return {
     role,

@@ -3,6 +3,14 @@ import { truncateBytes } from "./truncate-bytes.js"
 export interface PollerMessage {
   role: string
   content: string
+  /**
+   * TERMINAL finish reason, or null/undefined while the turn is still in
+   * flight. The SDK adapter (`toPollerMessage`) maps the server's
+   * non-terminal step finishes (`"tool-calls"`, `"unknown"`, or any finish on
+   * a message that still carries client-executed tool calls) to null —
+   * mirroring the OpenCode turn loop's own exit predicate — so a truthy value
+   * here means "this step will not be followed by another".
+   */
   finish_reason?: string | null | undefined
 }
 
@@ -27,6 +35,19 @@ export interface PollUntilIdleOptions {
    * O(transcript-length).
    */
   maxBytes?: number
+  /**
+   * Optional session-status probe — the authoritative "turn loop still
+   * running" signal. A terminal-looking message is necessary but NOT
+   * sufficient: the OpenCode server persists `finish` after EVERY step, so
+   * between two LLM steps (and during auto-compaction) the last message can
+   * carry a terminal finish while the turn is still in flight. When provided,
+   * `pollUntilIdle` only resolves once the message looks terminal AND this
+   * probe reports inactive. It is consulted ONLY after the message predicate
+   * passes (no extra HTTP per ordinary poll), and a rejection is treated as
+   * inactive so a broken status endpoint degrades to message-only completion
+   * instead of wedging the task until `timeoutMs`.
+   */
+  isSessionActive?: () => Promise<boolean>
 }
 
 export class PollerTimeoutError extends Error {
@@ -54,7 +75,14 @@ export class PollerAbortError extends Error {
 export async function pollUntilIdle(
   options: PollUntilIdleOptions,
 ): Promise<string> {
-  const { fetchMessages, timeoutMs, pollIntervalMs, signal, maxBytes } = options
+  const {
+    fetchMessages,
+    timeoutMs,
+    pollIntervalMs,
+    signal,
+    maxBytes,
+    isSessionActive,
+  } = options
   const startTime = Date.now()
 
   while (true) {
@@ -71,9 +99,15 @@ export async function pollUntilIdle(
     const last: PollerMessage | undefined = messages[messages.length - 1]
 
     if (last !== undefined && last.role === "assistant" && last.finish_reason) {
-      return maxBytes === undefined
-        ? last.content
-        : truncateBytes(last.content, maxBytes)
+      // Confirm via session status before collecting: a terminal-looking
+      // message observed while the session is still active is the inter-step
+      // (or compaction) race, not completion — keep polling. See the
+      // `isSessionActive` option doc for the failure-mode rationale.
+      if (!(await sessionStillActive(isSessionActive))) {
+        return maxBytes === undefined
+          ? last.content
+          : truncateBytes(last.content, maxBytes)
+      }
     }
 
     // Bound the size of the LAST assistant message between polls so each
@@ -98,6 +132,25 @@ export async function pollUntilIdle(
     }
 
     await sleepOrAbort(Math.min(pollIntervalMs, remaining), signal, startTime)
+  }
+}
+
+/**
+ * Defensive wrapper around the `isSessionActive` probe: absent probe ⇒
+ * inactive (message-only completion, the pre-status-gate contract), and a
+ * thrown/rejected probe ⇒ inactive — a broken status endpoint must degrade
+ * gracefully, never wedge the poll until timeout.
+ */
+async function sessionStillActive(
+  isSessionActive: (() => Promise<boolean>) | undefined,
+): Promise<boolean> {
+  if (isSessionActive === undefined) {
+    return false
+  }
+  try {
+    return await isSessionActive()
+  } catch {
+    return false
   }
 }
 

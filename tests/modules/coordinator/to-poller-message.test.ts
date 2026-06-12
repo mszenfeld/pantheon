@@ -91,12 +91,19 @@ describe("toPollerMessage (SDK adapter)", () => {
   it("ignores non-text parts when assembling content", () => {
     const raw: {
       info: Message
-      parts: Array<{ type: string; text?: string }>
+      parts: Array<{
+        type: string
+        text?: string
+        metadata?: Record<string, unknown>
+      }>
     } = {
       info: makeAssistant({ finish: "end_turn" }),
       parts: [
         { type: "text", text: "answer" },
-        { type: "tool", text: "ignored" },
+        // providerExecuted keeps the message terminal — a client-executed tool
+        // call would (correctly) read as mid-turn; terminality is pinned by
+        // the "non-terminal finish states" suite below, not here.
+        { type: "tool", text: "ignored", metadata: { providerExecuted: true } },
         { type: "reasoning" },
       ],
     }
@@ -120,5 +127,106 @@ describe("toPollerMessage (SDK adapter)", () => {
 
     expect(result.content).toBe("ok")
     expect(result.finish_reason).toBe("end_turn")
+  })
+})
+
+/**
+ * Mirror of the OpenCode server's own loop-exit predicate
+ * (packages/opencode/src/session/prompt.ts in sst/opencode): the turn loop
+ * persists EVERY step's assistant message with a `finish` value — `"tool-calls"`
+ * for intermediate steps — and only exits when
+ * `finish && !["tool-calls","unknown"].includes(finish) && !hasToolCalls`.
+ * Treating any truthy `finish` as terminal made `dispatch_parallel` return
+ * mid-turn with an empty result while the child kept running (the
+ * Perun-re-dispatched-Veles bug). These tests pin the adapter to the server's
+ * predicate: a non-terminal `finish` maps to `finish_reason: null`.
+ */
+describe("toPollerMessage — non-terminal finish states", () => {
+  it("maps finish 'tool-calls' (intermediate step) to null finish_reason", () => {
+    const raw: {
+      info: Message
+      parts: Array<{ type: string; text?: string }>
+    } = {
+      info: makeAssistant({ finish: "tool-calls" }),
+      parts: [{ type: "text", text: "calling tools…" }],
+    }
+
+    const result = toPollerMessage(raw)
+
+    expect(result.content).toBe("calling tools…")
+    expect(result.finish_reason).toBeNull()
+  })
+
+  it("maps finish 'unknown' to null finish_reason", () => {
+    const raw: {
+      info: Message
+      parts: Array<{ type: string; text?: string }>
+    } = {
+      info: makeAssistant({ finish: "unknown" }),
+      parts: [],
+    }
+
+    const result = toPollerMessage(raw)
+
+    expect(result.finish_reason).toBeNull()
+  })
+
+  it("maps finish 'stop' to null when the message still carries client-executed tool calls", () => {
+    // Server comment: "Some providers return 'stop' even when the assistant
+    // message contains tool calls" — the loop keeps running so tool results
+    // can be sent back. The adapter must not read such a message as terminal.
+    const raw: {
+      info: Message
+      parts: Array<{
+        type: string
+        text?: string
+        metadata?: Record<string, unknown>
+      }>
+    } = {
+      info: makeAssistant({ finish: "stop" }),
+      parts: [{ type: "text", text: "let me check" }, { type: "tool" }],
+    }
+
+    const result = toPollerMessage(raw)
+
+    expect(result.finish_reason).toBeNull()
+  })
+
+  it("keeps finish 'stop' terminal when the only tool calls are provider-executed", () => {
+    // Provider-executed tools (metadata.providerExecuted) never produce a
+    // follow-up step — the server excludes them from its hasToolCalls check.
+    const raw: {
+      info: Message
+      parts: Array<{
+        type: string
+        text?: string
+        metadata?: Record<string, unknown>
+      }>
+    } = {
+      info: makeAssistant({ finish: "stop" }),
+      parts: [
+        { type: "tool", metadata: { providerExecuted: true } },
+        { type: "text", text: "final answer" },
+      ],
+    }
+
+    const result = toPollerMessage(raw)
+
+    expect(result.content).toBe("final answer")
+    expect(result.finish_reason).toBe("stop")
+  })
+
+  it("keeps finish 'error' terminal (failed turns must not poll to timeout)", () => {
+    const raw: {
+      info: Message
+      parts: Array<{ type: string; text?: string }>
+    } = {
+      info: makeAssistant({ finish: "error" }),
+      parts: [{ type: "text", text: "partial" }],
+    }
+
+    const result = toPollerMessage(raw)
+
+    expect(result.finish_reason).toBe("error")
   })
 })

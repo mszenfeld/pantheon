@@ -18,7 +18,14 @@ class PollerAbortError extends Error {
   }
 }
 async function pollUntilIdle(options) {
-  const { fetchMessages, timeoutMs, pollIntervalMs, signal, maxBytes } = options;
+  const {
+    fetchMessages,
+    timeoutMs,
+    pollIntervalMs,
+    signal,
+    maxBytes,
+    isSessionActive
+  } = options;
   const startTime = Date.now();
   while (true) {
     if (signal?.aborted === true) {
@@ -31,7 +38,9 @@ async function pollUntilIdle(options) {
     const messages = await fetchMessages();
     const last = messages[messages.length - 1];
     if (last !== void 0 && last.role === "assistant" && last.finish_reason) {
-      return maxBytes === void 0 ? last.content : truncateBytes(last.content, maxBytes);
+      if (!await sessionStillActive(isSessionActive)) {
+        return maxBytes === void 0 ? last.content : truncateBytes(last.content, maxBytes);
+      }
     }
     if (maxBytes !== void 0 && last !== void 0 && last.role === "assistant" && Buffer.byteLength(last.content, "utf8") > maxBytes) {
       last.content = truncateBytes(last.content, maxBytes);
@@ -41,6 +50,16 @@ async function pollUntilIdle(options) {
       throw new PollerTimeoutError(Date.now() - startTime);
     }
     await sleepOrAbort(Math.min(pollIntervalMs, remaining), signal, startTime);
+  }
+}
+async function sessionStillActive(isSessionActive) {
+  if (isSessionActive === void 0) {
+    return false;
+  }
+  try {
+    return await isSessionActive();
+  } catch {
+    return false;
   }
 }
 function sleepOrAbort(ms, signal, startTime) {

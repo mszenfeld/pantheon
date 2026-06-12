@@ -26,6 +26,9 @@ function fakeSpecialist(
     ),
     fetchMessages: vi.fn(async (): Promise<PollerMessage[]> => []),
     abortTask: vi.fn(async () => {}),
+    // Default inactive so tests that only model messages keep the
+    // pre-status-gate behaviour; status-gate tests override this.
+    isSessionActive: vi.fn(async () => false),
     ...over,
   }
 }
@@ -202,6 +205,71 @@ describe("collectBackground", () => {
     // slot freed, exactly like wait_background.
     expect(store.get(id)).toBeUndefined()
     expect(store.countActiveByParent("p1")).toBe(0)
+  })
+
+  it("poll returns running (and keeps the task) when the message looks terminal but the session is still active", async () => {
+    // Inter-step race: the server persists `finish` after every step, so a
+    // mid-turn transcript can end in a terminal-looking message while the turn
+    // loop is still running. The status gate must keep the task uncollected.
+    const store = new BackgroundTaskStore()
+    const spec = fakeSpecialist({
+      fetchMessages: vi.fn(async () => idleMsg("not actually done")),
+      isSessionActive: vi.fn(async () => true),
+    })
+    const { id } = await seed(store, spec)
+    const [r] = await collect({
+      store,
+      specialist: spec,
+      ids: [id],
+      block: false,
+    })
+    expect(r?.status).toBe("running")
+    expect(store.get(id)).toBeDefined()
+    expect(spec.isSessionActive).toHaveBeenCalled()
+  })
+
+  it("poll collects normally when the status check itself fails (degrades to message-only)", async () => {
+    const store = new BackgroundTaskStore()
+    const spec = fakeSpecialist({
+      fetchMessages: vi.fn(async () => idleMsg("done!")),
+      isSessionActive: vi.fn(async () => {
+        throw new Error("status endpoint 500")
+      }),
+    })
+    const { id } = await seed(store, spec)
+    const [r] = await collect({
+      store,
+      specialist: spec,
+      ids: [id],
+      block: false,
+    })
+    expect(r?.status).toBe("success")
+    expect(r?.result).toContain("done!")
+    expect(store.get(id)).toBeUndefined()
+  })
+
+  it("wait (block) does not collect until the session goes inactive", async () => {
+    const store = new BackgroundTaskStore()
+    let statusPolls = 0
+    const spec = fakeSpecialist({
+      fetchMessages: vi.fn(async () => idleMsg("final")),
+      isSessionActive: vi.fn(async () => {
+        statusPolls++
+        return statusPolls <= 2
+      }),
+    })
+    const { id } = await seed(store, spec)
+    const [r] = await collect({
+      store,
+      specialist: spec,
+      ids: [id],
+      block: true,
+      pollIntervalMs: 10,
+    })
+    expect(r?.status).toBe("success")
+    expect(r?.result).toContain("final")
+    expect(statusPolls).toBeGreaterThanOrEqual(3)
+    expect(store.get(id)).toBeUndefined()
   })
 
   it("poll-success frees the slot so a new task can be dispatched at the cap (M7)", async () => {

@@ -39,6 +39,7 @@ interface SpecialistRecorder {
     startTask: Array<{ agentName: string; prompt: string }>
     fetchMessages: Array<{ sessionId: string }>
     abortTask: Array<{ sessionId: string }>
+    isSessionActive: Array<{ sessionId: string }>
   }
 }
 
@@ -48,6 +49,12 @@ interface SpecialistRecorderConfig {
   startTaskHandler?: (agentName: string, prompt: string) => Promise<string>
   fetchMessagesHandler?: (sessionId: string) => Promise<PollerMessage[]>
   abortTaskHandler?: (sessionId: string) => Promise<void>
+  /**
+   * Overrides `isSessionActive` for tests that gate completion on the
+   * session-status signal. Default: always inactive, so tests that only model
+   * messages keep their pre-status-gate behaviour.
+   */
+  isSessionActiveHandler?: (sessionId: string) => Promise<boolean>
 }
 
 function makeSpecialistRecorder(
@@ -57,6 +64,7 @@ function makeSpecialistRecorder(
     startTask: [],
     fetchMessages: [],
     abortTask: [],
+    isSessionActive: [],
   }
 
   const sessionMap = config.sessionMap ?? {}
@@ -104,6 +112,13 @@ function makeSpecialistRecorder(
       // dispatchParallel never calls startBackground; present only to satisfy
       // the DispatchSpecialist contract.
       return agentName
+    },
+    async isSessionActive(sessionId: string): Promise<boolean> {
+      calls.isSessionActive.push({ sessionId })
+      if (config.isSessionActiveHandler !== undefined) {
+        return config.isSessionActiveHandler(sessionId)
+      }
+      return false
     },
   }
 
@@ -209,6 +224,38 @@ describe("dispatchParallel", () => {
     expect(results[0]?.result).toBe("task output")
     expect(results[0]?.name).toBe("qa-fe-tester")
     expect(results[0]?.duration_ms).toBeGreaterThanOrEqual(0)
+  })
+
+  it("keeps polling a terminal-looking message while the child session is still active (status gate wiring)", async () => {
+    // The server persists `finish` after EVERY step, so mid-turn the child's
+    // last message can look terminal while the turn loop is still running.
+    // runTask must thread a per-session `isSessionActive` into the poller and
+    // only collect once the session reports inactive.
+    let statusPolls = 0
+    const { specialist, calls } = makeSpecialistRecorder({
+      sessionMap: { s1: { messages: [finishedMessage("final report")] } },
+      sessionIdSequence: ["s1"],
+      isSessionActiveHandler: async () => {
+        statusPolls++
+        return statusPolls <= 2
+      },
+    })
+
+    const tasks: DispatchTask[] = [{ name: "qa-fe-tester", prompt: "test" }]
+
+    const results = await dispatchParallel({
+      tasks,
+      agentRegistry: defaultRegistry,
+      specialist,
+      pollIntervalMs: 10,
+    })
+
+    expect(results[0]?.status).toBe("success")
+    expect(results[0]?.result).toBe("final report")
+    // Gated twice (active), collected on the third status read — and the gate
+    // was queried for the SAME child session the task runs in.
+    expect(calls.isSessionActive.length).toBeGreaterThanOrEqual(3)
+    expect(calls.isSessionActive[0]).toEqual({ sessionId: "s1" })
   })
 
   it("returns results in input order even when later tasks complete first", async () => {

@@ -26,6 +26,7 @@ interface FakeClient {
     sessionPromptAsync: Array<Record<string, unknown>>
     sessionMessages: Array<Record<string, unknown>>
     sessionAbort: Array<Record<string, unknown>>
+    sessionStatus: Array<Record<string, unknown> | undefined>
     appAgents: Array<Record<string, unknown> | undefined>
     appLog: Array<Record<string, unknown>>
   }
@@ -39,11 +40,21 @@ interface FakeClientConfig {
     {
       data?: Array<{
         info: Message
-        parts: Array<{ type: string; text?: string }>
+        parts: Array<{
+          type: string
+          text?: string
+          metadata?: Record<string, unknown>
+        }>
       }>
     }
   >
   agentsResponse?: { data?: Agent[] } | Error
+  /**
+   * Response for `session.status` — the server returns a map of NON-idle
+   * sessions only ({ [sessionID]: { type: "busy" | "retry" } }); an Error makes
+   * the endpoint reject (degraded-mode coverage).
+   */
+  statusResponse?: { data?: Record<string, { type: string }> } | Error
   /** When set, `app.log` rejects with this error — used to prove the breadcrumb is itself best-effort. */
   logRejectsWith?: Error
 }
@@ -55,6 +66,7 @@ function makeFakeClient(config: FakeClientConfig = {}): FakeClient {
     sessionPromptAsync: [],
     sessionMessages: [],
     sessionAbort: [],
+    sessionStatus: [],
     appAgents: [],
     appLog: [],
   }
@@ -89,6 +101,13 @@ function makeFakeClient(config: FakeClientConfig = {}): FakeClient {
       async abort(options: { path: { id: string } } & Record<string, unknown>) {
         calls.sessionAbort.push(options)
         return { data: true }
+      },
+      async status(options?: Record<string, unknown>) {
+        calls.sessionStatus.push(options)
+        if (config.statusResponse instanceof Error) {
+          throw config.statusResponse
+        }
+        return config.statusResponse ?? { data: {} }
       },
     },
     app: {
@@ -344,7 +363,14 @@ describe("createSDKSpecialist.fetchMessages", () => {
               info: makeAssistant({ finish: "end_turn" }),
               parts: [
                 { type: "text", text: "final " },
-                { type: "tool", text: "ignored-tool-output" },
+                // providerExecuted keeps this fixture terminal — a
+                // client-executed tool call alongside a finish is the mid-turn
+                // state and would (correctly) map finish_reason to null.
+                {
+                  type: "tool",
+                  text: "ignored-tool-output",
+                  metadata: { providerExecuted: true },
+                },
                 { type: "text", text: "answer" },
               ],
             },
@@ -371,7 +397,11 @@ describe("createSDKSpecialist.fetchMessages", () => {
         info: makeAssistant({ finish: "end_turn" }),
         parts: [
           { type: "text", text: "final " },
-          { type: "tool", text: "ignored-tool-output" },
+          {
+            type: "tool",
+            text: "ignored-tool-output",
+            metadata: { providerExecuted: true },
+          },
           { type: "text", text: "answer" },
         ],
       }),
@@ -423,6 +453,75 @@ describe("createSDKSpecialist.fetchMessages", () => {
     expect(fake.calls.sessionMessages[0]).toEqual({
       path: { id: "sess-empty" },
     })
+  })
+})
+
+/**
+ * `isSessionActive` is the authoritative "turn loop still running" signal that
+ * complements the message-finish predicate in `pollUntilIdle`. The server's
+ * `GET /session/status` returns only NON-idle sessions (idle entries are
+ * deleted from its in-memory map), so absence from the map means idle.
+ */
+describe("createSDKSpecialist.isSessionActive", () => {
+  it("returns true while the session is busy", async () => {
+    const fake = makeFakeClient({
+      statusResponse: { data: { "sess-child-1": { type: "busy" } } },
+    })
+    const specialist = createSDKSpecialist(fake.client, "parent-session-42")
+
+    await expect(specialist.isSessionActive("sess-child-1")).resolves.toBe(true)
+    expect(fake.calls.sessionStatus).toHaveLength(1)
+  })
+
+  it("returns true while the session is retrying (provider backoff is still an in-flight turn)", async () => {
+    const fake = makeFakeClient({
+      statusResponse: { data: { "sess-child-1": { type: "retry" } } },
+    })
+    const specialist = createSDKSpecialist(fake.client, "parent-session-42")
+
+    await expect(specialist.isSessionActive("sess-child-1")).resolves.toBe(true)
+  })
+
+  it("returns false when the session is absent from the status map (server deletes idle entries)", async () => {
+    const fake = makeFakeClient({
+      statusResponse: { data: { "some-other-session": { type: "busy" } } },
+    })
+    const specialist = createSDKSpecialist(fake.client, "parent-session-42")
+
+    await expect(specialist.isSessionActive("sess-child-1")).resolves.toBe(
+      false,
+    )
+  })
+
+  it("returns false for an explicit idle entry", async () => {
+    const fake = makeFakeClient({
+      statusResponse: { data: { "sess-child-1": { type: "idle" } } },
+    })
+    const specialist = createSDKSpecialist(fake.client, "parent-session-42")
+
+    await expect(specialist.isSessionActive("sess-child-1")).resolves.toBe(
+      false,
+    )
+  })
+
+  it("returns false when the SDK returns no data", async () => {
+    const fake = makeFakeClient({ statusResponse: { data: undefined } })
+    const specialist = createSDKSpecialist(fake.client, "parent-session-42")
+
+    await expect(specialist.isSessionActive("sess-child-1")).resolves.toBe(
+      false,
+    )
+  })
+
+  it("returns false (never throws) when the status endpoint fails — degrades to message-only completion", async () => {
+    const fake = makeFakeClient({
+      statusResponse: new Error("HTTP 503 from /session/status"),
+    })
+    const specialist = createSDKSpecialist(fake.client, "parent-session-42")
+
+    await expect(specialist.isSessionActive("sess-child-1")).resolves.toBe(
+      false,
+    )
   })
 })
 

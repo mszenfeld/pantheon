@@ -41,6 +41,10 @@ function makeEchoSpecialist(payload: string): DispatchSpecialist {
     async startBackground(): Promise<string> {
       return "fake-session"
     },
+    async isSessionActive(): Promise<boolean> {
+      // Always inactive: these tests model only the message transcript.
+      return false
+    },
   }
 }
 

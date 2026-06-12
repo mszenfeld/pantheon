@@ -72,6 +72,13 @@ async function collectBackground(input) {
     }
   }
 }
+async function sessionStillActive(specialist, childSessionId) {
+  try {
+    return await specialist.isSessionActive(childSessionId);
+  } catch {
+    return false;
+  }
+}
 async function collectOne(id, input, scrubber) {
   const {
     store,
@@ -103,7 +110,11 @@ async function collectOne(id, input, scrubber) {
   if (!block) {
     const messages = await specialist.fetchMessages(task.childSessionId);
     const last = messages[messages.length - 1];
-    if (last !== void 0 && last.role === "assistant" && last.finish_reason) {
+    if (last !== void 0 && last.role === "assistant" && last.finish_reason && // Status gate (mirrors pollUntilIdle): the server persists `finish`
+    // after every step, so a terminal-looking message while the session is
+    // still active is the inter-step race — report "running", don't
+    // collect. A failing probe reads as inactive (degrade to message-only).
+    !await sessionStillActive(specialist, task.childSessionId)) {
       store.remove(id);
       return {
         id,
@@ -118,6 +129,8 @@ async function collectOne(id, input, scrubber) {
   try {
     const raw = await pollUntilIdle({
       fetchMessages: () => specialist.fetchMessages(task.childSessionId),
+      // Same status gate as the foreground path — see DispatchSpecialist.
+      isSessionActive: () => specialist.isSessionActive(task.childSessionId),
       timeoutMs,
       pollIntervalMs,
       signal,

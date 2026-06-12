@@ -45,6 +45,15 @@ function createSDKSpecialist(client, parentSessionID) {
     async abortTask(sessionId) {
       await client.session.abort({ path: { id: sessionId } });
     },
+    async isSessionActive(sessionId) {
+      try {
+        const result = await client.session.status();
+        const status = (result.data ?? {})[sessionId];
+        return status !== void 0 && ACTIVE_SESSION_STATUS_TYPES.has(status.type);
+      } catch {
+        return false;
+      }
+    },
     async startBackground(agentName, prompt) {
       const created = await client.session.create({
         body: {
@@ -69,13 +78,26 @@ function createSDKSpecialist(client, parentSessionID) {
     }
   };
 }
+const ACTIVE_SESSION_STATUS_TYPES = /* @__PURE__ */ new Set([
+  "busy",
+  "retry",
+  "running"
+]);
+const NON_TERMINAL_FINISH_REASONS = /* @__PURE__ */ new Set([
+  "tool-calls",
+  "unknown"
+]);
 function isAssistant(message) {
   return message.role === "assistant";
 }
 function toPollerMessage(raw) {
   const role = raw.info.role;
   const text = raw.parts.filter((p) => p.type === "text").map((p) => p.text ?? "").join("");
-  const finishReason = isAssistant(raw.info) && typeof raw.info.finish === "string" ? raw.info.finish : null;
+  const rawFinish = isAssistant(raw.info) && typeof raw.info.finish === "string" ? raw.info.finish : null;
+  const hasClientToolCalls = raw.parts.some(
+    (p) => p.type === "tool" && !p.metadata?.["providerExecuted"]
+  );
+  const finishReason = rawFinish !== null && !NON_TERMINAL_FINISH_REASONS.has(rawFinish) && !hasClientToolCalls ? rawFinish : null;
   return {
     role,
     content: text,
@@ -119,6 +141,7 @@ async function fetchAgentRegistry(client) {
   return registry;
 }
 export {
+  ACTIVE_SESSION_STATUS_TYPES,
   AGENT_REGISTRY_TTL_MS,
   createSDKSpecialist,
   loadAgentRegistry,

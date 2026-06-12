@@ -12,11 +12,20 @@ import '../_shared/session-agent-registry.js';
  */
 type SDKClient = ReturnType<typeof createOpencodeClient>;
 declare function createSDKSpecialist(client: SDKClient, parentSessionID: string): DispatchSpecialist;
+/**
+ * Session-status types that mean "the turn loop is still in flight". The
+ * server's status map only ever contains non-idle sessions, so this set is
+ * matched against present entries; `"running"` is not emitted by the current
+ * SDK but is included for forward compatibility (mirrors oh-my-openagent's
+ * `ACTIVE_SESSION_STATUSES`).
+ */
+declare const ACTIVE_SESSION_STATUS_TYPES: ReadonlySet<string>;
 declare function toPollerMessage(raw: {
     info: Message;
     parts: Array<{
         type: string;
         text?: string;
+        metadata?: Record<string, unknown>;
     }>;
 }): PollerMessage;
 /**
@@ -28,4 +37,4 @@ declare function toPollerMessage(raw: {
 declare const AGENT_REGISTRY_TTL_MS = 60000;
 declare function loadAgentRegistry(client: SDKClient): Promise<Record<string, AgentInfo>>;
 
-export { AGENT_REGISTRY_TTL_MS, type SDKClient, createSDKSpecialist, loadAgentRegistry, toPollerMessage };
+export { ACTIVE_SESSION_STATUS_TYPES, AGENT_REGISTRY_TTL_MS, type SDKClient, createSDKSpecialist, loadAgentRegistry, toPollerMessage };

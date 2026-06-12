@@ -220,6 +220,23 @@ export async function collectBackground(
   }
 }
 
+/**
+ * Defensive wrapper around `specialist.isSessionActive` for the non-blocking
+ * poll path: a thrown/rejected probe reads as inactive, so a broken status
+ * endpoint degrades the completion check to message-only rather than failing
+ * the poll. Mirrors `pollUntilIdle`'s internal handling on the blocking path.
+ */
+async function sessionStillActive(
+  specialist: DispatchSpecialist,
+  childSessionId: string,
+): Promise<boolean> {
+  try {
+    return await specialist.isSessionActive(childSessionId)
+  } catch {
+    return false
+  }
+}
+
 async function collectOne(
   id: string,
   input: CollectBackgroundInput,
@@ -280,7 +297,16 @@ async function collectOne(
   if (!block) {
     const messages = await specialist.fetchMessages(task.childSessionId)
     const last = messages[messages.length - 1]
-    if (last !== undefined && last.role === "assistant" && last.finish_reason) {
+    if (
+      last !== undefined &&
+      last.role === "assistant" &&
+      last.finish_reason &&
+      // Status gate (mirrors pollUntilIdle): the server persists `finish`
+      // after every step, so a terminal-looking message while the session is
+      // still active is the inter-step race — report "running", don't
+      // collect. A failing probe reads as inactive (degrade to message-only).
+      !(await sessionStillActive(specialist, task.childSessionId))
+    ) {
       // A successful poll is TERMINAL — it returns the full result AND removes
       // the task, exactly like `wait_background` (one-time retrieval). This is
       // what frees the per-parent slot and stops every subsequent poll from
@@ -305,6 +331,8 @@ async function collectOne(
   try {
     const raw = await pollUntilIdle({
       fetchMessages: () => specialist.fetchMessages(task.childSessionId),
+      // Same status gate as the foreground path — see DispatchSpecialist.
+      isSessionActive: () => specialist.isSessionActive(task.childSessionId),
       timeoutMs,
       pollIntervalMs,
       signal,

@@ -28,6 +28,17 @@ interface DispatchSpecialist {
     startTask(agentName: string, prompt: string, onSessionCreated?: (sessionId: string) => void): Promise<string>;
     fetchMessages(sessionId: string): Promise<PollerMessage[]>;
     /**
+     * Authoritative "turn loop still running" probe for a child session
+     * (`GET /session/status`; absence from the map means idle). Completion
+     * detection needs BOTH signals: the server persists `finish` on the
+     * assistant message after every step, so a terminal-looking transcript
+     * observed while the session is still active is the inter-step (or
+     * auto-compaction) race, not completion. Implementations must never throw —
+     * report `false` on status-endpoint failure so completion degrades to the
+     * message-only predicate instead of failing the dispatch.
+     */
+    isSessionActive(sessionId: string): Promise<boolean>;
+    /**
      * Cancel a previously-started session so the child stops doing work
      * server-side (no orphaned compute, no charges). Called on BOTH terminal
      * non-success paths: when `ToolContext.abort` fires, AND when the task times

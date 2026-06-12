@@ -198,6 +198,114 @@ describe("pollUntilIdle", () => {
     await assertion
   })
 
+  /**
+   * Status gate: a terminal-looking message is necessary but NOT sufficient.
+   * Between two LLM steps (and during auto-compaction) the child session's
+   * last message can carry a truthy finish while the server-side turn loop is
+   * still running — `GET /session/status` is the authoritative "loop exited"
+   * signal. The poller must only resolve when the message looks terminal AND
+   * the session is no longer active.
+   */
+  describe("isSessionActive gate", () => {
+    it("keeps polling while the session is active, resolves once it goes inactive", async () => {
+      const messages: PollerMessage[] = [
+        { role: "assistant", content: "done", finish_reason: "stop" },
+      ]
+      const fetchMessages = vi.fn().mockResolvedValue(messages)
+      let active = true
+      const isSessionActive = vi.fn(async () => active)
+
+      const pollIntervalMs = 100
+      const promise = pollUntilIdle({
+        fetchMessages,
+        timeoutMs: 5000,
+        pollIntervalMs,
+        isSessionActive,
+      })
+
+      // Two polls with an active session — must NOT resolve yet.
+      await vi.advanceTimersByTimeAsync(pollIntervalMs)
+      active = false
+      await vi.advanceTimersByTimeAsync(pollIntervalMs)
+
+      const result = await promise
+
+      expect(result).toBe("done")
+      // Polled at least twice while gated, then resolved on the inactive read.
+      expect(fetchMessages.mock.calls.length).toBeGreaterThanOrEqual(3)
+      expect(isSessionActive.mock.calls.length).toBeGreaterThanOrEqual(3)
+    })
+
+    it("does not consult session status while the message is non-terminal", async () => {
+      // Cheap gating: the status HTTP call only fires once the message LOOKS
+      // terminal — otherwise every poll would double the request volume.
+      let callCount = 0
+      const fetchMessages = vi.fn().mockImplementation(async () => {
+        callCount++
+        if (callCount === 1) {
+          return [{ role: "assistant", content: "wip", finish_reason: null }]
+        }
+        return [{ role: "assistant", content: "done", finish_reason: "stop" }]
+      })
+      const isSessionActive = vi.fn(async () => false)
+
+      const pollIntervalMs = 100
+      const promise = pollUntilIdle({
+        fetchMessages,
+        timeoutMs: 5000,
+        pollIntervalMs,
+        isSessionActive,
+      })
+
+      await vi.advanceTimersByTimeAsync(pollIntervalMs)
+
+      const result = await promise
+
+      expect(result).toBe("done")
+      expect(isSessionActive).toHaveBeenCalledTimes(1)
+    })
+
+    it("treats an isSessionActive rejection as inactive (degrades to message-only)", async () => {
+      // A broken/unavailable status endpoint must not wedge the dispatch until
+      // taskTimeoutMs — fall back to the message predicate alone.
+      const messages: PollerMessage[] = [
+        { role: "assistant", content: "done", finish_reason: "stop" },
+      ]
+      const fetchMessages = vi.fn().mockResolvedValue(messages)
+      const isSessionActive = vi
+        .fn()
+        .mockRejectedValue(new Error("status endpoint 500"))
+
+      const result = await pollUntilIdle({
+        fetchMessages,
+        timeoutMs: 1000,
+        pollIntervalMs: 50,
+        isSessionActive,
+      })
+
+      expect(result).toBe("done")
+    })
+
+    it("times out (not resolves) when the session never goes inactive", async () => {
+      const messages: PollerMessage[] = [
+        { role: "assistant", content: "mid-turn", finish_reason: "stop" },
+      ]
+      const fetchMessages = vi.fn().mockResolvedValue(messages)
+      const isSessionActive = vi.fn(async () => true)
+
+      const promise = pollUntilIdle({
+        fetchMessages,
+        timeoutMs: 300,
+        pollIntervalMs: 100,
+        isSessionActive,
+      })
+
+      const rejection = expect(promise).rejects.toThrow("timeout")
+      await vi.advanceTimersByTimeAsync(500)
+      await rejection
+    })
+  })
+
   it("truncates oversized polled content by UTF-8 bytes when maxBytes is set", async () => {
     // 200 × "ż" → 400 UTF-8 bytes, 200 UTF-16 code units. With maxBytes=128
     // the byte length is clearly over, so we must truncate even though the
