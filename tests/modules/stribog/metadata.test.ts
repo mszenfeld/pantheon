@@ -167,6 +167,8 @@ describe("validateExtraToolsPattern", () => {
       "execute_recipe",
       "execute_*", // glob prefix "execute_" is a strict prefix of denied id execute_recipe
       "dispatch_*", // glob prefix "dispatch_" matches the dispatch capability class
+      "write_*", // glob prefix "write_" matches the mutation-verb capability class
+      "replace_*", // glob prefix "replace_" matches the mutation-verb capability class
       "*shell*", // leading/embedded * fails the shape rule
     ]
     for (const pattern of rejected) {
@@ -186,25 +188,18 @@ describe("validateExtraToolsPattern", () => {
     }
   })
 
-  // KNOWN GAP (reported to Group B/C owners). The plan's validateExtraToolsPattern
-  // tests only the glob's PREFIX against IMMUTABLE_DENY_{NAMED,PATTERNS}. The serena
-  // server-key prefix "serena_" matches none of them, so `serena_*` is currently
-  // ACCEPTED here even though it would glob over denied serena children
-  // (serena_write_memory, serena_execute_shell_command, serena_find_symbol — all
-  // isImmutableDeny === true; see the curated SERENA_READ_TOOLS list in
-  // src/modules/plan/allowed-tools.ts which exists precisely because serena mixes
-  // read + denied-capability tools). No regex- or prefix-content rule can separate
-  // {reject serena_*} from {accept supabase_*, context7_*} given the provided deny
-  // set, so closing this needs an explicit "mixed-capability server prefix" policy
-  // (or grant-time enforcement via isImmutableDeny, which already denies the unsafe
-  // children regardless). Group A does NOT invent that policy. Documents current
-  // behavior + the unresolved requirement instead of silently dropping it.
-  it("documents that serena_* is NOT yet rejected by the prefix-only validator (current behavior)", () => {
+  // §3.5 honest split (INTENDED behavior, not a gap): config-load validation is
+  // BEST-EFFORT. A broad glob like `serena_*` is ACCEPTED here on purpose — its prefix
+  // "serena_" contains no shell/write/dispatch marker and is not a prefix of any named
+  // denied id, so no static rule can prove it dangerous without an unsanctioned
+  // server-key registry (and no regex separates {reject serena_*} from {accept
+  // supabase_*}). The danger of serena_*'s children is caught at RUNTIME by the hook's
+  // isImmutableDeny floor — serena_write_memory / serena_execute_shell_command etc. are
+  // all denied (see the capability-corpus test above). The hook is the authoritative
+  // boundary; config-load only fail-fasts the statically-decidable subset.
+  it("accepts serena_* at config-load (danger is in the children, denied at the hook — §3.5)", () => {
     expect(validateExtraToolsPattern("serena_*").valid).toBe(true)
   })
-  it.todo(
-    "should reject serena_* — needs a mixed-capability server-prefix policy (Group B/C)",
-  )
 })
 
 describe("matchesExtraToolsPattern", () => {
