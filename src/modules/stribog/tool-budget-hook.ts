@@ -1,7 +1,7 @@
 import { isAbsolute, resolve } from "node:path"
 import {
   STRIBOG_AGENT_KEY,
-  STRIBOG_ALLOWED_TOOL_IDS,
+  CORE_BUILTINS,
   STRIBOG_EDIT_BUDGET,
 } from "./stribog.metadata.js"
 
@@ -38,7 +38,7 @@ export interface StribogToolHookHandle {
 
 /**
  * Build the `tool.execute.before` handler enforcing, for a session positively attributed as
- * `stribog`: (1) the tool-name allow-list (deny anything outside STRIBOG_ALLOWED_TOOL_IDS),
+ * `stribog`: (1) the tool-name allow-list (deny anything outside CORE_BUILTINS),
  * and (2) the edit budget (at most STRIBOG_EDIT_BUDGET distinct files via edit/write).
  *
  * Fail-open by construction: non-stribog/unknown sessions and any internal/attribution error
@@ -78,12 +78,12 @@ export function makeStribogToolHook(
       // For sessions whose identity never resolves, this collapses the per-tool-call
       // full-transcript fetch from "every tool call" to "only deny-candidates / edit / write".
       const isEditWrite = input.tool === "edit" || input.tool === "write"
-      if (!isEditWrite && STRIBOG_ALLOWED_TOOL_IDS.has(input.tool)) return
+      if (!isEditWrite && CORE_BUILTINS.has(input.tool)) return
 
       const agent = await deps.resolveAgent(input.sessionID)
       if (agent !== STRIBOG_AGENT_KEY) return // pass-through for other/undefined agents
 
-      if (!STRIBOG_ALLOWED_TOOL_IDS.has(input.tool)) {
+      if (!CORE_BUILTINS.has(input.tool)) {
         throw new Error(
           `${TOOL_DENIED}: tool "${input.tool}" is outside Stribog's allow-list ` +
             `(read/glob/grep/edit/write/bash only). Stribog is a leaf actuator — it does not ` +
