@@ -97,7 +97,7 @@ describe("AppVerkStribogPlugin", () => {
     )
   })
 
-  it("declares a native tools deny-map for execute_recipe and task (inert in 1.15.10; hook enforces)", async () => {
+  it("declares a native tools deny-map for execute_recipe and task (default-allow in 1.17.3; hook enforces)", async () => {
     const hooks = await AppVerkStribogPlugin(fakeInput())
     const config: {
       agent?: Record<string, { tools?: Record<string, boolean> }>

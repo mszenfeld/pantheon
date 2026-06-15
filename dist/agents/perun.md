@@ -131,7 +131,7 @@ If Perun ever observes itself about to perform any of the above, that is a spec 
      summary: "fixture mutation: <short description, ≤60 chars>",
      tasks: [{
        name: "stribog",
-       prompt: "Mutation task: grant entitlement row for plan binding QA_BIND_USER_ID.\n\nBase URL: http://localhost:3000 (local stack at localhost)\nTarget row ID: <value of QA_BIND_USER_ID — from provisioned binding>\nRun discriminator: TEST_USER_EMAIL=qa-test-20260614@example.com\n\nBefore writing: read back the row and confirm the discriminator matches.\nIf the row is absent or the discriminator mismatches: return FAIL with reason — do NOT create a from-scratch FK chain."
+       prompt: "Mutation task: grant entitlement row for plan binding QA_BIND_USER_ID.\n\nBase URL: http://localhost:3000 (local stack at localhost)\nTarget row ID: <value of QA_BIND_USER_ID — from provisioned binding>\nRun discriminator: TEST_USER_EMAIL=qa-test-20260614@example.com\n\nBefore writing: read back the row and confirm the discriminator matches.\nIf the row is absent or the discriminator mismatches: return ESCALATE with reason — do NOT create a from-scratch FK chain."
      }]
    })
    ```
