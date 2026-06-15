@@ -32,8 +32,14 @@ export const AppVerkStribogPlugin: Plugin = async ({ client }) => {
   // which — unlike the dispatch-only SessionAgentRegistry — resolves direct/eval sessions too).
   // Edit-budget state is owned by this factory call's closure (see makeStribogToolHook,
   // mirroring BackgroundTaskStore) rather than a module-global.
+  const extraTools =
+    loadPantheonConfig().agents[STRIBOG_AGENT_KEY]?.extraTools ?? []
+  // Entries are already lowercase (enforced by config validation); normalize defensively.
+  const extraPatterns = extraTools.map((p) => p.toLowerCase())
+
   const { hook, clearSession } = makeStribogToolHook({
     resolveAgent: (sessionID) => getSessionAgentCached(sessionID, client),
+    extraPatterns,
   })
 
   // One-time degraded-mode warning, mirroring the serena-gate pattern in

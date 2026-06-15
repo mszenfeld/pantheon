@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
-import { mkdtempSync, rmSync } from "node:fs"
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs"
 import path from "node:path"
 import { tmpdir } from "node:os"
 import { AppVerkStribogPlugin } from "../../../src/modules/stribog/index.js"
@@ -166,5 +166,81 @@ describe("AppVerkStribogPlugin", () => {
     await expect(
       before(beforeInput("write", sessionID), beforeOutput("/repo/d.ts")),
     ).resolves.toBeUndefined()
+  })
+})
+
+describe("AppVerkStribogPlugin – extraTools wiring", () => {
+  let tmpHome: string
+  let origHome: string | undefined
+  let origXdgData: string | undefined
+  let origCwd: string
+
+  beforeEach(() => {
+    __resetCacheForTests()
+    clearAgentMetadataRegistry()
+    tmpHome = mkdtempSync(path.join(tmpdir(), "pantheon-stribog-et-"))
+    origHome = process.env.HOME
+    process.env.HOME = tmpHome
+    origXdgData = process.env["XDG_DATA_HOME"]
+    process.env["XDG_DATA_HOME"] = path.join(tmpHome, ".local", "share")
+    origCwd = process.cwd()
+    const projectDir = path.join(tmpHome, "project")
+    mkdirSync(projectDir, { recursive: true })
+    process.chdir(projectDir)
+  })
+
+  afterEach(() => {
+    process.chdir(origCwd)
+    if (origHome === undefined) delete process.env.HOME
+    else process.env.HOME = origHome
+    if (origXdgData === undefined) delete process.env["XDG_DATA_HOME"]
+    else process.env["XDG_DATA_HOME"] = origXdgData
+    rmSync(tmpHome, { recursive: true, force: true })
+    __resetCacheForTests()
+    clearAgentMetadataRegistry()
+  })
+
+  function writeUserGlobal(content: string): void {
+    const dir = path.join(tmpHome, ".config", "opencode")
+    mkdirSync(dir, { recursive: true })
+    writeFileSync(path.join(dir, "pantheon.json"), content)
+  }
+
+  /**
+   * Build a plugin instance whose hook attributes EVERY session to `stribog`,
+   * so the tool enforcement path is exercised end-to-end.
+   */
+  async function makePlugin() {
+    const plugin = await AppVerkStribogPlugin({
+      client: {
+        session: {
+          messages: async () => ({
+            data: [{ info: { role: "user", agent: STRIBOG_AGENT_KEY } }],
+          }),
+        },
+      },
+    } as never)
+    return plugin
+  }
+
+  it("allows a pattern from extraTools when configured via pantheon.json", async () => {
+    writeUserGlobal(
+      `{ "agents": { "stribog": { "extraTools": ["supabase_*"] } } }`,
+    )
+    const plugin = await makePlugin()
+    const before = plugin["tool.execute.before"]!
+    // supabase_execute_sql matches the "supabase_*" glob — must pass.
+    await expect(
+      before({ tool: "supabase_execute_sql", sessionID: "s1", callID: "c" }, { args: {} }),
+    ).resolves.toBeUndefined()
+  })
+
+  it("denies the same pattern when extraTools is absent (strict default)", async () => {
+    // No pantheon.json at all → extraPatterns defaults to [] → deny.
+    const plugin = await makePlugin()
+    const before = plugin["tool.execute.before"]!
+    await expect(
+      before({ tool: "supabase_execute_sql", sessionID: "s1", callID: "c" }, { args: {} }),
+    ).rejects.toThrow(/STRIBOG_TOOL_DENIED/)
   })
 })
