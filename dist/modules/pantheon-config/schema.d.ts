@@ -8,7 +8,8 @@
 type PantheonConfig = {
     agents: {
         [name: string]: {
-            model: string;
+            model?: string;
+            extraTools?: string[];
         };
     };
 };

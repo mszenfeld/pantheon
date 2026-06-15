@@ -1,7 +1,11 @@
 import { neutralizeUntrustedOutput } from "../_shared/sanitize.js";
+import {
+  STRIBOG_AGENT_KEY,
+  validateExtraToolsPattern
+} from "../stribog/stribog.metadata.js";
 const MODEL_REGEX = /^[A-Za-z0-9._-]+(\/[A-Za-z0-9._-]+)+$/;
 const MAX_SHOWN_LEN = 120;
-const KNOWN_AGENT_FIELDS = /* @__PURE__ */ new Set(["model"]);
+const KNOWN_AGENT_FIELDS = /* @__PURE__ */ new Set(["model", "extraTools"]);
 function prefix(sourcePath) {
   return sourcePath !== void 0 ? `[pantheon] ${sourcePath}: ` : "[pantheon] ";
 }
@@ -39,21 +43,64 @@ function validateConfigFile(raw, sourcePath) {
         );
       }
     }
+    let validatedExtraTools;
+    const rawExtraTools = agent.extraTools;
+    if (rawExtraTools !== void 0) {
+      if (rawName !== STRIBOG_AGENT_KEY) {
+        errors.push(
+          `${prefix(sourcePath)}extraTools on agent "${safeName}" is ignored \u2014 extraTools only affects the stribog agent`
+        );
+      } else if (!Array.isArray(rawExtraTools)) {
+        errors.push(
+          `${prefix(sourcePath)}agents.${safeName}.extraTools must be an array of strings \u2014 ignoring extraTools`
+        );
+      } else {
+        const kept = [];
+        for (const entry of rawExtraTools) {
+          if (typeof entry !== "string") {
+            errors.push(
+              `${prefix(sourcePath)}agents.${safeName}.extraTools: non-string entry ignored`
+            );
+            continue;
+          }
+          const check = validateExtraToolsPattern(entry);
+          if (!check.valid) {
+            errors.push(
+              `${prefix(sourcePath)}agents.${safeName}.extraTools: invalid entry "${neutralizeUntrustedOutput(entry)}" \u2014 ${check.error}`
+            );
+          } else {
+            kept.push(entry);
+          }
+        }
+        if (kept.length > 0) {
+          validatedExtraTools = kept;
+        }
+      }
+    }
     const model = agent.model;
-    if (model === void 0) {
-      continue;
+    let validatedModel;
+    if (model !== void 0) {
+      if (typeof model !== "string" || !MODEL_REGEX.test(model)) {
+        const raw2 = typeof model === "string" ? model : String(model);
+        const cleaned = neutralizeUntrustedOutput(raw2);
+        const truncated = cleaned.length > MAX_SHOWN_LEN ? `${cleaned.slice(0, MAX_SHOWN_LEN)}\u2026` : cleaned;
+        const shown = `"${truncated}"`;
+        errors.push(
+          `${prefix(sourcePath)}invalid model ${shown} for agent "${safeName}" \u2014 must match <providerID>/<modelID> (aggregator paths like openrouter/openai/gpt-5.5 are allowed)`
+        );
+        if (validatedExtraTools !== void 0) {
+          result.agents[rawName] = { extraTools: validatedExtraTools };
+        }
+        continue;
+      }
+      validatedModel = model;
     }
-    if (typeof model !== "string" || !MODEL_REGEX.test(model)) {
-      const raw2 = typeof model === "string" ? model : String(model);
-      const cleaned = neutralizeUntrustedOutput(raw2);
-      const truncated = cleaned.length > MAX_SHOWN_LEN ? `${cleaned.slice(0, MAX_SHOWN_LEN)}\u2026` : cleaned;
-      const shown = `"${truncated}"`;
-      errors.push(
-        `${prefix(sourcePath)}invalid model ${shown} for agent "${safeName}" \u2014 must match <providerID>/<modelID> (aggregator paths like openrouter/openai/gpt-5.5 are allowed)`
-      );
-      continue;
+    if (validatedModel !== void 0 || validatedExtraTools !== void 0) {
+      result.agents[rawName] = {
+        ...validatedModel !== void 0 ? { model: validatedModel } : {},
+        ...validatedExtraTools !== void 0 ? { extraTools: validatedExtraTools } : {}
+      };
     }
-    result.agents[rawName] = { model };
   }
   return { config: result, errors };
 }
