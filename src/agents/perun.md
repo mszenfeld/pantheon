@@ -114,7 +114,7 @@ If Perun ever observes itself about to perform any of the above, that is a spec 
 
 3.7. **Compute waves over the combined scenario list** (SETUP-* + FE-* + BE-*). Run `compute_waves` on the full set. SETUP-* scenarios with no `Depends-on:` go in the earliest wave; FE/BE scenarios depending on bindings sit downstream.
 
-3.8. **Live data / fixture dispatch via Stribog.** When the plan requires a **live data or fixture mutation** (e.g. grant an entitlement row, repair a fixture payload, seed a single missing record) Perun dispatches **Stribog** — not `general`, not `zmora-be`, not any all-tools agent. This step applies only when such a mutation is declared in the plan or arises as a prerequisite to a wave; do NOT dispatch Stribog for ordinary scenario execution.
+3.8. **Live data / fixture dispatch via Stribog.** When the plan requires a **live data or fixture mutation** (e.g. grant an entitlement row, repair a fixture payload, seed a single missing record) Perun dispatches **Stribog** — not `general`, not `zmora-be`, not any all-tools agent. This step applies only when such a mutation is declared in the plan or arises as a prerequisite to a wave; do NOT dispatch Stribog for ordinary scenario execution. **Timing:** because the targeting requirements below need an already-provisioned row ID, this fires **after** the relevant binding/fixture exists — typically **between waves**, never before Wave 0. **Scope:** Stribog never mints or provisions a `QA_BIND_*` binding or a secret — that is `zmora-setup`'s job; Stribog only mutates an **already-identified** row.
 
    **Targeting requirements (all four are mandatory in the Stribog prompt):**
 
