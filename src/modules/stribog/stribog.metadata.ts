@@ -65,15 +65,24 @@ export const IMMUTABLE_DENY_NAMED: ReadonlySet<string> = new Set([
 ])
 
 /** Capability-class deny patterns (segment-anchored; matched against the normalized lowercase id).
- *  Prefix/server-key agnostic so serena_*, serena2_*, etc. are all covered. */
+ *  Prefix/server-key agnostic so serena_*, serena2_*, etc. are all covered.
+ *
+ *  NOTE on the mutation-verb pattern: it denies code/state writes (serena_write_memory,
+ *  serena_replace_symbol_body, …). Being server-agnostic, it ALSO denies a data-MCP's structured
+ *  row-mutation tools (supabase_insert_rows, supabase_delete_rows, …). That is intended: the
+ *  supported DB-fixture mutation path is `supabase_execute_sql` (a SQL string — `execute` is
+ *  deliberately NOT a mutation verb, so it passes). Grant `supabase_execute_sql` (exact, or via the
+ *  `supabase_*` glob) — not the structured verb-named write tools. Over-denial is the safe failure
+ *  mode for a security floor; the false-negative direction (letting a shell/code-write through) is not. */
 export const IMMUTABLE_DENY_PATTERNS: ReadonlyArray<RegExp> = [
   /(^|_)execute_shell(_command)?$/i,
   /(^|_)shell(_command)?$/i,
   /(^|_)dispatch(_|$)/i,
   /(^|_)recipe(_|$)/i,
-  /^task(_|$)/i,
-  /(^|_)(write|create|replace|insert|rename|delete|move|edit)_/i,
-  /_(memory|symbol|symbol_body|content|text_file)$/i,
+  /^task(_|$)/i, // task_* and bare task
+  /(^|_)task$/i, // *_task — trailing leaf-dispatch segment (§3.4 `*_task`)
+  /(^|_)(write|create|replace|insert|rename|delete|move|edit)_/i, // mutation verbs — see NOTE above
+  /_(memory|symbol|symbol_body|content|text_file)$/i, // serena write-targets (`content` = serena_replace_content)
 ]
 
 /** True if a normalized (lowercase) tool id is immutably denied (named OR capability-class). */
@@ -95,11 +104,15 @@ export function validateExtraToolsPattern(
     }
   }
   if (pattern === "*") return { valid: false, error: "bare * not allowed" }
-  if (IMMUTABLE_DENY_NAMED.has(pattern)) {
-    return { valid: false, error: `exact denied id: ${pattern}` }
+  // Exact id: reject if statically denied (named OR capability-class), so config-load agrees with
+  // the runtime hook floor — no silent config-pass-then-runtime-deny (e.g. `supabase_delete_rows`).
+  if (!pattern.endsWith("*") && isImmutableDeny(pattern)) {
+    return { valid: false, error: `denied id: ${pattern}` }
   }
   if (pattern.endsWith("*")) {
     const prefix = pattern.slice(0, -1)
+    // Glob: reject only statically-provable collisions. Broad globs (serena_*) are accepted here
+    // per §3.5; their dangerous children are denied at runtime by isImmutableDeny.
     for (const deniedId of IMMUTABLE_DENY_NAMED) {
       if (deniedId.startsWith(prefix)) {
         return {

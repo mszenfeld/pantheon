@@ -126,6 +126,7 @@ describe("isImmutableDeny — capability-aware deny set", () => {
       "dispatch_background",
       "poll_background",
       "wait_background",
+      "run_task", // *_task trailing leaf-dispatch segment (the /(^|_)task$/ pattern)
       "EXECUTE_RECIPE".toLowerCase(),
       "SERENA_EXECUTE_SHELL_COMMAND".toLowerCase(),
     ]
@@ -134,7 +135,15 @@ describe("isImmutableDeny — capability-aware deny set", () => {
     }
   })
 
-  it("does NOT over-deny the core builtins or benign read-only third-party tools", () => {
+  it("intentionally denies a data-MCP's structured row-mutation tools (use supabase_execute_sql instead)", () => {
+    // The mutation-verb pattern is server-agnostic, so structured DB write tools are caught.
+    // This is by design — the supported DB-fixture path is the SQL-string tool, not these.
+    for (const id of ["supabase_insert_rows", "supabase_delete_rows", "supabase_create_table"]) {
+      expect(isImmutableDeny(id)).toBe(true)
+    }
+  })
+
+  it("does NOT over-deny the core builtins, the SQL path, or non-mutation-verb DB tools", () => {
     const allowed = [
       "read",
       "glob",
@@ -144,6 +153,9 @@ describe("isImmutableDeny — capability-aware deny set", () => {
       "bash",
       "supabase_execute_sql",
       "supabase_execute-sql",
+      "supabase_update_rows", // `update` is not in the mutation-verb list
+      "supabase_upsert_rows", // `upsert` is not in the mutation-verb list
+      "supabase_list_tables",
       "context7_resolve-library-id",
     ]
     for (const id of allowed) {
@@ -170,17 +182,20 @@ describe("validateExtraToolsPattern", () => {
       "write_*", // glob prefix "write_" matches the mutation-verb capability class
       "replace_*", // glob prefix "replace_" matches the mutation-verb capability class
       "*shell*", // leading/embedded * fails the shape rule
+      "supabase_delete_rows", // exact id caught by isImmutableDeny — config-load now agrees with runtime
+      "serena_write_memory", // exact id caught by isImmutableDeny (mutation verb + memory suffix)
     ]
     for (const pattern of rejected) {
       expect(validateExtraToolsPattern(pattern).valid).toBe(false)
     }
   })
 
-  it("accepts safe prefix globs and exact ids", () => {
+  it("accepts safe prefix globs and exact ids (incl. non-mutation-verb DB tools)", () => {
     const accepted = [
       "supabase_*",
       "context7_*",
       "supabase_execute_sql",
+      "supabase_update_rows", // `update` not a mutation verb → allowed exact id
       "context7_resolve-library-id",
     ]
     for (const pattern of accepted) {
