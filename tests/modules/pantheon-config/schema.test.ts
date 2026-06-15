@@ -385,5 +385,37 @@ describe("validateConfigFile – extraTools", () => {
     expect(
       result.errors.some((e) => /extraTools/.test(e) && /perun/.test(e)),
     ).toBe(true)
+    // ...and extraTools must NOT be smuggled into the stored non-stribog agent shape.
+    expect(result.config.agents.perun).toEqual({
+      model: "anthropic/claude-opus-4-7",
+    })
+  })
+
+  it("stores nothing for an empty extraTools array (no model) and emits no error", () => {
+    const result = validateConfigFile({
+      agents: { stribog: { extraTools: [] } },
+    })
+    expect(result.config.agents.stribog).toBeUndefined()
+    expect(result.errors).toEqual([])
+  })
+
+  it("stores nothing when every extraTools entry is invalid, but records each error", () => {
+    const result = validateConfigFile({
+      agents: { stribog: { extraTools: ["CamelCase", "execute_recipe"] } },
+    })
+    expect(result.config.agents.stribog).toBeUndefined()
+    expect(result.errors).toHaveLength(2)
+  })
+
+  it("drops a non-string entry, keeps the valid sibling, pushes an error", () => {
+    const result = validateConfigFile({
+      agents: {
+        stribog: { extraTools: [42, "supabase_execute_sql"] },
+      },
+    })
+    expect(result.config.agents.stribog).toEqual({
+      extraTools: ["supabase_execute_sql"],
+    })
+    expect(result.errors).toHaveLength(1)
   })
 })
