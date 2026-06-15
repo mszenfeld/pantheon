@@ -174,7 +174,9 @@ describe("stribog tool-budget hook", () => {
 
   it("defaults to a strict allow-list when no extraPatterns are configured", async () => {
     // Production default (index.ts omits extraPatterns until wired): a would-be MCP tool is denied.
-    const { hook: h } = makeStribogToolHook({ resolveAgent: async () => STRIBOG })
+    const { hook: h } = makeStribogToolHook({
+      resolveAgent: async () => STRIBOG,
+    })
     await expect(h(input("supabase_execute_sql"), out())).rejects.toThrow(
       /STRIBOG_TOOL_DENIED/,
     )
@@ -186,9 +188,9 @@ describe("stribog tool-budget hook", () => {
       resolveAgent: async () => STRIBOG,
       extraPatterns: ["serena_replace_symbol_body"],
     })
-    await expect(
-      h(input("serena_replace_symbol_body"), out()),
-    ).rejects.toThrow(/STRIBOG_TOOL_DENIED/)
+    await expect(h(input("serena_replace_symbol_body"), out())).rejects.toThrow(
+      /STRIBOG_TOOL_DENIED/,
+    )
   })
 
   it("allows up to the budget of distinct files, then denies the next", async () => {
@@ -235,11 +237,51 @@ describe("stribog tool-budget hook", () => {
     await expect(h(input("edit"), out("/repo/a.ts"))).resolves.toBeUndefined()
   })
 
-  it("fails open on missing/relative filePath (no throw, not counted)", async () => {
+  it("fails closed on a RELATIVE filePath for edit/write (SCOPE_VIOLATION)", async () => {
+    // A non-absolute path cannot be bound to the per-file budget, so it is refused (not passed).
     const h = hook(STRIBOG)
-    await expect(h(input("write"), out())).resolves.toBeUndefined()
-    await expect(h(input("edit"), out("relative.ts"))).resolves.toBeUndefined()
-    await h(input("write"), out("/repo/a.ts"))
+    await expect(h(input("write"), out("a.ts"))).rejects.toThrow(
+      /STRIBOG_SCOPE_VIOLATION/,
+    )
+    await expect(h(input("edit"), out("relative.ts"))).rejects.toThrow(
+      /STRIBOG_SCOPE_VIOLATION/,
+    )
+  })
+
+  it("fails closed on a MISSING filePath for edit/write (SCOPE_VIOLATION)", async () => {
+    const h = hook(STRIBOG)
+    await expect(h(input("write"), out())).rejects.toThrow(
+      /STRIBOG_SCOPE_VIOLATION/,
+    )
+    await expect(h(input("edit"), out())).rejects.toThrow(
+      /STRIBOG_SCOPE_VIOLATION/,
+    )
+  })
+
+  it("does not echo the raw filePath in the non-absolute denial (CWE-117)", async () => {
+    // A control-byte / sentinel-bearing relative path must NOT be interpolated into the message;
+    // the hook states the failure by type only.
+    const h = hook(STRIBOG)
+    await expect(h(input("edit"), out("evil]0;pwn.ts"))).rejects.toThrow(
+      // matches the type-only message; must NOT contain the raw "evil…pwn.ts" payload
+      /STRIBOG_SCOPE_VIOLATION: edit\/write refused — filePath must be an absolute path but was relative/,
+    )
+    await expect(h(input("edit"), out("evil]0;pwn.ts"))).rejects.not.toThrow(
+      /pwn\.ts/,
+    )
+  })
+
+  it("does not count a refused non-absolute path against the budget", async () => {
+    // The fail-closed denial must not consume budget: after two relative refusals, two distinct
+    // ABSOLUTE files still fit under STRIBOG_EDIT_BUDGET (=2).
+    const h = hook(STRIBOG)
+    await expect(h(input("write"), out("rel-a.ts"))).rejects.toThrow(
+      /STRIBOG_SCOPE_VIOLATION/,
+    )
+    await expect(h(input("edit"), out("rel-b.ts"))).rejects.toThrow(
+      /STRIBOG_SCOPE_VIOLATION/,
+    )
+    await expect(h(input("write"), out("/repo/a.ts"))).resolves.toBeUndefined()
     await expect(h(input("edit"), out("/repo/b.ts"))).resolves.toBeUndefined()
   })
 

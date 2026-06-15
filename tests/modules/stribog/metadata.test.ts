@@ -135,32 +135,116 @@ describe("isImmutableDeny — capability-aware deny set", () => {
     }
   })
 
-  it("intentionally denies a data-MCP's structured row-mutation tools (use supabase_execute_sql instead)", () => {
-    // The mutation-verb pattern is server-agnostic, so structured DB write tools are caught.
-    // This is by design — the supported DB-fixture path is the SQL-string tool, not these.
-    for (const id of ["supabase_insert_rows", "supabase_delete_rows", "supabase_create_table"]) {
+  it("denies the kebab-case forms opencode 1.17.3 preserves (dash-segmented dangerous ids)", () => {
+    // opencode keeps dashes in serverKey_toolName, so these are the on-the-wire ids for
+    // serena/dispatch/data-MCP write+shell+dispatch tools. Each MUST normalize to its
+    // underscore form and hit the deny floor — otherwise a broad glob grant lets them ALLOW.
+    const kebab = [
+      "serena_execute-shell-command",
+      "serena_write-memory",
+      "serena_replace-symbol-body",
+      "serena_replace-content",
+      "serena_create-text-file",
+      "serena_insert-after-symbol",
+      "serena_insert-before-symbol",
+      "serena_rename-symbol",
+      "serena_delete-memory",
+      "serena_edit-memory",
+      "serena_safe-delete-symbol",
+      "supabase_delete-rows",
+      "supabase_insert-rows",
+      "supabase_create-table",
+      "execute-recipe",
+      "dispatch-parallel",
+      "run-task",
+    ]
+    for (const id of kebab) {
       expect(isImmutableDeny(id)).toBe(true)
     }
   })
 
-  it("does NOT over-deny the core builtins, the SQL path, or non-mutation-verb DB tools", () => {
+  it("intentionally denies a data-MCP's structured row-mutation tools (use supabase_execute_sql instead)", () => {
+    // The mutation-verb pattern is server-agnostic, so structured DB write tools are caught.
+    // This is by design — the supported DB-fixture path is the SQL-string tool, not these.
+    for (const id of [
+      "supabase_insert_rows",
+      "supabase_delete_rows",
+      "supabase_create_table",
+    ]) {
+      expect(isImmutableDeny(id)).toBe(true)
+    }
+  })
+
+  // MAINT-002 — capability-floor ALLOW ceiling (the positive half of the corpus).
+  // The deny tests above pin what MUST be blocked; this pins what MUST stay allowed,
+  // so the floor reads as a DELIBERATE allowlist boundary, not an accidental hole.
+  // The danger is asymmetric coverage: a corpus that only enumerated denied ids could
+  // not tell "intentionally allowed" from "missed verb" — which is how the SEC-001 gap
+  // hid. Each entry here is a looks-mutating-but-benign id whose leading/non-final
+  // segment is an UNLISTED (non-mutation) verb — get/read/list/execute/resolve — that
+  // the floor passes ON PURPOSE. Adding any of these verbs to IMMUTABLE_DENY_PATTERNS
+  // (or widening the bare-edit/write exemption) must fail HERE.
+  it("does NOT over-deny the core builtins, the SQL path, or non-mutation-verb tools (capability-floor ceiling)", () => {
     const allowed = [
+      // CORE_BUILTINS — bare `edit`/`write` are mutation verbs but, as the whole
+      // single-segment id, MUST stay allowed here: the deny floor uses the split
+      // anchor `verb_ | _verb$` precisely so these fall through to the edit-budget
+      // path. A `(^|_)verb(_|$)` form would brick Stribog's only side-effect tools.
       "read",
       "glob",
       "grep",
       "edit",
       "write",
       "bash",
+      // SQL-string fixture path — `execute` is deliberately not a mutation verb.
       "supabase_execute_sql",
       "supabase_execute-sql",
-      "supabase_update_rows", // `update` is not in the mutation-verb list
-      "supabase_upsert_rows", // `upsert` is not in the mutation-verb list
+      // Read-verb MCP tools — `get`/`read`/`list` are NOT in the mutation-verb set, so
+      // these pass the floor by design. Pinning the read-side (not only `execute`/`list`)
+      // proves the allowlist floor is intentional: a future edit that mis-classifies a
+      // read verb as mutating (e.g. folding `read`/`get` into the verb alternation) breaks
+      // here, not silently in production where it would brick Stribog's read tools.
+      "supabase_get_row",
+      "supabase_read_table",
+      "serena_get_symbols_overview", // read tool; suffix `overview` is not a write-target
       "supabase_list_tables",
       "context7_resolve-library-id",
     ]
     for (const id of allowed) {
       expect(isImmutableDeny(id)).toBe(false)
     }
+    // Floor boundary, made explicit: a read VERB does not buy a pass when the SUFFIX is a
+    // serena write-target. `serena_read_memory` is DENIED by the `_(memory|symbol|…)$` rule
+    // (verb-agnostic — any `*_memory` is a serena write surface), even though `read` itself
+    // is benign. Pinning this guards the suffix rule against a "but it's only a read" edit.
+    expect(isImmutableDeny("serena_read_memory")).toBe(true)
+  })
+
+  it("denies the extended verb set as whole segments, order-agnostic (update/upsert/DDL/grant + verb-after-noun)", () => {
+    // SEC-003: the mutation-verb floor was extended (update/upsert/drop/truncate/
+    // alter/grant) and made order-agnostic so a verb that is the TRAILING segment
+    // (`supabase_rows_delete`) is caught, not only verb-prefixed ids. Whole-segment
+    // anchoring still permits the SQL fixture path (`execute` is not a verb).
+    const denied = [
+      "supabase_update_rows", // `update` now a mutation verb
+      "supabase_upsert_rows", // `upsert` now a mutation verb
+      "supabase_drop_table", // DDL
+      "supabase_truncate_table", // DDL
+      "supabase_alter_table", // DDL
+      "supabase_grant_role", // privilege grant
+      "supabase_rows_delete", // verb-after-noun: trailing-segment verb
+      "supabase_rows_update", // verb-after-noun: trailing-segment verb
+      "supabase_drop-table", // kebab form, dash-normalized then denied
+      "supabase_rows-delete", // kebab verb-after-noun
+    ]
+    for (const id of denied) {
+      expect(isImmutableDeny(id)).toBe(true)
+    }
+    // Guard the load-bearing exemption alongside, so a future regex edit that
+    // re-breaks bare edit/write or the SQL path fails right here.
+    expect(isImmutableDeny("supabase_execute_sql")).toBe(false)
+    expect(isImmutableDeny("edit")).toBe(false)
+    expect(isImmutableDeny("write")).toBe(false)
   })
 
   it("pins each of the four dispatch literals into IMMUTABLE_DENY_NAMED", () => {
@@ -184,18 +268,25 @@ describe("validateExtraToolsPattern", () => {
       "*shell*", // leading/embedded * fails the shape rule
       "supabase_delete_rows", // exact id caught by isImmutableDeny — config-load now agrees with runtime
       "serena_write_memory", // exact id caught by isImmutableDeny (mutation verb + memory suffix)
+      "supabase_delete-rows", // kebab exact: dash-normalized in isImmutableDeny, so config-load rejects it too
+      "serena_write-memory", // kebab exact: same dangerous tool, dash-form on the opencode wire
+      "supabase_update_rows", // SEC-003: `update` now a mutation verb → exact id rejected
+      "supabase_upsert_rows", // SEC-003: `upsert` now a mutation verb → exact id rejected
+      "supabase_rows_delete", // SEC-003: trailing-segment verb (order-agnostic) → rejected
+      "update_*", // SEC-003: glob prefix "update_" matches the extended mutation-verb class
+      "grant_*", // SEC-003: glob prefix "grant_" matches the extended mutation-verb class
     ]
     for (const pattern of rejected) {
       expect(validateExtraToolsPattern(pattern).valid).toBe(false)
     }
   })
 
-  it("accepts safe prefix globs and exact ids (incl. non-mutation-verb DB tools)", () => {
+  it("accepts safe prefix globs and exact ids (the SQL path + read-only DB tools)", () => {
     const accepted = [
       "supabase_*",
       "context7_*",
-      "supabase_execute_sql",
-      "supabase_update_rows", // `update` not a mutation verb → allowed exact id
+      "supabase_execute_sql", // `execute` is not a mutation verb → allowed exact id
+      "supabase_list_tables", // read-only, no verb segment
       "context7_resolve-library-id",
     ]
     for (const pattern of accepted) {

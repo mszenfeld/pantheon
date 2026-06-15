@@ -42,7 +42,12 @@ function makeStribogToolHook(deps) {
       }
       {
         const filePath = output.args?.filePath;
-        if (typeof filePath !== "string" || !isAbsolute(filePath)) return;
+        if (typeof filePath !== "string" || !isAbsolute(filePath)) {
+          const kind = typeof filePath === "string" ? "relative" : `absent (${typeof filePath})`;
+          throw new Error(
+            `${SCOPE_VIOLATION}: edit/write refused \u2014 filePath must be an absolute path but was ${kind}; a non-absolute path cannot be bound to the edit budget. This task exceeds Stribog's scope. Return the ESCALATE result now.`
+          );
+        }
         const path = resolve(filePath);
         const set = pathsFor(input.sessionID);
         if (!set.has(path) && set.size >= STRIBOG_EDIT_BUDGET) {

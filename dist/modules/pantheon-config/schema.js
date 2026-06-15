@@ -2,7 +2,7 @@ import { neutralizeUntrustedOutput } from "../_shared/sanitize.js";
 import {
   STRIBOG_AGENT_KEY,
   validateExtraToolsPattern
-} from "../stribog/stribog.metadata.js";
+} from "../_shared/stribog-extra-tools-contract.js";
 const MODEL_REGEX = /^[A-Za-z0-9._-]+(\/[A-Za-z0-9._-]+)+$/;
 const MAX_SHOWN_LEN = 120;
 const KNOWN_AGENT_FIELDS = /* @__PURE__ */ new Set(["model", "extraTools"]);
@@ -88,12 +88,9 @@ function validateConfigFile(raw, sourcePath) {
         errors.push(
           `${prefix(sourcePath)}invalid model ${shown} for agent "${safeName}" \u2014 must match <providerID>/<modelID> (aggregator paths like openrouter/openai/gpt-5.5 are allowed)`
         );
-        if (validatedExtraTools !== void 0) {
-          result.agents[rawName] = { extraTools: validatedExtraTools };
-        }
-        continue;
+      } else {
+        validatedModel = model;
       }
-      validatedModel = model;
     }
     if (validatedModel !== void 0 || validatedExtraTools !== void 0) {
       result.agents[rawName] = {

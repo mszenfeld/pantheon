@@ -7,10 +7,13 @@
  */
 
 import { neutralizeUntrustedOutput } from "../_shared/sanitize.js"
+// Pull the extraTools contract from the neutral shared leaf, NOT the stribog
+// feature module — the pure config layer must not depend on a feature module
+// (ARCH-001 — inverted DIP).
 import {
   STRIBOG_AGENT_KEY,
   validateExtraToolsPattern,
-} from "../stribog/stribog.metadata.js"
+} from "../_shared/stribog-extra-tools-contract.js"
 
 export type PantheonConfig = {
   agents: { [name: string]: { model?: string; extraTools?: string[] } }
@@ -197,13 +200,13 @@ export function validateConfigFile(
         errors.push(
           `${prefix(sourcePath)}invalid model ${shown} for agent "${safeName}" — must match <providerID>/<modelID> (aggregator paths like openrouter/openai/gpt-5.5 are allowed)`,
         )
-        // model is invalid — only store agent if extraTools is present
-        if (validatedExtraTools !== undefined) {
-          result.agents[rawName] = { extraTools: validatedExtraTools }
-        }
-        continue
+        // model is invalid: leave validatedModel undefined so an invalid value
+        // is NEVER stored (CWE-117). The unified store block below still
+        // persists extraTools if present — this replaces the old early-store +
+        // `continue`, which existed only to guarantee that invariant.
+      } else {
+        validatedModel = model
       }
-      validatedModel = model
     }
 
     // Store the agent if there is anything to store (model OR extraTools).

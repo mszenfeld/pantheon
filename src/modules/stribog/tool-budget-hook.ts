@@ -49,15 +49,20 @@ export interface StribogToolHookHandle {
  * Build the `tool.execute.before` handler enforcing, for a session positively attributed as
  * `stribog`: (1) the tool-name allow-list — CORE_BUILTINS plus any config-granted extraTools
  * pattern, with the immutable capability-deny set winning over everything — and (2) the edit
- * budget (at most STRIBOG_EDIT_BUDGET distinct files via edit/write).
+ * budget (at most STRIBOG_EDIT_BUDGET distinct files via edit/write). The budget binds ONLY native
+ * edit/write; a native edit/write whose filePath is missing or non-absolute is REFUSED (fail-closed)
+ * since it cannot be keyed into the per-file budget. Write-capable extraTools are not budgeted — they
+ * are denied upstream by the isImmutableDeny capability floor (step 3), never reaching the budget.
  *
- * `extraPatterns` defaults to `[]` (strict: CORE_BUILTINS only). It is populated from
- * `agents.stribog.extraTools` by the plugin wiring in `index.ts`; until that wiring lands the
- * extraTools allow-branch is inert and the boundary stays strict (fail-safe).
+ * `extraPatterns` defaults to `[]` (strict: CORE_BUILTINS only). The plugin wiring in `index.ts`
+ * reads `agents.stribog.extraTools` and passes it in, so when that key is unconfigured the list is
+ * empty and the extraTools allow-branch is a no-op — the boundary stays strict (fail-safe).
  *
- * Fail-open by construction: non-stribog/unknown sessions and any internal/attribution error
- * pass the call through. Only the two intended denials throw (their markers re-thrown past the
- * internal-error guard so they reach the model as a tool-error part).
+ * Fail-open by construction for the ATTRIBUTION axis: non-stribog/unknown sessions and any
+ * internal/attribution error pass the call through. Only the intended denials throw — the two
+ * TOOL_DENIED branches (immutable capability-deny; outside-allow-list) and the SCOPE_VIOLATION
+ * branch (edit budget exhausted OR a non-absolute edit/write filePath) — their markers re-thrown
+ * past the internal-error guard so they reach the model as a tool-error part.
  *
  * ORDER IS LOAD-BEARING (§3.3). The handler:
  *   (1) Pre-filters the 6 non-edit core builtins WITHOUT attribution (CORE_BUILTINS-only — adding
@@ -69,7 +74,8 @@ export interface StribogToolHookHandle {
  *       session, or during its own attribution-unresolved window, is never denied here.
  *   (4) Allows core builtins (edit/write fall through to the budget; the rest already returned at
  *       step 1) or a configured extraPattern match; otherwise denies.
- *   (5) Enforces the edit budget for edit/write.
+ *   (5) Enforces the edit budget for edit/write — and REFUSES (fail-closed) a native edit/write
+ *       whose filePath is missing/non-absolute, since such a call cannot be bound to the budget.
  *
  * RAW vs LOWERCASE split: CORE_BUILTINS membership and the edit/write budget are matched against
  * the RAW runtime id; a lowercased `denyKey` is used ONLY for isImmutableDeny + extraPattern
@@ -107,7 +113,7 @@ export function makeStribogToolHook(
       const raw = input.tool
       const isEditWrite = raw === "edit" || raw === "write"
 
-      // (1) Pre-filter — CORE_BUILTINS-ONLY. The 6 non-edit core builtins (read/glob/grep/bash)
+      // (1) Pre-filter — CORE_BUILTINS-ONLY. The 4 non-edit core builtins (read/glob/grep/bash)
       // always pass for a stribog session and are a no-op for everyone else, so there is nothing
       // to attribute: skip the (full-transcript) attribution call entirely, mirroring
       // coordinator-policy's `tool!=="bash"` bail. Do NOT add extraPatterns here — that would skip
@@ -137,6 +143,14 @@ export function makeStribogToolHook(
       // (4) Allow core builtins (only edit/write reach here — the rest returned at step 1) → fall
       // through to the edit budget. Else allow a configured extraTools match (same trust class as
       // bash: no edit budget). Else deny: outside the allow-list AND the configured extraTools.
+      //
+      // SCOPE OF THE EDIT BUDGET: it binds ONLY native `edit`/`write` (the sole tools that reach
+      // step 5). A configured extraTools match returns HERE with no per-file bookkeeping — the hook
+      // keeps no per-file accounting for MCP writes. Therefore a *write-capable* extraTool must be
+      // DENIED, not budgeted: that denial is the `isImmutableDeny` capability floor (step 3), which
+      // covers the serena-write family and the shell/exec/dispatch classes and wins over any
+      // extraTools config. So allow-listing a write-capable MCP tool here cannot smuggle unbudgeted
+      // writes past step 5 — it is refused upstream at step 3.
       if (!CORE_BUILTINS.has(raw)) {
         if (extraPatterns.some((p) => matchesExtraToolsPattern(p, denyKey))) {
           return // allowed MCP/extra tool — no edit-budget bookkeeping
@@ -152,7 +166,24 @@ export function makeStribogToolHook(
       // (5) Edit-budget enforcement for edit/write (only edit/write reach this point).
       {
         const filePath = output.args?.filePath
-        if (typeof filePath !== "string" || !isAbsolute(filePath)) return // fail-open: missing/relative
+        // Fail-CLOSED: a native edit/write whose filePath is missing or non-absolute cannot be
+        // scope-budgeted (the budget set keys on resolved absolute paths), so REFUSE it rather
+        // than letting it through unaccounted. We have no evidence opencode emits relative paths
+        // here (the only other producer resolves absolute), so this is a theoretical-reachability
+        // floor — but it must deny, not pass. CWE-117: state the failure by TYPE only; never echo
+        // the raw filePath value (it may carry control bytes). The SCOPE_VIOLATION marker is exact
+        // so the outer catch re-throws it past the internal-error guard.
+        if (typeof filePath !== "string" || !isAbsolute(filePath)) {
+          const kind =
+            typeof filePath === "string"
+              ? "relative"
+              : `absent (${typeof filePath})`
+          throw new Error(
+            `${SCOPE_VIOLATION}: edit/write refused — filePath must be an absolute path but was ` +
+              `${kind}; a non-absolute path cannot be bound to the edit budget. This task exceeds ` +
+              "Stribog's scope. Return the ESCALATE result now.",
+          )
+        }
         const path = resolve(filePath)
         const set = pathsFor(input.sessionID)
         if (!set.has(path) && set.size >= STRIBOG_EDIT_BUDGET) {

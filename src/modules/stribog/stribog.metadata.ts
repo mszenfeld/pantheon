@@ -1,9 +1,20 @@
 import type { SpecialistInfo } from "../agent-registry/agent-metadata.js"
-import { DISPATCH_TOOL_NAMES } from "../coordinator/dispatch-tool-names.js"
-
-/** Canonical agent key — centralised so the literal "stribog" is not duplicated
- *  across registration, config injection, tests, and docs (mirrors TRIGLAV_AGENT_KEY). */
-export const STRIBOG_AGENT_KEY = "stribog" as const
+// The extraTools / immutable-deny CONTRACT lives in a neutral shared leaf
+// (`_shared/stribog-extra-tools-contract.ts`) so the pure config layer can depend
+// on it without importing this feature module (ARCH-001 — inverted DIP). We
+// re-export every contract symbol below so existing consumers keep importing them
+// from `stribog.metadata.js` unchanged; `STRIBOG_AGENT_KEY` is also imported into
+// local scope because `stribogSpecialistInfo` references it directly (a re-exported
+// binding is not in local scope).
+import { STRIBOG_AGENT_KEY } from "../_shared/stribog-extra-tools-contract.js"
+export {
+  STRIBOG_AGENT_KEY,
+  IMMUTABLE_DENY_NAMED,
+  IMMUTABLE_DENY_PATTERNS,
+  isImmutableDeny,
+  validateExtraToolsPattern,
+  matchesExtraToolsPattern,
+} from "../_shared/stribog-extra-tools-contract.js"
 
 /** Default model. Stribog is a doer, so it pins an explicit default (unlike
  *  Triglav, which inherits the session default). `openai/gpt-5.4` won the
@@ -54,91 +65,6 @@ export const STRIBOG_DENIED_TOOLS: Readonly<Record<string, false>> = {
   todowrite: false,
   webfetch: false,
   websearch: false,
-}
-
-/** Immutable deny — capability-aware, no config can re-enable. Named ids: minter + leaf-dispatch family.
- *  Invariant (locked by metadata.test.ts): IMMUTABLE_DENY_NAMED ⊆ keys(STRIBOG_DENIED_TOOLS). */
-export const IMMUTABLE_DENY_NAMED: ReadonlySet<string> = new Set([
-  "execute_recipe",
-  "task", // opencode-native leaf dispatch; NOT in DISPATCH_TOOL_NAMES, so explicit
-  ...DISPATCH_TOOL_NAMES,
-])
-
-/** Capability-class deny patterns (segment-anchored; matched against the normalized lowercase id).
- *  Prefix/server-key agnostic so serena_*, serena2_*, etc. are all covered.
- *
- *  NOTE on the mutation-verb pattern: it denies code/state writes (serena_write_memory,
- *  serena_replace_symbol_body, …). Being server-agnostic, it ALSO denies a data-MCP's structured
- *  row-mutation tools (supabase_insert_rows, supabase_delete_rows, …). That is intended: the
- *  supported DB-fixture mutation path is `supabase_execute_sql` (a SQL string — `execute` is
- *  deliberately NOT a mutation verb, so it passes). Grant `supabase_execute_sql` (exact, or via the
- *  `supabase_*` glob) — not the structured verb-named write tools. Over-denial is the safe failure
- *  mode for a security floor; the false-negative direction (letting a shell/code-write through) is not. */
-export const IMMUTABLE_DENY_PATTERNS: ReadonlyArray<RegExp> = [
-  /(^|_)execute_shell(_command)?$/i,
-  /(^|_)shell(_command)?$/i,
-  /(^|_)dispatch(_|$)/i,
-  /(^|_)recipe(_|$)/i,
-  /^task(_|$)/i, // task_* and bare task
-  /(^|_)task$/i, // *_task — trailing leaf-dispatch segment (§3.4 `*_task`)
-  /(^|_)(write|create|replace|insert|rename|delete|move|edit)_/i, // mutation verbs — see NOTE above
-  /_(memory|symbol|symbol_body|content|text_file)$/i, // serena write-targets (`content` = serena_replace_content)
-]
-
-/** True if a normalized (lowercase) tool id is immutably denied (named OR capability-class). */
-export function isImmutableDeny(normalizedId: string): boolean {
-  return (
-    IMMUTABLE_DENY_NAMED.has(normalizedId) ||
-    IMMUTABLE_DENY_PATTERNS.some((rx) => rx.test(normalizedId))
-  )
-}
-
-/** Validate one extraTools entry. Returns {valid:true} or {valid:false,error}. */
-export function validateExtraToolsPattern(
-  pattern: string,
-): { valid: true } | { valid: false; error: string } {
-  if (!/^[a-z0-9_-]+\*?$/.test(pattern)) {
-    return {
-      valid: false,
-      error: "must be lowercase alnum/_/-, optional single trailing *",
-    }
-  }
-  if (pattern === "*") return { valid: false, error: "bare * not allowed" }
-  // Exact id: reject if statically denied (named OR capability-class), so config-load agrees with
-  // the runtime hook floor — no silent config-pass-then-runtime-deny (e.g. `supabase_delete_rows`).
-  if (!pattern.endsWith("*") && isImmutableDeny(pattern)) {
-    return { valid: false, error: `denied id: ${pattern}` }
-  }
-  if (pattern.endsWith("*")) {
-    const prefix = pattern.slice(0, -1)
-    // Glob: reject only statically-provable collisions. Broad globs (serena_*) are accepted here
-    // per §3.5; their dangerous children are denied at runtime by isImmutableDeny.
-    for (const deniedId of IMMUTABLE_DENY_NAMED) {
-      if (deniedId.startsWith(prefix)) {
-        return {
-          valid: false,
-          error: `glob ${pattern} would cover denied id ${deniedId}`,
-        }
-      }
-    }
-    if (IMMUTABLE_DENY_PATTERNS.some((rx) => rx.test(prefix))) {
-      return {
-        valid: false,
-        error: `glob ${pattern} prefix matches a denied capability class`,
-      }
-    }
-  }
-  return { valid: true }
-}
-
-/** Match a validated pattern (glob or exact) against a normalized id. */
-export function matchesExtraToolsPattern(
-  pattern: string,
-  normalizedId: string,
-): boolean {
-  return pattern.endsWith("*")
-    ? normalizedId.startsWith(pattern.slice(0, -1))
-    : normalizedId === pattern
 }
 
 export const stribogSpecialistInfo: SpecialistInfo = {

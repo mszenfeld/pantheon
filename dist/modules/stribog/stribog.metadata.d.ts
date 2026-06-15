@@ -1,8 +1,6 @@
 import { SpecialistInfo } from '../agent-registry/agent-metadata.js';
+export { IMMUTABLE_DENY_NAMED, IMMUTABLE_DENY_PATTERNS, STRIBOG_AGENT_KEY, isImmutableDeny, matchesExtraToolsPattern, validateExtraToolsPattern } from '../_shared/stribog-extra-tools-contract.js';
 
-/** Canonical agent key — centralised so the literal "stribog" is not duplicated
- *  across registration, config injection, tests, and docs (mirrors TRIGLAV_AGENT_KEY). */
-declare const STRIBOG_AGENT_KEY: "stribog";
 /** Default model. Stribog is a doer, so it pins an explicit default (unlike
  *  Triglav, which inherits the session default). `openai/gpt-5.4` won the
  *  2026-06-10 four-round eval (docs/eval/scenarios/stribog/): the cheapest model
@@ -31,31 +29,6 @@ declare const CORE_BUILTINS: ReadonlySet<string>;
  *  the load-bearing enforcement. Kept as declared defense-in-depth and to document intent
  *  (no execute_recipe → minter != actuator; no task/dispatch → leaf). */
 declare const STRIBOG_DENIED_TOOLS: Readonly<Record<string, false>>;
-/** Immutable deny — capability-aware, no config can re-enable. Named ids: minter + leaf-dispatch family.
- *  Invariant (locked by metadata.test.ts): IMMUTABLE_DENY_NAMED ⊆ keys(STRIBOG_DENIED_TOOLS). */
-declare const IMMUTABLE_DENY_NAMED: ReadonlySet<string>;
-/** Capability-class deny patterns (segment-anchored; matched against the normalized lowercase id).
- *  Prefix/server-key agnostic so serena_*, serena2_*, etc. are all covered.
- *
- *  NOTE on the mutation-verb pattern: it denies code/state writes (serena_write_memory,
- *  serena_replace_symbol_body, …). Being server-agnostic, it ALSO denies a data-MCP's structured
- *  row-mutation tools (supabase_insert_rows, supabase_delete_rows, …). That is intended: the
- *  supported DB-fixture mutation path is `supabase_execute_sql` (a SQL string — `execute` is
- *  deliberately NOT a mutation verb, so it passes). Grant `supabase_execute_sql` (exact, or via the
- *  `supabase_*` glob) — not the structured verb-named write tools. Over-denial is the safe failure
- *  mode for a security floor; the false-negative direction (letting a shell/code-write through) is not. */
-declare const IMMUTABLE_DENY_PATTERNS: ReadonlyArray<RegExp>;
-/** True if a normalized (lowercase) tool id is immutably denied (named OR capability-class). */
-declare function isImmutableDeny(normalizedId: string): boolean;
-/** Validate one extraTools entry. Returns {valid:true} or {valid:false,error}. */
-declare function validateExtraToolsPattern(pattern: string): {
-    valid: true;
-} | {
-    valid: false;
-    error: string;
-};
-/** Match a validated pattern (glob or exact) against a normalized id. */
-declare function matchesExtraToolsPattern(pattern: string, normalizedId: string): boolean;
 declare const stribogSpecialistInfo: SpecialistInfo;
 
-export { CORE_BUILTINS, DEFAULT_STRIBOG_MODEL, IMMUTABLE_DENY_NAMED, IMMUTABLE_DENY_PATTERNS, STRIBOG_AGENT_KEY, STRIBOG_DENIED_TOOLS, STRIBOG_DESCRIPTION, STRIBOG_EDIT_BUDGET, isImmutableDeny, matchesExtraToolsPattern, stribogSpecialistInfo, validateExtraToolsPattern };
+export { CORE_BUILTINS, DEFAULT_STRIBOG_MODEL, STRIBOG_DENIED_TOOLS, STRIBOG_DESCRIPTION, STRIBOG_EDIT_BUDGET, stribogSpecialistInfo };

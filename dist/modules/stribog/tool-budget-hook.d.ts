@@ -31,15 +31,20 @@ interface StribogToolHookHandle {
  * Build the `tool.execute.before` handler enforcing, for a session positively attributed as
  * `stribog`: (1) the tool-name allow-list — CORE_BUILTINS plus any config-granted extraTools
  * pattern, with the immutable capability-deny set winning over everything — and (2) the edit
- * budget (at most STRIBOG_EDIT_BUDGET distinct files via edit/write).
+ * budget (at most STRIBOG_EDIT_BUDGET distinct files via edit/write). The budget binds ONLY native
+ * edit/write; a native edit/write whose filePath is missing or non-absolute is REFUSED (fail-closed)
+ * since it cannot be keyed into the per-file budget. Write-capable extraTools are not budgeted — they
+ * are denied upstream by the isImmutableDeny capability floor (step 3), never reaching the budget.
  *
- * `extraPatterns` defaults to `[]` (strict: CORE_BUILTINS only). It is populated from
- * `agents.stribog.extraTools` by the plugin wiring in `index.ts`; until that wiring lands the
- * extraTools allow-branch is inert and the boundary stays strict (fail-safe).
+ * `extraPatterns` defaults to `[]` (strict: CORE_BUILTINS only). The plugin wiring in `index.ts`
+ * reads `agents.stribog.extraTools` and passes it in, so when that key is unconfigured the list is
+ * empty and the extraTools allow-branch is a no-op — the boundary stays strict (fail-safe).
  *
- * Fail-open by construction: non-stribog/unknown sessions and any internal/attribution error
- * pass the call through. Only the two intended denials throw (their markers re-thrown past the
- * internal-error guard so they reach the model as a tool-error part).
+ * Fail-open by construction for the ATTRIBUTION axis: non-stribog/unknown sessions and any
+ * internal/attribution error pass the call through. Only the intended denials throw — the two
+ * TOOL_DENIED branches (immutable capability-deny; outside-allow-list) and the SCOPE_VIOLATION
+ * branch (edit budget exhausted OR a non-absolute edit/write filePath) — their markers re-thrown
+ * past the internal-error guard so they reach the model as a tool-error part.
  *
  * ORDER IS LOAD-BEARING (§3.3). The handler:
  *   (1) Pre-filters the 6 non-edit core builtins WITHOUT attribution (CORE_BUILTINS-only — adding
@@ -51,7 +56,8 @@ interface StribogToolHookHandle {
  *       session, or during its own attribution-unresolved window, is never denied here.
  *   (4) Allows core builtins (edit/write fall through to the budget; the rest already returned at
  *       step 1) or a configured extraPattern match; otherwise denies.
- *   (5) Enforces the edit budget for edit/write.
+ *   (5) Enforces the edit budget for edit/write — and REFUSES (fail-closed) a native edit/write
+ *       whose filePath is missing/non-absolute, since such a call cannot be bound to the budget.
  *
  * RAW vs LOWERCASE split: CORE_BUILTINS membership and the edit/write budget are matched against
  * the RAW runtime id; a lowercased `denyKey` is used ONLY for isImmutableDeny + extraPattern

@@ -103,6 +103,20 @@ export const AppVerkStribogPlugin: Plugin = async ({ client }) => {
       )
     },
     "tool.execute.before": hook,
+    // NO `tool.execute.after` — this is a DELIBERATE exclusion, not an oversight.
+    // The hook above is an allow/deny gate on tool *invocation*; it does not (and
+    // is not meant to) transform or scrub tool *results*. Stribog DB-tool results
+    // (e.g. a granted `supabase_execute_sql`) are returned to model context
+    // VERBATIM — only `zmora-*` results pass the QA stderr scrubber
+    // (`scrubSecrets` in src/modules/qa/scrubber.ts), which protects zmora, not
+    // stribog. The compensating control is therefore a read-restricted,
+    // least-privilege DB role on the configured MCP connection — a REQUIRED
+    // operator precondition, not optional hardening (spec §3.6 "Least-privilege
+    // is a hard precondition"; see docs/light-execution.md "accepted trust
+    // assumption"). A Stribog result-scrubber / column-denylist is a tracked,
+    // forward-looking follow-up — intentionally out of scope here because a
+    // half-complete scrubber on a security boundary is worse than a documented,
+    // enforced-by-the-DB-role precondition.
     event: async ({ event }) => {
       if (event.type === "session.deleted") {
         const deletedID = event.properties?.info?.id

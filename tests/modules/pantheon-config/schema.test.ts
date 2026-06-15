@@ -379,7 +379,12 @@ describe("validateConfigFile – extraTools", () => {
 
   it("emits diagnostic/warning when non-stribog agent uses extraTools", () => {
     const result = validateConfigFile({
-      agents: { perun: { model: "anthropic/claude-opus-4-7", extraTools: ["supabase_*"] } },
+      agents: {
+        perun: {
+          model: "anthropic/claude-opus-4-7",
+          extraTools: ["supabase_*"],
+        },
+      },
     })
     // extraTools on non-stribog should be warned about
     expect(
@@ -417,5 +422,22 @@ describe("validateConfigFile – extraTools", () => {
       extraTools: ["supabase_execute_sql"],
     })
     expect(result.errors).toHaveLength(1)
+  })
+
+  // §3.5 LOAD-BEARING: an invalid model MUST NEVER be stored (CWE-117), yet a
+  // valid extraTools sibling must still survive. This is the exact invariant
+  // the now-removed early-store + `continue` used to guarantee in the
+  // invalid-model branch; the unified store block must reproduce it.
+  it("stores ONLY extraTools (no model key) when the model is invalid (CWE-117 invariant)", () => {
+    const result = validateConfigFile({
+      agents: {
+        stribog: { model: "no-slash-here", extraTools: ["supabase_*"] },
+      },
+    })
+    expect(result.config.agents.stribog).toEqual({ extraTools: ["supabase_*"] })
+    expect(result.config.agents.stribog).not.toHaveProperty("model")
+    expect(
+      result.errors.some((e) => /invalid model "no-slash-here"/.test(e)),
+    ).toBe(true)
   })
 })
