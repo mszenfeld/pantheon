@@ -93,6 +93,85 @@ describe("stribog tool-budget hook", () => {
     ).rejects.toThrow(/STRIBOG_TOOL_DENIED/)
   })
 
+  it("denies capital/cased non-builtin ids whose lowercase form is immutably denied", async () => {
+    // Raw id is not in CORE_BUILTINS and not edit/write → not pre-filtered; the lowercased
+    // denyKey is caught by isImmutableDeny. Both the named ids and a capability-class id.
+    const h = hook(STRIBOG)
+    for (const t of ["Execute_Recipe", "TASK", "serena_replace_symbol_body"]) {
+      await expect(h(input(t), out())).rejects.toThrow(/STRIBOG_TOOL_DENIED/)
+    }
+  })
+
+  it("gates the immutable-deny throw behind attribution (legit for non-stribog callers)", async () => {
+    // execute_recipe is legitimate for zmora-setup and dispatch_* for Perun/Veles. The deny
+    // must NOT fire before attribution resolves to stribog — so a non-stribog session, and an
+    // unresolved one, both pass an otherwise-denied id (fail-open).
+    await expect(
+      hook("Perun - Coordinator")(input("execute_recipe"), out()),
+    ).resolves.toBeUndefined()
+    await expect(
+      hook(undefined)(input("serena_replace_symbol_body"), out()),
+    ).resolves.toBeUndefined()
+  })
+
+  it("does not attribute the 6 core builtins but does attribute pattern-candidates", async () => {
+    // Pre-filter is CORE_BUILTINS-only: read/glob/grep/bash skip resolveAgent; a would-be
+    // extraTools candidate (supabase_execute_sql) must reach attribution.
+    let calls = 0
+    const { hook: h } = makeStribogToolHook({
+      resolveAgent: async () => {
+        calls++
+        return STRIBOG
+      },
+    })
+    for (const t of ["read", "glob", "grep", "bash"]) {
+      await expect(h(input(t), out())).resolves.toBeUndefined()
+    }
+    expect(calls).toBe(0)
+    await expect(h(input("supabase_execute_sql"), out())).rejects.toThrow(
+      /STRIBOG_TOOL_DENIED/,
+    )
+    expect(calls).toBe(1)
+  })
+
+  it("allows a configured extraTools pattern for stribog (no edit budget consumed)", async () => {
+    const { hook: h } = makeStribogToolHook({
+      resolveAgent: async () => STRIBOG,
+      extraPatterns: ["supabase_*"],
+    })
+    await expect(
+      h(input("supabase_execute_sql"), out()),
+    ).resolves.toBeUndefined()
+    // Same trust class as bash → no edit-budget bookkeeping: exhaust 2 real edit files,
+    // then the extra tool still passes (it never counted against the budget).
+    await h(input("write"), out("/repo/a.ts"))
+    await h(input("edit"), out("/repo/b.ts"))
+    await expect(
+      h(input("supabase_execute_sql"), out()),
+    ).resolves.toBeUndefined()
+  })
+
+  it("denies an id outside the allow-list AND the configured extraTools", async () => {
+    const { hook: h } = makeStribogToolHook({
+      resolveAgent: async () => STRIBOG,
+      extraPatterns: ["supabase_*"],
+    })
+    await expect(h(input("context7_resolve"), out())).rejects.toThrow(
+      /STRIBOG_TOOL_DENIED/,
+    )
+  })
+
+  it("lets immutable-deny win over even a permissive extraTools pattern", async () => {
+    // A `*`-equivalent broad pattern cannot re-enable a capability-class denial.
+    const { hook: h } = makeStribogToolHook({
+      resolveAgent: async () => STRIBOG,
+      extraPatterns: ["supabase_*", "execute_*"],
+    })
+    await expect(h(input("execute_recipe"), out())).rejects.toThrow(
+      /STRIBOG_TOOL_DENIED/,
+    )
+  })
+
   it("allows up to the budget of distinct files, then denies the next", async () => {
     const h = hook(STRIBOG)
     await expect(h(input("write"), out("/repo/a.ts"))).resolves.toBeUndefined()
