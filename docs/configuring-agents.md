@@ -104,15 +104,95 @@ So if you set `default_agent` to an agent that is not a **visible primary** (a h
 {
   "agents": {
     [agentName: string]: {
-      "model": string  // "<providerID>/<modelID>", e.g. "anthropic/claude-opus-4-7"
+      "model"?:      string,    // "<providerID>/<modelID>", e.g. "anthropic/claude-opus-4-7"
+      "extraTools"?: string[]   // Stribog only — see "Configuring Stribog extraTools" below
     }
   }
 }
 ```
 
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `model` | `string` | No | `<providerID>/<modelID>` — the model to use for this agent. Omit to inherit the session default (or, for Stribog, its eval-picked default). |
+| `extraTools` | `string[]` | No | Stribog only. Additional tool ids or trailing-`*` globs to grant. Ignored on all other agents (a warning is emitted). |
+
 Model strings follow OpenCode's native convention: `<providerID>/<modelID>`. Aggregator providers like OpenRouter use a three-segment form (`openrouter/openai/gpt-5.5`), and that is accepted too. The same value you would put in `opencode.json` `agent.<name>.model`.
 
 JSONC support: comments (`//` and `/* */`) and trailing commas are allowed.
+
+## Configuring Stribog `extraTools`
+
+`agents.stribog.extraTools` is an optional `string[]` that grants Stribog access to additional tools beyond its default allow-list (`read`, `glob`, `grep`, `edit`, `write`, `bash`). It applies only to the `stribog` agent; the field is ignored (with a warning) on all others.
+
+### Syntax
+
+Each entry is either an **exact lowercase tool id** or a **trailing-`*` glob**:
+
+```jsonc
+{
+  "agents": {
+    "stribog": {
+      "extraTools": [
+        "supabase_execute_sql",   // exact id
+        "supabase_*"              // trailing-glob: any tool whose id starts with "supabase_"
+      ]
+    }
+  }
+}
+```
+
+Tool ids follow MCP's flattened convention: `<serverKey>_<toolName>`, where dashes in the server key are preserved and a single `_` is inserted as the join. All ids and glob patterns must be lowercase alphanumeric with `_` and `-`; glob entries additionally end with `*`. Malformed entries are rejected at config-load with a diagnostic in the OpenCode console.
+
+### Default: `[]`
+
+When `extraTools` is absent or empty, Stribog's allowed set is exactly `{read, glob, grep, edit, write, bash}` — the same boundary as before this feature existed. No behavior changes unless you add entries.
+
+### The immutable capability guardrail
+
+The **`isImmutableDeny` guardrail** in the tool-budget hook always wins, regardless of how broad your `extraTools` config is. It permanently denies these capability classes for Stribog:
+
+| Capability class | Examples |
+|---|---|
+| Secret-minting | `execute_recipe` |
+| Leaf-dispatch | `task`, `dispatch_*`, `*_task` |
+| Shell / exec | `*_execute_shell`, `*_shell_command` |
+| Code / state writes | `serena_write_memory`, `serena_replace_symbol_body`, `serena_replace_content`, `serena_create_text_file` |
+
+No `extraTools` entry — exact or glob — can re-enable any of these. Attempting to grant an exact denied id (e.g. `"execute_recipe"`) is rejected at config-load. A broad glob (e.g. `"serena_*"`) is accepted at load but its denied children are refused at runtime by the hook.
+
+### Glob scoping warning
+
+Scope globs to a **single, trusted data-MCP namespace** (e.g. `supabase_*` for a Supabase MCP server). A broad glob like `serena_*` nominally covers serena's write and shell tools; those specific ids are denied at runtime by the immutable guardrail, but the pattern still grants every other serena tool to Stribog. Prefer exact ids when the task is known; use a prefix glob only when the tool set for a given MCP server is stable and you trust the server.
+
+### Preconditions when granting a database MCP tool
+
+When `extraTools` gives Stribog a database MCP (e.g. `supabase_execute_sql`), Stribog gains structured read/write access to whatever the connection reaches — including remote, shared, or multi-tenant databases and secret-bearing tables. Two preconditions are mandatory:
+
+1. **The MCP must point at the local stack the run targets.** Do not configure a shared or production endpoint.
+2. **Use a least-privilege database role.** The role should be scoped to the operations the task requires (e.g. read-only, or restricted to specific tables).
+
+The `isImmutableDeny` guardrail protects harness invariants (no minting, dispatch, shell, or code-write). It does **not** constrain the contents of any datastore the configured tools reach. Least-privilege is your responsibility.
+
+### Whole-object merge footgun
+
+Per-agent config entries are merged **whole-object**: a closer `pantheon.json` that sets `stribog.extraTools` replaces the user-global `stribog` entry entirely, including any `stribog.model` you set at the user level.
+
+Example:
+
+```jsonc
+// ~/.config/opencode/pantheon.json (user-global)
+{ "agents": { "stribog": { "model": "openai/gpt-5.4" } } }
+
+// /my-project/.opencode/pantheon.json (project-local)
+{ "agents": { "stribog": { "extraTools": ["supabase_execute_sql"] } } }
+```
+
+Effective config inside `/my-project`: `{ "extraTools": ["supabase_execute_sql"] }` — the `model` from the user-global file is **gone**. To keep both, repeat them in the closer file:
+
+```jsonc
+// /my-project/.opencode/pantheon.json
+{ "agents": { "stribog": { "model": "openai/gpt-5.4", "extraTools": ["supabase_execute_sql"] } } }
+```
 
 ## Precedence vs. `opencode.json`
 

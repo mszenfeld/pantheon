@@ -16,16 +16,20 @@ A task that fails any check, or turns out non-trivial mid-way (it spreads across
 
 ## Security model — the tool-budget hook is the boundary
 
-The runtime security boundary is the **`tool.execute.before` hook** in `src/modules/stribog/tool-budget-hook.ts`. A 2026-06-10 live probe established that opencode 1.15.10 does **not** enforce the prompt frontmatter `allowed-tools:` list, **nor** a `config.agent.stribog.tools` deny-map — both are inert (a non-listed tool still executed). So the allow-list in `allowed-tools.ts` is a **declaration** (rendered into the prompt, and the source the hook's allowed set is kept in sync with), not the gate.
+The runtime security boundary is the **`tool.execute.before` hook** in `src/modules/stribog/tool-budget-hook.ts`.
+
+**opencode 1.17.3 finding (binary-verified):** `config.agent.<x>.tools` in `opencode.json` is honored by the runtime but operates as **default-allow**: a tool absent from the configured list still executes. As a result, an `extraTools` id not explicitly listed in `config.agent.tools` is **not pre-denied** by the OpenCode runtime — the hook remains the authoritative gate. The allow-list in `allowed-tools.ts` is a **declaration** (rendered into the prompt, and the source the hook's allowed set is kept in sync with), not the enforcement point.
 
 For a session positively attributed as `stribog` (via `getSessionAgentCached`), the hook enforces two limits and **fails open** for any other/unknown session:
 
-- **Tool-name allow-list.** Any tool whose lowercase runtime id is outside `{read, glob, grep, edit, write, bash}` is refused with `STRIBOG_TOOL_DENIED`. This is what makes the exclusions real:
-  - **`execute_recipe` / `serena-write` denied** → Stribog cannot value-hide-mint secrets (minter ≠ actuator; minting stays with `zmora-setup` — see [the invariant](#the-minter--actuator-invariant) below).
-  - **`task` / dispatch denied** → Stribog is a leaf; it never fans out.
+- **Tool-name allow-list with an immutable capability-deny layer.** For a confirmed stribog session the hook runs in three sub-steps:
+  1. **Immutable capability-deny (`isImmutableDeny`) wins first** — regardless of `extraTools` config. This denies the following capability classes by name or segment-anchored regex pattern: secret-minting (`execute_recipe`), leaf-dispatch (`task`, `dispatch_*`, `*_task`), shell/exec (`*_execute_shell`, `*_shell_command`), and code/state writes (`serena_write_memory`, `serena_replace_symbol_body`, `serena_replace_content`, `serena_create_text_file`, etc.). **No config can re-enable these.** This is what makes `execute_recipe` and `serena`-write-family denials a *pattern-enforced guarantee* rather than the incidental result of a closed allow-list.
+  2. Core builtins (`read`, `glob`, `grep`, `edit`, `write`, `bash`) are allowed and fall through to the edit budget.
+  3. Any tool matching a configured `extraTools` pattern (and not immutably denied) is allowed in the same trust class as `bash`.
+  - Any tool not covered by the above is refused with `STRIBOG_TOOL_DENIED`.
 - **Edit budget.** At most `STRIBOG_EDIT_BUDGET` (2) distinct files via `edit`/`write`; a third is refused with `STRIBOG_SCOPE_VIOLATION`.
 
-The declared list grants three groups: structured tools (`Read`/`Glob`/`Grep`/`Edit`/`Write`), actuator Bash verbs (`docker`/`docker compose`/`make`/`npm`/`pnpm`/`bun`/`uv`/`curl`), and read-only git (`log`/`blame`/`status`/`diff`).
+The declared list grants three groups: structured tools (`Read`/`Glob`/`Grep`/`Edit`/`Write`), actuator Bash verbs (`docker`/`docker compose`/`make`/`npm`/`pnpm`/`bun`/`uv`/`curl`), and read-only git (`log`/`blame`/`status`/`diff`). MCP tool ids take the form `<serverKey>_<toolName>` with dashes in the server key preserved and a single `_` inserted as the join. This is the flattened id space both `isImmutableDeny` and `extraTools` patterns operate on.
 
 > **Bash is allowed at the tool-name level only — the hook does not inspect sub-commands.** The `Bash(...)`-verb scoping in the declared list is therefore *not* enforced: at runtime Stribog's `bash` is effectively a full host shell (only `git commit` is globally blocked, by the commit plugin). So `rm`, `git reset`, `git revert`, etc. are **not** blocked. This is the accepted host-env trust boundary (see below): `make`/`npm`/`docker` already run repo-controlled code with the operator's env, so program-name matching is not the containment mechanism. Restricting bash verbs is a documented follow-up. Edit recovery is therefore **not** `git revert`/`reset` from within Stribog — it is the Perun scratch-ref snapshot (a Phase-2 component; see the [Experimental note](#experimental--phase-1-note)). `interactive_bash` is not ported in v1; long-running services run **detached** via plain `Bash`.
 
@@ -35,10 +39,10 @@ This mirrors the in-code note at the top of `src/modules/stribog/allowed-tools.t
 
 Secrets stay with `zmora-setup`; they are never co-resident with the actuator.
 
-- The tool-budget hook **denies `execute_recipe`** for a stribog session (→ `STRIBOG_TOOL_DENIED`), so Stribog has no path to the minting machinery. (This is hook-enforced, not a property of an inert allow-list.)
+- The tool-budget hook **denies `execute_recipe`** for a stribog session (→ `STRIBOG_TOOL_DENIED`). `execute_recipe` is in `IMMUTABLE_DENY_NAMED` — the denial is pattern-enforced and no `extraTools` config can re-enable it. (This is defense-in-depth: `execute_recipe` has its own caller-gate; the invariant does not depend on the hook's timing alone.)
 - The QA module injects minted binding values into a session's shell env only for sessions whose key matches the `zmora-` binding gate. **Stribog's agent key is `stribog`** — it cannot match that gate, so no minted QA binding is ever injected into a Stribog session. `zmora-setup` is unchanged and not retired; the QA mechanism (`VARIANTS` / `SETUP_TOOLS` / the `execute_recipe` gate / `BindingsStore` / the binding-injection hook) is untouched.
 
-The result is that the two roles stay cleanly separated: `zmora-setup` *mints and hides* secret values; Stribog *acts* and never sees them through any value-hiding channel. Any residual secret exposure is only the **same filesystem / host-env surface any operator-privileged coding agent has** (reading `.env`, `~/.aws`, etc.) — owned by the trust assumption below, not a value-hiding regression.
+The result is that the two roles stay cleanly separated: `zmora-setup` *mints and hides* secret values; Stribog *acts* and never sees them through any value-hiding channel.
 
 ## The accepted trust assumption
 
@@ -46,6 +50,7 @@ Stribog runs in the **real working tree**; its edits are persistent and git-visi
 
 - **Bash runs repo-controlled code with the operator's env.** Stribog's `Bash` invokes `make` / `npm run` / `docker compose` / `uv` — i.e. **repo-controlled code** — with the **operator's full host env and credentials**. This is the same posture as any real coding agent. The `buildChildEnv` host-env stripping protects only the `execute_recipe` child (which Stribog does not have), **not** normal `Bash`. This is the accepted trust boundary for a real actuator with no OS sandbox.
 - **`curl` is the egress primitive.** `curl` is allow-listed because liveness verification needs it (polling a service until it answers). It is also, by the same token, an unrestricted network-egress primitive. With no OS sandbox, that egress capability is accepted as part of the host-env trust boundary above — it is not separately contained.
+- **MCP data tools and structured read/write reach.** When `extraTools` grants Stribog a database MCP tool (e.g. `supabase_execute_sql`), Stribog gains **structured read and write access to whatever the database connection reaches** — including remote, shared, or multi-tenant databases and secret-bearing tables such as `auth.users` or service-role credential rows. The secret or sensitive value enters via the **tool result the model sees**, and Stribog tool results are **not scrubbed** (only zmora stderr is). The `isImmutableDeny` guardrail protects harness invariants (no minting, no dispatch, no exec/shell, no code/state writes) — it does **not** constrain the contents of any datastore the configured tools can reach. Two hard preconditions follow from this: **the database MCP must point at the local stack the run targets** (not a shared or production endpoint), and **the database role must be least-privilege** (scoped to the operations the task requires).
 
 > This rationale is **ported here intentionally** so it survives the eventual deletion of the design spec under `docs/superpowers/` (a deletable working artefact). This doc is the durable home for the "why."
 
