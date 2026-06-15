@@ -39,11 +39,11 @@ export const CORE_BUILTINS: ReadonlySet<string> = new Set([
   "bash",
 ])
 
-/** Native opencode deny-map for `config.agent.stribog.tools`. NOTE: a live probe (2026-06-10)
- *  found `config.agent[x].tools` is INERT in opencode 1.15.10 — this map is declarative only;
- *  the tool-budget hook is the load-bearing enforcement. Kept so a future opencode fix yields
- *  free defense-in-depth, and to document intent (no execute_recipe → minter != actuator; no
- *  task → leaf). opencode is default-ALLOW, so denies are explicit opt-outs. */
+/** Native opencode deny-map for `config.agent.stribog.tools`. NOTE: a binary check on opencode
+ *  1.17.3 found `config.agent[x].tools` is honored but DEFAULT-ALLOW (a tool absent from the map
+ *  still executes) — so this map only bites as an explicit deny, and the tool-budget hook remains
+ *  the load-bearing enforcement. Kept as declared defense-in-depth and to document intent
+ *  (no execute_recipe → minter != actuator; no task/dispatch → leaf). */
 export const STRIBOG_DENIED_TOOLS: Readonly<Record<string, false>> = {
   task: false,
   execute_recipe: false,

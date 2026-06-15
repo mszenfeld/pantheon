@@ -58,10 +58,11 @@ export const AppVerkStribogPlugin: Plugin = async ({ client }) => {
       config.agent[STRIBOG_AGENT_KEY] = {
         description: stribogSpecialistInfo.description,
         mode: "subagent",
-        // DECLARATIVE only: a 2026-06-10 live probe found config.agent[x].tools is INERT in
-        // opencode 1.15.10 (a denied tool still executed). The tool-budget hook is the real
-        // boundary; this map documents intent (no execute_recipe → minter != actuator; no task
-        // → leaf) and yields free defense-in-depth if a future opencode honors it.
+        // DECLARATIVE intent: a binary check on opencode 1.17.3 found config.agent[x].tools is
+        // honored but DEFAULT-ALLOW (a tool absent from the map still executes), so this deny-map
+        // only bites as an explicit deny and is not load-bearing. The tool-budget hook is the real
+        // boundary; this map documents intent (no execute_recipe → minter != actuator; no
+        // task/dispatch → leaf) and yields defense-in-depth via its explicit denies.
         tools: { ...STRIBOG_DENIED_TOOLS },
         get prompt() {
           return buildStribogPrompt()

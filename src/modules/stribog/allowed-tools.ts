@@ -1,11 +1,13 @@
 // DECLARED allow-list for the Stribog light-execution agent, rendered into the agent's
-// prompt frontmatter (`allowed-tools:`). IMPORTANT: a 2026-06-10 live probe found this
-// frontmatter list AND the `config.agent.stribog.tools` deny-map are NOT enforced by
-// opencode 1.15.10 (a non-listed tool still executed). The REAL runtime boundary is the
-// `tool.execute.before` hook in `tool-budget-hook.ts`: for an attributed `stribog` session it
-// denies any tool outside {read,glob,grep,edit,write,bash} (→ STRIBOG_TOOL_DENIED) and caps
-// distinct edit/write files at STRIBOG_EDIT_BUDGET (→ STRIBOG_SCOPE_VIOLATION). This array is
-// the declaration the prompt + the hook's allowed set are kept in sync with — treat it as a
+// prompt frontmatter (`allowed-tools:`). IMPORTANT: the frontmatter list is NOT the enforcement
+// point. A binary check on opencode 1.17.3 found `config.agent.stribog.tools` is honored but
+// DEFAULT-ALLOW (a tool absent from the map still executes), so it does not gate non-listed
+// tools either. The REAL runtime boundary is the `tool.execute.before` hook in
+// `tool-budget-hook.ts`: for an attributed `stribog` session it allows the core builtins
+// {read,glob,grep,edit,write,bash} plus any configured `agents.stribog.extraTools` pattern,
+// denies the immutable capability set (isImmutableDeny) and everything else (→ STRIBOG_TOOL_DENIED),
+// and caps distinct edit/write files at STRIBOG_EDIT_BUDGET (→ STRIBOG_SCOPE_VIOLATION). This array is
+// the declaration the prompt + the hook's CORE_BUILTINS set are kept in sync with — treat it as a
 // declaration, NOT the gate. EXCLUSIONS the HOOK enforces (not "absent → uncallable"):
 //   - no `execute_recipe` / serena-write  → the hook denies it, so Stribog cannot
 //     value-hide-mint secrets (minter != actuator; that stays with zmora-setup). The QA
