@@ -172,6 +172,25 @@ describe("stribog tool-budget hook", () => {
     )
   })
 
+  it("defaults to a strict allow-list when no extraPatterns are configured", async () => {
+    // Production default (index.ts omits extraPatterns until wired): a would-be MCP tool is denied.
+    const { hook: h } = makeStribogToolHook({ resolveAgent: async () => STRIBOG })
+    await expect(h(input("supabase_execute_sql"), out())).rejects.toThrow(
+      /STRIBOG_TOOL_DENIED/,
+    )
+  })
+
+  it("lets immutable-deny win over an EXACT extraTools pattern of the same id", async () => {
+    // Even if a denied id is force-listed exactly, the runtime floor (isImmutableDeny) overrides it.
+    const { hook: h } = makeStribogToolHook({
+      resolveAgent: async () => STRIBOG,
+      extraPatterns: ["serena_replace_symbol_body"],
+    })
+    await expect(
+      h(input("serena_replace_symbol_body"), out()),
+    ).rejects.toThrow(/STRIBOG_TOOL_DENIED/)
+  })
+
   it("allows up to the budget of distinct files, then denies the next", async () => {
     const h = hook(STRIBOG)
     await expect(h(input("write"), out("/repo/a.ts"))).resolves.toBeUndefined()

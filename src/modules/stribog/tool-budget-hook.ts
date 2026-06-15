@@ -51,6 +51,10 @@ export interface StribogToolHookHandle {
  * pattern, with the immutable capability-deny set winning over everything — and (2) the edit
  * budget (at most STRIBOG_EDIT_BUDGET distinct files via edit/write).
  *
+ * `extraPatterns` defaults to `[]` (strict: CORE_BUILTINS only). It is populated from
+ * `agents.stribog.extraTools` by the plugin wiring in `index.ts`; until that wiring lands the
+ * extraTools allow-branch is inert and the boundary stays strict (fail-safe).
+ *
  * Fail-open by construction: non-stribog/unknown sessions and any internal/attribution error
  * pass the call through. Only the two intended denials throw (their markers re-thrown past the
  * internal-error guard so they reach the model as a tool-error part).
