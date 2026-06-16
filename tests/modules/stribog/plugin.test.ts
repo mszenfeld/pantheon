@@ -121,10 +121,10 @@ describe("AppVerkStribogPlugin", () => {
     } as never)
   })
 
-  // L3: when the openai provider the pinned default needs is absent, the default
+  // L3: when the opencode-go provider the pinned default needs is absent, the default
   // is skipped (stribog inherits the session default) AND a one-time warning toast
   // documents the dependency — the serena-gate pattern from plan/explore.
-  it("warns exactly once on session.created when the openai provider is absent", async () => {
+  it("warns exactly once on session.created when the opencode-go provider is absent", async () => {
     const showToast = vi.fn(async () => {})
     const hooks = await AppVerkStribogPlugin(toastInput(showToast))
     await hooks.config?.({ agent: {}, provider: {} } as never)
@@ -133,10 +133,10 @@ describe("AppVerkStribogPlugin", () => {
     expect(showToast).toHaveBeenCalledTimes(1)
   })
 
-  it("does not warn when the openai provider is configured", async () => {
+  it("does not warn when the opencode-go provider is configured", async () => {
     const showToast = vi.fn(async () => {})
     const hooks = await AppVerkStribogPlugin(toastInput(showToast))
-    await hooks.config?.({ agent: {}, provider: { openai: {} } } as never)
+    await hooks.config?.({ agent: {}, provider: { "opencode-go": {} } } as never)
     await hooks.event?.({ event: { type: "session.created" } } as never)
     expect(showToast).not.toHaveBeenCalled()
   })

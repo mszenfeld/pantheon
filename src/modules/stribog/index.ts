@@ -22,7 +22,7 @@ import {
 import { buildStribogPrompt } from "./prompt.js"
 import { makeStribogToolHook } from "./tool-budget-hook.js"
 
-/** Provider id the pinned default needs (`openai` for `openai/gpt-5.4`). */
+/** Provider id the pinned default needs (`opencode-go` for `opencode-go/kimi-k2.7-code`). */
 const DEFAULT_MODEL_PROVIDER = providerIdOf(DEFAULT_STRIBOG_MODEL)
 
 export const AppVerkStribogPlugin: Plugin = async ({ client }) => {
@@ -68,8 +68,8 @@ export const AppVerkStribogPlugin: Plugin = async ({ client }) => {
           return buildStribogPrompt()
         },
       }
-      // Stribog pins an explicit eval-picked default (`openai/gpt-5.4`) — it is a
-      // doer, not cheap retrieval — overridable via `agents.stribog.model`, and
+      // Stribog pins an explicit eval-picked default (`opencode-go/kimi-k2.7-code`)
+      // — a cost-efficient doer — overridable via `agents.stribog.model`, and
       // a user's opencode.json `agent.stribog.model` overrides even that. The
       // shared helper resolves user > override > default per the documented
       // precedence and registers the `stribog` slug for typo detection. The
@@ -77,10 +77,10 @@ export const AppVerkStribogPlugin: Plugin = async ({ client }) => {
       // src/modules/pantheon-config/schema.ts — so an invalid value is already
       // absent and falls through to the default.
       //
-      // L3: that default needs the `openai` provider. On a fresh install where
-      // OpenAI is absent (e.g. opencode-subscription / Anthropic-only), pinning
-      // it would yield a stribog whose dispatch fails at model resolution. So we
-      // only pass the default when the provider is configured; otherwise we pass
+      // L3: that default needs the `opencode-go` provider. On an install where
+      // opencode-go is absent, pinning it would yield a stribog whose dispatch
+      // fails at model resolution. So we only pass the default when the provider
+      // is configured; otherwise we pass
       // `undefined` and stribog inherits the session default (one-time toast
       // below documents the dependency). User opencode.json and pantheon.json
       // overrides take precedence over the default leg, so they still win even
