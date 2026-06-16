@@ -175,11 +175,11 @@ describe("isImmutableDeny — capability-aware deny set", () => {
     }
   })
 
-  // MAINT-002 — capability-floor ALLOW ceiling (the positive half of the corpus).
+  // capability-floor ALLOW ceiling (the positive half of the corpus).
   // The deny tests above pin what MUST be blocked; this pins what MUST stay allowed,
   // so the floor reads as a DELIBERATE allowlist boundary, not an accidental hole.
   // The danger is asymmetric coverage: a corpus that only enumerated denied ids could
-  // not tell "intentionally allowed" from "missed verb" — which is how the SEC-001 gap
+  // not tell "intentionally allowed" from "missed verb" — which is how the original gap
   // hid. Each entry here is a looks-mutating-but-benign id whose leading/non-final
   // segment is an UNLISTED (non-mutation) verb — get/read/list/execute/resolve — that
   // the floor passes ON PURPOSE. Adding any of these verbs to IMMUTABLE_DENY_PATTERNS
@@ -221,7 +221,7 @@ describe("isImmutableDeny — capability-aware deny set", () => {
   })
 
   it("denies the extended verb set as whole segments, order-agnostic (update/upsert/DDL/grant + verb-after-noun)", () => {
-    // SEC-003: the mutation-verb floor was extended (update/upsert/drop/truncate/
+    // the mutation-verb floor was extended (update/upsert/drop/truncate/
     // alter/grant) and made order-agnostic so a verb that is the TRAILING segment
     // (`supabase_rows_delete`) is caught, not only verb-prefixed ids. Whole-segment
     // anchoring still permits the SQL fixture path (`execute` is not a verb).
@@ -270,11 +270,11 @@ describe("validateExtraToolsPattern", () => {
       "serena_write_memory", // exact id caught by isImmutableDeny (mutation verb + memory suffix)
       "supabase_delete-rows", // kebab exact: dash-normalized in isImmutableDeny, so config-load rejects it too
       "serena_write-memory", // kebab exact: same dangerous tool, dash-form on the opencode wire
-      "supabase_update_rows", // SEC-003: `update` now a mutation verb → exact id rejected
-      "supabase_upsert_rows", // SEC-003: `upsert` now a mutation verb → exact id rejected
-      "supabase_rows_delete", // SEC-003: trailing-segment verb (order-agnostic) → rejected
-      "update_*", // SEC-003: glob prefix "update_" matches the extended mutation-verb class
-      "grant_*", // SEC-003: glob prefix "grant_" matches the extended mutation-verb class
+      "supabase_update_rows", // `update` now a mutation verb → exact id rejected
+      "supabase_upsert_rows", // `upsert` now a mutation verb → exact id rejected
+      "supabase_rows_delete", // trailing-segment verb (order-agnostic) → rejected
+      "update_*", // glob prefix "update_" matches the extended mutation-verb class
+      "grant_*", // glob prefix "grant_" matches the extended mutation-verb class
     ]
     for (const pattern of rejected) {
       expect(validateExtraToolsPattern(pattern).valid).toBe(false)

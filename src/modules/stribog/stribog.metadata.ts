@@ -1,7 +1,7 @@
 import type { SpecialistInfo } from "../agent-registry/agent-metadata.js"
 // The extraTools / immutable-deny CONTRACT lives in a neutral shared leaf
 // (`_shared/stribog-extra-tools-contract.ts`) so the pure config layer can depend
-// on it without importing this feature module (ARCH-001 — inverted DIP). We
+// on it without importing this feature module (an inverted DIP). We
 // re-export every contract symbol below so existing consumers keep importing them
 // from `stribog.metadata.js` unchanged; `STRIBOG_AGENT_KEY` is also imported into
 // local scope because `stribogSpecialistInfo` references it directly (a re-exported

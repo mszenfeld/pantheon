@@ -4,8 +4,8 @@
  * Extracted from `stribog/stribog.metadata.ts` so the load-time config layer
  * (`pantheon-config/schema.ts`) and the runtime tool hook
  * (`stribog/tool-budget-hook.ts`) depend on the SAME testable contract WITHOUT
- * the generic "pure" config layer importing the stribog feature module (ARCH-001
- * — inverted DIP). Mirrors `coordinator/dispatch-tool-names.ts`: a dependency-light
+ * the generic "pure" config layer importing the stribog feature module (an
+ * inverted DIP). Mirrors `coordinator/dispatch-tool-names.ts`: a dependency-light
  * leaf both sides can import.
  *
  * Dependency direction: this file imports ONLY `DISPATCH_TOOL_NAMES` from the

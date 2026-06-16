@@ -9,7 +9,7 @@
 import { neutralizeUntrustedOutput } from "../_shared/sanitize.js"
 // Pull the extraTools contract from the neutral shared leaf, NOT the stribog
 // feature module — the pure config layer must not depend on a feature module
-// (ARCH-001 — inverted DIP).
+// (an inverted DIP).
 import {
   STRIBOG_AGENT_KEY,
   validateExtraToolsPattern,

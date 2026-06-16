@@ -19,14 +19,14 @@ function info(name: string): SpecialistInfo {
 }
 
 /**
- * End-to-end proof of the ordering invariant (ARCH-002): a `registerAgentMetadata`
+ * End-to-end proof of the ordering invariant: a `registerAgentMetadata`
  * that runs AFTER the coordinator has built Perun's prompt must FAIL LOUD rather
  * than silently never reaching the cached prompt. This drives the REAL coordinator
  * `config` hook and the REAL `get prompt()` getter (which calls `getPerunPrompt()`,
  * the snapshot+cache path) instead of calling the builder directly — so it covers
  * the cache the unit tests bypass.
  */
-describe("ARCH-002: late registration after Perun prompt snapshot fails loud", () => {
+describe("late registration after Perun prompt snapshot fails loud", () => {
   beforeEach(() => clearAgentMetadataRegistry())
 
   it("throws when an agent registers after getPerunPrompt() has snapshotted the registry", async () => {
