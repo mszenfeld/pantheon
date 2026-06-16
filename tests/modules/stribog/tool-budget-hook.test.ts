@@ -395,7 +395,7 @@ describe("stribog serena toolset (accepted; single-file edits budgeted)", () => 
   // User decision 2026-06-16: serena is an ACCEPTED code-intelligence toolset for Stribog.
   // Allowed in full EXCEPT the shell escape and inherently multi-file edits; its single-file
   // edits are budgeted against the same 2-file limit as edit/write.
-  const bashlessOut = (relative_path) => ({ args: { relative_path } })
+  const bashlessOut = (relative_path: string) => ({ args: { relative_path } })
 
   it("allows serena read/navigation/memory tools", async () => {
     const h = hook(STRIBOG)
@@ -481,7 +481,7 @@ describe("stribog bash secret-generation tripwire (minter != actuator)", () => {
   // deliberately deferred item); secret GENERATION, however, is a hard security invariant the
   // actuator must not cross. This tripwire denies the natural secret-gen commands (defense-in-depth
   // behind the hardened prompt; not an adversarial sandbox). Attribution-gated to stribog.
-  const bashOut = (command) => ({ args: { command } })
+  const bashOut = (command: string) => ({ args: { command } })
   const SECRET_CMDS = [
     `mkdir -p config && node -e "console.log(require('crypto').randomBytes(32).toString('hex'))" > /tmp/s.txt`,
     `npm exec -- node -e "console.log(require('crypto').randomBytes(48).toString('base64url'))"`,
