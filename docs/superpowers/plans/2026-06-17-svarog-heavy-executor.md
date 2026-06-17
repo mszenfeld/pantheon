@@ -105,7 +105,7 @@ describe("svarogSpecialistInfo", () => {
     expect(DEFAULT_SVAROG_MODEL).toContain("/")
   })
 
-  it("carve-out matches the 7 serena editors but NOT memory-writes or shell", () => {
+  it("carve-out matches the 8 serena editors but NOT memory-writes or shell", () => {
     for (const id of [
       "serena_rename_symbol",
       "serena_safe_delete_symbol",

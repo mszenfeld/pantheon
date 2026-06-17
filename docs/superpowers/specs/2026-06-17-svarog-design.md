@@ -168,8 +168,8 @@ handler, **attribution-gated** (via the grandfathered `getSessionAgentCached`) a
 6. else → ALLOW.
 
 This reuses the shared deny set with zero duplication (no drift), and the carve-out (step 3) is the
-single point that re-enables exactly the 7 serena editors. A re-keyed hook test must assert a
-`svarog`-attributed session: ALLOWS the 7 editors + `get_diagnostics_for_file` + `edit`/`write`;
+single point that re-enables exactly the 8 serena editors. A re-keyed hook test must assert a
+`svarog`-attributed session: ALLOWS the 8 editors + `get_diagnostics_for_file` + `edit`/`write`;
 DENIES `question`, `execute_recipe`, `task`/dispatch, `*_execute_shell`, `write_memory`,
 `supabase_delete_rows`/`db_drop_table` (DB/DDL), and `SECRET_DENIED` for `openssl rand`/`node -e
 …randomBytes` — so a copy-paste that leaves the `STRIBOG_AGENT_KEY` gate (which silently fails open)
