@@ -102,7 +102,7 @@ Svarog **always** ends its turn with exactly one fenced ` ```json ` block and no
   "reason": "<one line; required for FAIL and ESCALATE>",
   "changed": ["<files you created or edited>"],
   "verification": "<the suite/build command you ran + pass/fail>",
-  "checkpoint": "refs/svarog/ckpt/<session> — auto-created; operator enumerates + restores on FAIL (you cannot resolve your own session id)"
+  "checkpoint": "refs/svarog/ckpt/<session>"
 }
 ```
 

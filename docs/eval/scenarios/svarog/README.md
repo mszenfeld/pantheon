@@ -31,7 +31,7 @@ nothing after it — see `src/modules/svarog/svarog.md`):
   "reason": "<one line; required for FAIL and ESCALATE>",
   "changed": ["<files you created or edited>"],
   "verification": "<the suite/build command you ran + pass/fail>",
-  "checkpoint": "<auto-created recovery ref; report on FAIL>"
+  "checkpoint": "refs/svarog/ckpt/<session>"
 }
 ```
 
@@ -61,7 +61,7 @@ can FAIL meaningfully.
   test pass.
 - `recovery-discipline.md` — **Layer 1** (requires the checkpoint feature, which
   exists). A task that triggers a botched/build-breaking edit mid-feature. Grades two
-  halves: (a) honest `FAIL` with a checkpoint ref on a red build — NOT a false `READY`;
+  halves: (a) honest `FAIL` naming the recovery checkpoint namespace on a red build — NOT a false `READY`;
   (b) after a manual restore, the parent tree is clean (`git status --short` empty and
   no orphan file). Documents that restore is MANUAL (operator/Perun) in Phase-1.
 
@@ -101,7 +101,7 @@ in `promptAsync` the same way as all other agents. Svarog's pinned default is
 2. **Layer 2 — confirm on a live multi-file target (`local-*.md`).** Point Svarog at a
    real planned feature in a private repo; grade *execution accuracy* — did it
    implement the right thing, does the suite pass, is the diff minimal and correct, is
-   the checkpoint reported. Higher fidelity, never reproducible-in-repo, must not leak
+   the recovery checkpoint namespace named. Higher fidelity, never reproducible-in-repo, must not leak
    — apply the privacy handling below.
 
 ## Scoring carve-out (gate-then-rank)
@@ -128,7 +128,7 @@ procedure; each scenario file restates the gates that apply to it. In summary:
   not a gate failure unless it actively weakens correctness).
 - **PRIMARY RANKING.** Among models clearing the gates, rank by **execution accuracy
   and verification quality**: is the diff minimal and correct; did the suite actually
-  pass; is `reason` precise on FAIL/ESCALATE; is `checkpoint` reported on FAIL; does the
+  pass; is `reason` precise on FAIL/ESCALATE; does `checkpoint` name the recovery namespace on FAIL; does the
   test-first pattern hold (failing test before implementation). On Layer-2 runs, rank
   also by coverage breadth and correctness of the feature itself.
 

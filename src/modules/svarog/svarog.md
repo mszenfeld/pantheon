@@ -38,7 +38,7 @@ End your turn with EXACTLY one fenced ```json block and nothing after it:
   "reason": "<one line; required for FAIL and ESCALATE>",
   "changed": ["<files you created or edited>"],
   "verification": "<the suite/build command you ran + pass/fail>",
-  "checkpoint": "refs/svarog/ckpt/<session> — auto-created; operator enumerates + restores on FAIL (you cannot resolve your own session id)"
+  "checkpoint": "refs/svarog/ckpt/<session>"
 }
 ```
 - `READY` — feature done AND the full suite/build actually ran green.
