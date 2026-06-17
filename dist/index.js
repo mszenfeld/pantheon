@@ -6,6 +6,7 @@ import { AppVerkSkillRegistryPlugin } from "../packages/skill-registry/dist/inde
 import { AppVerkQAPlugin } from "./modules/qa/index.js";
 import { AppVerkExplorePlugin } from "./modules/explore/index.js";
 import { AppVerkStribogPlugin } from "./modules/stribog/index.js";
+import { AppVerkSvarogPlugin } from "./modules/svarog/index.js";
 import { AppVerkPlanPlugin } from "./modules/plan/index.js";
 import { AppVerkSwiftDeveloperPlugin } from "../packages/swift-developer/dist/index.js";
 import { AppVerkCoordinatorPlugin } from "./modules/coordinator/index.js";
@@ -24,6 +25,7 @@ const defaultPluginFactories = [
   AppVerkQAPlugin,
   AppVerkExplorePlugin,
   AppVerkStribogPlugin,
+  AppVerkSvarogPlugin,
   AppVerkPlanPlugin,
   AppVerkSwiftDeveloperPlugin,
   AppVerkCoordinatorPlugin,

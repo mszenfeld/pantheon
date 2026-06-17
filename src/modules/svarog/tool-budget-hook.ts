@@ -34,7 +34,7 @@ export interface SvarogToolHookInput {
 }
 
 export interface SvarogToolHookOutput {
-  args: { command?: unknown }
+  args: { command?: unknown; filePath?: unknown }
 }
 
 export type SvarogToolHook = (
