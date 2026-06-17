@@ -28,6 +28,7 @@ The harness curates the agent picker — only registered agents are shown and ne
 | **Zmora**   | QA tester. Executes FE and BE test scenarios on demand, dispatched by Perun.                                                |
 | **Triglav** | Read-only codebase explorer. Maps structure and finds definitions/references/patterns; dispatched by Perun before planning. See [`docs/exploration.md`](docs/exploration.md). |
 | **Stribog** | Light execution specialist. Performs one small, mechanical task with real side effects (bring up/fix a service, restart, read logs, a 1–2 file config change), verifies it, and returns a structured result; dispatched by Perun. Experimental (Phase 1): no automatic edit-recovery yet. See [`docs/light-execution.md`](docs/light-execution.md). |
+| **Svarog** | Heavy/main code executor. Implements a multi-file feature or refactor from a plan — writes code test-first, runs the full suite/build, and returns a verified diff with a recoverable checkpoint. Stops at READY (does not commit); dispatched by Perun. See [`docs/heavy-execution.md`](docs/heavy-execution.md). |
 
 ## Installation
 
@@ -65,6 +66,7 @@ Per-agent model selection lives in `pantheon.json`:
     "veles":   { "model": "opencode-go/kimi-k2.6" },
     "zmora":   { "model": "github-copilot/gpt-5.4" },
     "triglav": { "model": "opencode-go/deepseek-v4-flash" },
+    "svarog":  { "model": "openai/gpt-5.4" },
   },
 }
 ```
@@ -81,6 +83,7 @@ A sensible starting point per agent. Veles' pick comes from running the model-ev
 | **Veles** (planner) | Kimi K2.6 | Eval pick across three Layer-1 scenarios — the only candidate to finish all three with the JSON contract intact and clean grounding (no hallucinated behavior, local infra, real DB columns). `EXPENSIVE`, so reliability and speed matter. |
 | **Zmora** (QA tester) | GPT-5.4 | Drives FE/BE scenarios with heavy, structured tool use; reliable at executing scripted steps. |
 | **Triglav** (explorer) | Deepseek V4 Flash | Dispatched many-in-parallel and in the background — favors a fast, cheap model. |
+| **Svarog** (heavy executor) | GPT-5.4 (interim default; provider-gated on `openai`) | Heavy in-tree editor doing broad multi-file work — must not run on a weak model. Interim pick (mirrors OMO's Hephaestus and Stribog's pre-eval default); the §11 Svarog eval may raise this to a frontier model. |
 
 Set each in `pantheon.json` as `<providerID>/<modelID>` for the provider you choose (run `opencode models` to find the exact ID — it varies per provider). The full reference (locations, precedence, schema, FAQ) is in [`docs/configuring-agents.md`](docs/configuring-agents.md).
 
