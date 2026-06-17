@@ -42,15 +42,9 @@
 
 ---
 
-## OPEN DECISION (resolve before executing — Task 5/6 depend on it)
+## Checkpoint wiring — RESOLVED: Option C (auto-create in hook, manual restore)
 
-The spec (§7) deferred the checkpoint's **invocation/wiring** to the plan: `checkpoint.ts` exports `createCheckpoint`/`restoreCheckpoint`, but *who calls them at runtime* is a genuine fork. As written, Tasks 5 deliver tested utility functions; one of these wirings must be chosen and folded into Tasks 3/5/6 before the checkpoint actually runs:
-
-- **Option A (recommended): auto-create in the hook + a single `svarog_restore` plugin tool.** The tool hook calls `createCheckpoint` on the first mutating tool-call of a confirmed `svarog` session (once per session; deterministic ref `refs/svarog/ckpt/<sessionID>`). Svarog calls a no-arg `svarog_restore` tool on its 3-attempt-failure path; the deterministic ref is reported in the result's `checkpoint` field. Robust, minimal LLM burden. Cost: +1 plugin tool (gated to svarog), hook gains a `createCheckpoint` dep + a per-session "created" flag, `session.deleted` deletes the ref.
-- **Option C: auto-create in the hook; restore is Perun/manual.** Same auto-create; Svarog reports the ref and FAILs without self-restoring; Perun or the user runs restore. Simplest (no new tool), but Svarog can't self-recover mid-run.
-- **Option B: prompt-driven via bash.** `svarog.md` tells Svarog to run the documented git sequence itself. No new tools/wiring, but fragile (an LLM running multi-step git plumbing). Not recommended.
-
-**Default if unspecified:** Option A. Folding it in adds: a `createCheckpoint` dep to `makeSvarogToolHook` (Task 3) + a `svarog_restore` tool definition and its registration (Task 6), plus an allow entry and a hook test. Until chosen, `checkpoint.ts` is tested but unwired.
+The spec (§7) deferred the checkpoint's invocation to the plan. **Decision: Option C.** The tool hook auto-creates the recovery checkpoint once per session, before the first mutating tool (deterministic ref `refs/svarog/ckpt/<sessionID>`). **Restore is manual** — Svarog cannot self-restore; on unrecoverable failure it returns `FAIL` and reports the checkpoint ref, and the operator/Perun restores via `restoreCheckpoint` (or the documented git sequence). No restore tool is added. This is reflected in Task 3 (hook auto-create + `createCheckpoint` dep + `clearSession`), Task 4 (prompt failure/recovery wording), Task 5 (`restoreCheckpoint` is the manual path), and Task 6 (wire `createCheckpoint(process.cwd(), sessionID)`).
 
 ---
 
@@ -360,7 +354,7 @@ import { makeSvarogToolHook } from "../../../src/modules/svarog/tool-budget-hook
 import { SVAROG_AGENT_KEY } from "../../../src/modules/svarog/svarog.metadata.js"
 
 const svarogHook = () =>
-  makeSvarogToolHook({ resolveAgent: async () => SVAROG_AGENT_KEY })
+  makeSvarogToolHook({ resolveAgent: async () => SVAROG_AGENT_KEY }).hook
 const input = (tool: string) => ({ tool, sessionID: "s1", callID: "c" })
 const noArgs = { args: {} }
 
@@ -423,10 +417,28 @@ describe("makeSvarogToolHook", () => {
     await allows("bash", { args: { command: "bun run test" } })
   })
 
+  it("creates a recovery checkpoint once, before the first mutating tool", async () => {
+    const created: string[] = []
+    const { hook } = makeSvarogToolHook({
+      resolveAgent: async () => SVAROG_AGENT_KEY,
+      createCheckpoint: (s) => created.push(s),
+    })
+    await hook(input("read"), noArgs) // read -> no checkpoint
+    expect(created).toEqual([])
+    await hook(input("edit"), { args: { filePath: "/a" } }) // first mutating -> checkpoint
+    await hook(input("write"), { args: { filePath: "/b" } }) // -> no new checkpoint
+    await hook(input("serena_replace_content"), noArgs) // serena editor -> no new checkpoint
+    expect(created).toEqual(["s1"])
+  })
+
   it("fails OPEN for a non-svarog / unresolved session", async () => {
-    const other = makeSvarogToolHook({ resolveAgent: async () => "zmora-setup" })
+    const other = makeSvarogToolHook({
+      resolveAgent: async () => "zmora-setup",
+    }).hook
     await expect(other(input("execute_recipe"), noArgs)).resolves.toBeUndefined()
-    const unknown = makeSvarogToolHook({ resolveAgent: async () => undefined })
+    const unknown = makeSvarogToolHook({
+      resolveAgent: async () => undefined,
+    }).hook
     await expect(unknown(input("task"), noArgs)).resolves.toBeUndefined()
   })
 })
@@ -457,9 +469,17 @@ const SECRET_GEN_BASH =
 // agent is a full-transcript call; skip it for tools that leak nothing and have no deny path).
 const PREFILTER_READS: ReadonlySet<string> = new Set(["read", "glob", "grep"])
 
+// Native tools that mutate the working tree -> trigger the one-time recovery checkpoint (a serena
+// editor also triggers it, matched via SVAROG_SERENA_EDITORS).
+const MUTATING_NATIVE: ReadonlySet<string> = new Set(["edit", "write", "multiedit"])
+
 export interface SvarogToolHookDeps {
   /** Resolve a session's agent key. Returns undefined when unknown (-> fail-open). */
   resolveAgent: (sessionID: string) => Promise<string | undefined>
+  /** Best-effort recovery snapshot, called ONCE per session before the first mutating tool
+   *  (edit/write/multiedit or a serena editor). Failures are swallowed — the checkpoint is a
+   *  recovery aid, never a gate. Omit in tests that do not exercise it. */
+  createCheckpoint?: (sessionID: string) => void
 }
 
 export interface SvarogToolHookInput {
@@ -477,6 +497,13 @@ export type SvarogToolHook = (
   output: SvarogToolHookOutput,
 ) => Promise<void>
 
+export interface SvarogToolHookHandle {
+  /** The tool.execute.before handler (allow/deny gate + one-time recovery checkpoint). */
+  hook: SvarogToolHook
+  /** Drop a session's "checkpoint created" marker. Called from the plugin's session.deleted. */
+  clearSession: (sessionID: string) => void
+}
+
 /**
  * Build the `tool.execute.before` handler for Svarog. Unlike Stribog this is ALLOW-by-default
  * with a DENY FLOOR and NO edit budget (Svarog is the multi-file executor). Order is load-bearing:
@@ -490,8 +517,13 @@ export type SvarogToolHook = (
  *   (5) everything else -> ALLOW (edit/write/multiedit, serena reads + diagnostics, skill, ...).
  * Fail-open on the attribution axis and on any internal error; only intended denials throw.
  */
-export function makeSvarogToolHook(deps: SvarogToolHookDeps): SvarogToolHook {
-  return async (input, output) => {
+export function makeSvarogToolHook(
+  deps: SvarogToolHookDeps,
+): SvarogToolHookHandle {
+  /** Sessions for which the one-time recovery checkpoint has already been created. */
+  const checkpointed = new Set<string>()
+
+  const hook: SvarogToolHook = async (input, output) => {
     try {
       const raw = input.tool
       // (1) pure reads — nothing to enforce, skip the attribution call.
@@ -504,6 +536,25 @@ export function makeSvarogToolHook(deps: SvarogToolHookDeps): SvarogToolHook {
 
       // ---- confirmed svarog from here ----
       const norm = raw.toLowerCase().replace(/-/g, "_")
+
+      // (2a) Auto-create the recovery checkpoint ONCE, before the first mutating tool. Best-effort:
+      // a checkpoint failure must NEVER block the edit (it is a recovery aid, not a gate). Restore is
+      // MANUAL (Option C) — Svarog reports the ref and returns FAIL if it cannot recover; the
+      // operator/Perun runs restoreCheckpoint. Mutating = native edit/write/multiedit OR a serena editor.
+      const mutating =
+        MUTATING_NATIVE.has(raw) || SVAROG_SERENA_EDITORS.test(norm)
+      if (
+        mutating &&
+        deps.createCheckpoint &&
+        !checkpointed.has(input.sessionID)
+      ) {
+        checkpointed.add(input.sessionID)
+        try {
+          deps.createCheckpoint(input.sessionID)
+        } catch {
+          // best-effort; a checkpoint failure must not throw from the hook
+        }
+      }
 
       // (2b) bash secret-generation tripwire. Every other bash command passes (host-shell trust).
       if (raw === "bash") {
@@ -554,6 +605,12 @@ export function makeSvarogToolHook(deps: SvarogToolHookDeps): SvarogToolHook {
       // never throw from a hook on internal / attribution errors (fail-open)
     }
   }
+
+  const clearSession = (sessionID: string): void => {
+    checkpointed.delete(sessionID)
+  }
+
+  return { hook, clearSession }
 }
 ```
 
@@ -659,10 +716,10 @@ Explore → Plan → (test-first) Implement → Verify → Manual QA gate.
 - **Manual QA gate (leaf surface):** drive the artifact through a surface you actually have — a non-interactive CLI via bash, an HTTP API via `curl`, a library/module via a minimal driver script. **Web-UI / interactive-TUI work is out of your surface → `ESCALATE` or leave it to a Zmora pass.** Reading the source and concluding "should work" does NOT pass.
 
 ## Failure recovery
-Try up to 3 *materially different* approaches. Then do one bounded self-root-cause pass: re-read the failing surface, challenge your assumption, try a 4th approach. If still failing, **revert to your checkpoint** and `ESCALATE` with each attempt summarised in `reason`.
+A recovery checkpoint is created automatically before your first edit. Try up to 3 *materially different* approaches, then one bounded self-root-cause pass: re-read the failing surface, challenge your assumption, try a 4th approach. If still failing, return **`FAIL`** (do not claim success) and report the `checkpoint` ref in your result — you do **not** restore it yourself; the operator/Perun restores the clean tree from that ref.
 
 ## Hard invariants
-- Never leave code broken. Never claim READY without a green suite. Never commit. Never mint, write, or echo a secret. Never revert changes you did not make. No type-suppression (`as any` / `@ts-ignore`). No `question`. No dispatch.
+- Never claim READY with a broken build — if you cannot fix it, return `FAIL` and report the checkpoint ref so the tree can be restored. Never claim READY without a green suite. Never commit. Never mint, write, or echo a secret. Never revert changes you did not make. No type-suppression (`as any` / `@ts-ignore`). No `question`. No dispatch.
 
 ## Done ritual
 Before emitting READY, re-read the original task and your intent, and run the suite once more.
@@ -676,7 +733,7 @@ End your turn with EXACTLY one fenced ```json``` block and nothing after it:
   "reason": "<one line; required for FAIL and ESCALATE>",
   "changed": ["<files you created or edited>"],
   "verification": "<the suite/build command you ran + pass/fail>",
-  "checkpoint": "<the scratch ref to restore from; never empty>"
+  "checkpoint": "<auto-created recovery ref; report it so the operator can restore on FAIL>"
 }
 ```
 - `READY` — feature done AND the full suite/build actually ran green.
@@ -722,6 +779,8 @@ AV_COMMIT_SKILL=1 git commit -m "feat(svarog): author system prompt and memoized
 ---
 
 ## Task 5: In-tree commit-tree checkpoint
+
+> **Wiring (Option C):** `createCheckpoint` is invoked by the hook (Task 3) on the first mutating tool; `restoreCheckpoint` is the **manual** restore path the operator/Perun runs (documented in `docs/heavy-execution.md`, Task 12) — a tested utility, not wired into Svarog's runtime.
 
 **Files:**
 - Create: `src/modules/svarog/checkpoint.ts`
@@ -993,6 +1052,7 @@ import {
 } from "./svarog.metadata.js"
 import { buildSvarogPrompt } from "./prompt.js"
 import { makeSvarogToolHook } from "./tool-budget-hook.js"
+import { createCheckpoint } from "./checkpoint.js"
 
 /** Provider id the pinned default needs (`openai` for `openai/gpt-5.4`). */
 const DEFAULT_MODEL_PROVIDER = providerIdOf(DEFAULT_SVAROG_MODEL)
@@ -1003,8 +1063,11 @@ export const AppVerkSvarogPlugin: Plugin = async ({ client }) => {
   // The hook is the load-bearing enforcement; attribution via getSessionAgentCached resolves
   // dispatched AND eval/direct sessions (the _shared SessionAgentRegistry is dispatch-only).
   // Svarog imports skill-utils as the 3rd grandfathered consumer (see AGENTS.md amendment).
-  const hook = makeSvarogToolHook({
+  const { hook, clearSession } = makeSvarogToolHook({
     resolveAgent: (sessionID) => getSessionAgentCached(sessionID, client),
+    // Option C: auto-create the recovery checkpoint on the first mutating tool; restore is manual.
+    // Phase-1 assumes Svarog edits the repo it runs in (process.cwd()).
+    createCheckpoint: (sessionID) => createCheckpoint(process.cwd(), sessionID),
   })
 
   let providerMissing = false
@@ -1045,8 +1108,8 @@ export const AppVerkSvarogPlugin: Plugin = async ({ client }) => {
       if (event.type === "session.deleted") {
         const deletedID = event.properties?.info?.id
         if (typeof deletedID === "string" && deletedID.length > 0) {
-          // Svarog keeps no per-session budget state; only evict the identity cache entry.
-          forgetSessionAgent(deletedID)
+          clearSession(deletedID) // drop the session's checkpoint-created marker
+          forgetSessionAgent(deletedID) // evict the identity cache entry
         }
         return
       }
