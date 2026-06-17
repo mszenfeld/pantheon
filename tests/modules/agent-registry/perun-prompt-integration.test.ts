@@ -9,6 +9,7 @@ import {
 import { zmoraSpecialistInfo } from "../../../src/modules/qa/zmora.metadata.js"
 import { fixAutoSpecialistInfo } from "../../../src/modules/agent-registry/fix-auto.metadata.js"
 import { triglavSpecialistInfo } from "../../../src/modules/explore/triglav.metadata.js"
+import { svarogSpecialistInfo } from "../../../src/modules/svarog/svarog.metadata.js"
 import { DISPATCHABLE_ALL_AGENTS } from "../../../src/modules/coordinator/dispatch.js"
 
 const here = path.dirname(fileURLToPath(import.meta.url))
@@ -27,7 +28,7 @@ function render(): string {
   // constant (mirrors how coordinator/index.ts builds the real prompt).
   return buildPerunPrompt(
     template,
-    [fixAutoSpecialistInfo, zmoraSpecialistInfo, triglavSpecialistInfo],
+    [fixAutoSpecialistInfo, zmoraSpecialistInfo, triglavSpecialistInfo, svarogSpecialistInfo],
     { dispatchableAllowlist: ALLOWLIST },
   )
 }
@@ -76,5 +77,11 @@ describe("perun prompt integration", () => {
     expect(render()).not.toContain(
       "the lone entry in the `DISPATCHABLE_ALL_AGENTS` allowlist",
     )
+  })
+
+  it("renders the svarog workflow contribution and leaves no stray placeholder", () => {
+    const out = render()
+    expect(out).toContain("heavy/main executor")
+    expect(out).not.toContain("{WORKFLOW:svarog}")
   })
 })
