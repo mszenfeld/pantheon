@@ -121,9 +121,9 @@ Svarog **always** ends its turn with exactly one fenced ` ```json ` block and no
 
 ## Model selection
 
-Svarog is a heavy executor doing broad in-tree edits and must not run on a weak model. It **pins an explicit default**: `openai/gpt-5.4` (`DEFAULT_SVAROG_MODEL` in `src/modules/svarog/svarog.metadata.ts`). This is a role-fit, **not** a security control — the security boundary is the tool hook, never the model choice.
+Svarog is a heavy executor doing broad in-tree edits and must not run on a weak model. It **pins an explicit default**: `openai/gpt-5.5` — the strongest GPT on the OpenAI subscription (`DEFAULT_SVAROG_MODEL` in `src/modules/svarog/svarog.metadata.ts`). This is a role-fit, **not** a security control — the security boundary is the tool hook, never the model choice.
 
-The pick is **interim**: the Svarog eval (run per `docs/eval/playbook.md`) refines it — a frontier model may be warranted. The default mirrors OMO's GPT-pinned Hephaestus and was Stribog's own pre-eval default, so it is harness-recognized.
+The Svarog eval (run per `docs/eval/playbook.md`) may still refine the exact tier. `gpt-5.5` is the top standard GPT SKU on the OpenAI subscription (the `-pro` tier needs higher access; `-fast`/`-mini` are weaker).
 
 The default is **provider-gated** on `openai`. If the `openai` provider is absent (fresh subscription/Anthropic install), the default is skipped (Svarog inherits the session default) and a one-time warning toast fires on `session.created`. User/pantheon overrides are unaffected and still win.
 

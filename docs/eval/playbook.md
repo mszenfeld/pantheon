@@ -683,7 +683,7 @@ The generic procedure mostly applies, with these amendments.
   ```
 
 - **Fixing the model per-run.** Pass `model: { providerID, modelID }` in `promptAsync`
-  exactly as for all other agents. Svarog's pinned default is `openai/gpt-5.4`
+  exactly as for all other agents. Svarog's pinned default is `openai/gpt-5.5`
   (provider-gated); the eval compares it against frontier alternatives. Record the
   model ID in the report header.
 

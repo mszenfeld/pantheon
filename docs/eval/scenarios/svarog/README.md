@@ -90,7 +90,7 @@ checkpoint mechanism requires a born HEAD).
 
 Each run fixes the model explicitly per-run — pass `model: { providerID, modelID }`
 in `promptAsync` the same way as all other agents. Svarog's pinned default is
-`openai/gpt-5.4`; the eval refines whether that holds or a frontier model is needed.
+`openai/gpt-5.5` (the strongest GPT on the OpenAI subscription); the eval refines whether that holds or another tier is better.
 
 ## Two-layer workflow
 

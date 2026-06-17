@@ -23,7 +23,7 @@ import { buildSvarogPrompt } from "./prompt.js"
 import { makeSvarogToolHook } from "./tool-budget-hook.js"
 import { createCheckpoint } from "./checkpoint.js"
 
-/** Provider id the pinned default needs (`openai` for `openai/gpt-5.4`). */
+/** Provider id the pinned default needs (`openai` for `openai/gpt-5.5`). */
 const DEFAULT_MODEL_PROVIDER = providerIdOf(DEFAULT_SVAROG_MODEL)
 
 export const AppVerkSvarogPlugin: Plugin = async ({ client }) => {

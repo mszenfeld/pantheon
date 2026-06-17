@@ -4,13 +4,13 @@ import type { SpecialistInfo } from "../agent-registry/agent-metadata.js"
  *  across registration, config injection, tests, and docs. */
 export const SVAROG_AGENT_KEY = "svarog" as const
 
-/** Interim pinned default — a STRONG coding model (a heavy executor doing broad in-tree
- *  edits must not run on a weak model). `openai/gpt-5.4` mirrors OMO's GPT-pinned Hephaestus
- *  and was Stribog's own pre-eval default, so it is harness-recognized. Provider-gated on
- *  `openai` with a session-default fallback + one-time toast (see index.ts). INTERIM: the
- *  Svarog eval refines this (may raise to a frontier model). Must satisfy MODEL_REGEX in
+/** Pinned default — the strongest GPT tier on the OpenAI subscription (a heavy executor doing
+ *  broad in-tree edits must not run on a weak model). `openai/gpt-5.5` is the top standard GPT
+ *  SKU on the subscription (the `-pro` tier needs higher access; `-fast`/`-mini` are weaker).
+ *  Provider-gated on `openai` with a session-default fallback + one-time toast (see index.ts);
+ *  the Svarog eval may still refine the tier. Must satisfy MODEL_REGEX in
  *  src/modules/pantheon-config/schema.ts. NOT a security control. */
-export const DEFAULT_SVAROG_MODEL = "openai/gpt-5.4"
+export const DEFAULT_SVAROG_MODEL = "openai/gpt-5.5"
 
 export const SVAROG_DESCRIPTION =
   "Heavy/main code executor: implements a multi-file feature or refactor from a plan or task — writes code test-first, runs the full suite/build, and returns a verified diff with a recoverable checkpoint. Stops at READY (does not commit). NOT for trivial 1-2 file mechanical changes (use stribog), secrets (use zmora-setup), or work needing an unsettled design decision (plan with veles)."
