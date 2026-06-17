@@ -21,9 +21,10 @@ const MUTATING_NATIVE: ReadonlySet<string> = new Set(["edit", "write", "multiedi
 export interface SvarogToolHookDeps {
   /** Resolve a session's agent key. Returns undefined when unknown (-> fail-open). */
   resolveAgent: (sessionID: string) => Promise<string | undefined>
-  /** Best-effort recovery snapshot, called ONCE per session before the first mutating tool
-   *  (edit/write/multiedit or a serena editor). Failures are swallowed — the checkpoint is a
-   *  recovery aid, never a gate. Omit in tests that do not exercise it. */
+  /** Best-effort recovery snapshot, invoked on the first mutating tool (edit/write/multiedit or a
+   *  serena editor) and retried on the next one if it throws — so it runs at most once successfully
+   *  per session. Failures are swallowed — the checkpoint is a recovery aid, never a gate. Omit in
+   *  tests that do not exercise it. */
   createCheckpoint?: (sessionID: string) => void
 }
 
@@ -82,10 +83,12 @@ export function makeSvarogToolHook(
       // ---- confirmed svarog from here ----
       const norm = raw.toLowerCase().replace(/-/g, "_")
 
-      // (2a) Auto-create the recovery checkpoint ONCE, before the first mutating tool. Best-effort:
-      // a checkpoint failure must NEVER block the edit (it is a recovery aid, not a gate). Restore is
-      // MANUAL (Option C) — Svarog reports the ref and returns FAIL if it cannot recover; the
-      // operator/Perun runs restoreCheckpoint. Mutating = native edit/write/multiedit OR a serena editor.
+      // (2a) Auto-create the recovery checkpoint on the FIRST mutating tool (marked only after a
+      // successful snapshot, so a transient / born-HEAD failure retries on the next mutating tool
+      // instead of latching the session with no recovery point). Best-effort: a checkpoint failure
+      // must NEVER block the edit (recovery aid, not a gate). Restore is MANUAL (Option C) — on FAIL
+      // the operator enumerates the deterministic ref (`git for-each-ref refs/svarog/ckpt/`) and runs
+      // restoreCheckpoint. Mutating = native edit/write/multiedit OR a serena editor.
       const mutating =
         MUTATING_NATIVE.has(raw) || SVAROG_SERENA_EDITORS.test(norm)
       if (
@@ -93,11 +96,14 @@ export function makeSvarogToolHook(
         deps.createCheckpoint &&
         !checkpointed.has(input.sessionID)
       ) {
-        checkpointed.add(input.sessionID)
         try {
           deps.createCheckpoint(input.sessionID)
+          // Mark ONLY after a successful snapshot, so a transient failure (or a born-HEAD
+          // repo) lets the NEXT mutating tool retry instead of silently latching the session
+          // as "checkpointed" with no recovery point for the rest of the turn.
+          checkpointed.add(input.sessionID)
         } catch {
-          // best-effort; a checkpoint failure must not throw from the hook
+          // best-effort; a checkpoint failure must not throw from the hook (recovery aid, not a gate)
         }
       }
 

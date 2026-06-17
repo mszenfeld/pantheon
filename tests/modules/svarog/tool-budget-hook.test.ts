@@ -21,10 +21,15 @@ describe("makeSvarogToolHook", () => {
     await allows("multiedit", { args: { filePath: "/c" } })
     for (const p of ["/1", "/2", "/3", "/4", "/5"])
       await allows("edit", { args: { filePath: p } })
+    // all 8 serena editors must pass the carve-out BEFORE the reused isImmutableDeny floor
     await allows("serena_rename_symbol")
     await allows("serena_safe_delete_symbol")
     await allows("serena_replace_symbol_body")
     await allows("serena_replace_content")
+    await allows("serena_create_text_file")
+    await allows("serena_insert_after_symbol")
+    await allows("serena_insert_before_symbol")
+    await allows("serena_replace_regex")
   })
 
   it("allows reads, diagnostics, and skill loading", async () => {
@@ -77,6 +82,26 @@ describe("makeSvarogToolHook", () => {
     await hook(input("write"), { args: { filePath: "/b" } }) // -> no new checkpoint
     await hook(input("serena_replace_content"), noArgs) // serena editor -> no new checkpoint
     expect(created).toEqual(["s1"])
+  })
+
+  it("retries the checkpoint on the next mutating tool when the first attempt fails", async () => {
+    let attempts = 0
+    const { hook } = makeSvarogToolHook({
+      resolveAgent: async () => SVAROG_AGENT_KEY,
+      createCheckpoint: () => {
+        attempts += 1
+        if (attempts === 1)
+          throw new Error("born-HEAD: commit-tree -p HEAD failed")
+      },
+    })
+    // first mutating tool: checkpoint throws (swallowed) -> session NOT latched, edit still allowed
+    await expect(
+      hook(input("edit"), { args: { filePath: "/a" } }),
+    ).resolves.toBeUndefined()
+    // next mutating tool retries and succeeds; a third no longer attempts (now latched)
+    await hook(input("write"), { args: { filePath: "/b" } })
+    await hook(input("multiedit"), { args: { filePath: "/c" } })
+    expect(attempts).toBe(2)
   })
 
   it("fails OPEN for a non-svarog / unresolved session", async () => {

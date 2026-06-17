@@ -45,7 +45,7 @@ The result is that the two roles stay cleanly separated: `zmora-setup` *mints an
 
 ## Checkpoint and recovery — in-tree `commit-tree`
 
-Before Svarog's **first mutating tool** (`edit`, `write`, `multiedit`, or a serena editor), the hook **automatically creates a recovery checkpoint** — a `git commit-tree` object stored at `refs/svarog/ckpt/<sessionID>`. Svarog reports the ref in its result payload so the operator or Perun can restore the tree on `FAIL`.
+Before Svarog's **first mutating tool** (`edit`, `write`, `multiedit`, or a serena editor), the hook **automatically creates a recovery checkpoint** — a `git commit-tree` object stored at the deterministic ref `refs/svarog/ckpt/<sessionID>`. Svarog cannot read its own opencode session id, so it does **not** report a resolved ref; the ref is enumerable out-of-band (`git for-each-ref refs/svarog/ckpt/`) and the operator restores the tree on `FAIL`.
 
 ### How it works
 
@@ -58,7 +58,7 @@ Restore is **manual** — Svarog does not restore its own checkpoint. On `FAIL`,
 1. `git read-tree <ckptRef>` — sets the index to the checkpoint tree.
 2. `git checkout-index -a -f` — writes tracked checkpoint content to the working tree.
 3. Orphans (files present now but absent from the checkpoint) are removed with `fs.rmSync`.
-4. `git reset -q` — rebuilds the index to `HEAD` so the staging area matches the pre-edit state.
+4. `git reset -q` — resets the index to `HEAD`. (Original staging is **not** preserved — restore is a recovery aid that yields a clean, recoverable tree, not a replay of mid-turn staging.)
 
 ### Honest limits
 
@@ -102,20 +102,20 @@ Svarog **always** ends its turn with exactly one fenced ` ```json ` block and no
   "reason": "<one line; required for FAIL and ESCALATE>",
   "changed": ["<files you created or edited>"],
   "verification": "<the suite/build command you ran + pass/fail>",
-  "checkpoint": "<auto-created recovery ref; report it so the operator can restore on FAIL>"
+  "checkpoint": "refs/svarog/ckpt/<session> — auto-created; operator enumerates + restores on FAIL (you cannot resolve your own session id)"
 }
 ```
 
 | `status` | Meaning |
 |---|---|
 | `READY` | The task is done and the full suite/build ran green. Does **not** mean "committed" — Svarog stops at READY and never commits. |
-| `FAIL` | Svarog tried and the tests/build do not pass. Report the checkpoint ref in `checkpoint` so the tree can be restored. |
+| `FAIL` | Svarog tried and the tests/build do not pass. The auto-created checkpoint (`refs/svarog/ckpt/<session>`) lets the operator restore the tree. |
 | `ESCALATE` | Out of scope or needs a decision (open question in `reason`). |
 
 - `reason` — one line; **required** for `FAIL` and `ESCALATE`.
 - `changed` — files created or edited this turn.
 - `verification` — the suite/build command and its pass/fail result.
-- `checkpoint` — the `refs/svarog/ckpt/<sessionID>` ref auto-created before the first edit; always report it on `FAIL`.
+- `checkpoint` — the deterministic `refs/svarog/ckpt/<session>` namespace where the recovery ref was auto-created before the first edit. Svarog cannot resolve its own session id, so it reports this template, not a concrete `ses_…` value; the operator enumerates the real ref via `git for-each-ref refs/svarog/ckpt/`.
 
 **Svarog stops at READY and never commits.** Review the diff, then run `/commit`.
 
@@ -123,7 +123,7 @@ Svarog **always** ends its turn with exactly one fenced ` ```json ` block and no
 
 Svarog is a heavy executor doing broad in-tree edits and must not run on a weak model. It **pins an explicit default**: `openai/gpt-5.4` (`DEFAULT_SVAROG_MODEL` in `src/modules/svarog/svarog.metadata.ts`). This is a role-fit, **not** a security control — the security boundary is the tool hook, never the model choice.
 
-The pick is **interim**: the §11 Svarog eval (run per `docs/eval/playbook.md`) refines it — a frontier model may be warranted. The default mirrors OMO's GPT-pinned Hephaestus and was Stribog's own pre-eval default, so it is harness-recognized.
+The pick is **interim**: the Svarog eval (run per `docs/eval/playbook.md`) refines it — a frontier model may be warranted. The default mirrors OMO's GPT-pinned Hephaestus and was Stribog's own pre-eval default, so it is harness-recognized.
 
 The default is **provider-gated** on `openai`. If the `openai` provider is absent (fresh subscription/Anthropic install), the default is skipped (Svarog inherits the session default) and a one-time warning toast fires on `session.created`. User/pantheon overrides are unaffected and still win.
 

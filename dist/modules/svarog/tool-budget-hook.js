@@ -16,9 +16,9 @@ function makeSvarogToolHook(deps) {
       const norm = raw.toLowerCase().replace(/-/g, "_");
       const mutating = MUTATING_NATIVE.has(raw) || SVAROG_SERENA_EDITORS.test(norm);
       if (mutating && deps.createCheckpoint && !checkpointed.has(input.sessionID)) {
-        checkpointed.add(input.sessionID);
         try {
           deps.createCheckpoint(input.sessionID);
+          checkpointed.add(input.sessionID);
         } catch {
         }
       }

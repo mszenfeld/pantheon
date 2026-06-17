@@ -63,7 +63,11 @@ export const IMMUTABLE_DENY_PATTERNS: ReadonlyArray<RegExp> = [
   // edit-budget path in tool-budget-hook.ts. `(^|_)verb(_|$)` would wrongly match bare edit/write
   // and brick Stribog's only side-effect tools. See NOTE above for scope.
   /(^|_)(write|create|replace|insert|rename|delete|move|edit|update|upsert|drop|truncate|alter|grant)_|_(write|create|replace|insert|rename|delete|move|edit|update|upsert|drop|truncate|alter|grant)$/i,
-  /_(memory|symbol|symbol_body|content|text_file)$/i, // serena write-targets (`content` = serena_replace_content)
+  // serena write-target nouns. Intentionally a WHOLE-noun match (no write-verb prefix required), so it
+  // ALSO over-denies pure-read ids that end in these nouns (e.g. a non-serena `*_get_content`). That is
+  // the SAFE direction for a security floor (over-deny > under-deny); serena's own reads are rescued by
+  // the serena_* carve-out (Stribog step 2c / Svarog SVAROG_SERENA_EDITORS) BEFORE this floor runs.
+  /_(memory|symbol|symbol_body|content|text_file)$/i,
 ]
 
 /** True if a normalized (lowercase) tool id is immutably denied (named OR capability-class).

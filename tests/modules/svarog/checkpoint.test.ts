@@ -54,6 +54,28 @@ describe("svarog checkpoint", () => {
     expect(git(repo, ["diff", "--cached", "--name-only"])).toBe("")
   })
 
+  it("never deletes gitignored operator data on restore (no `clean -x`)", () => {
+    writeFileSync(path.join(repo, ".gitignore"), "ignored.local\n")
+    git(repo, ["add", "-A"])
+    git(repo, ["commit", "-q", "-m", "ignore operator data"])
+
+    // operator's gitignored data, present at checkpoint time
+    writeFileSync(path.join(repo, "ignored.local"), "operator secret\n")
+    const ref = createCheckpoint(repo, "s3")
+
+    // after the checkpoint: a Svarog-created orphan + a touch to the ignored file
+    writeFileSync(path.join(repo, "orphan.txt"), "svarog garbage\n")
+    writeFileSync(path.join(repo, "ignored.local"), "operator secret (touched)\n")
+    restoreCheckpoint(repo, ref)
+
+    expect(existsSync(path.join(repo, "orphan.txt"))).toBe(false) // true orphan removed
+    // gitignored file is NOT an orphan -> survives untouched (restore never runs `clean -x`)
+    expect(existsSync(path.join(repo, "ignored.local"))).toBe(true)
+    expect(readFileSync(path.join(repo, "ignored.local"), "utf-8")).toBe(
+      "operator secret (touched)\n",
+    )
+  })
+
   it("returns a non-empty ref even on a clean tree", () => {
     const ref = createCheckpoint(repo, "s2")
     expect(git(repo, ["rev-parse", ref])).toMatch(/^[0-9a-f]{40}$/)

@@ -15,9 +15,10 @@
 declare function createCheckpoint(cwd: string, sessionId: string): string;
 /**
  * Restore the working tree to a checkpoint ref: recover tracked content, remove ONLY files Svarog
- * created this turn (present-now AND absent-from-checkpoint), then rebuild the index to HEAD so the
- * staging state matches the original. NEVER `clean -x` (it would delete the operator's gitignored
- * data). Gitignored / embedded-repo / started-service side effects are not recovered.
+ * created this turn (present-now AND absent-from-checkpoint), then reset the index to HEAD. NOTE:
+ * original staging is NOT preserved — restore is a recovery aid that yields a clean, recoverable
+ * tree, not a replay of mid-turn staging. NEVER `clean -x` (it would delete the operator's
+ * gitignored data). Gitignored / embedded-repo / started-service side effects are not recovered.
  */
 declare function restoreCheckpoint(cwd: string, ckptRef: string): void;
 

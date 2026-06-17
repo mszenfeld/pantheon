@@ -7,7 +7,7 @@ declare const SVAROG_AGENT_KEY: "svarog";
  *  edits must not run on a weak model). `openai/gpt-5.4` mirrors OMO's GPT-pinned Hephaestus
  *  and was Stribog's own pre-eval default, so it is harness-recognized. Provider-gated on
  *  `openai` with a session-default fallback + one-time toast (see index.ts). INTERIM: the
- *  §11 Svarog eval refines this (may raise to a frontier model). Must satisfy MODEL_REGEX in
+ *  Svarog eval refines this (may raise to a frontier model). Must satisfy MODEL_REGEX in
  *  src/modules/pantheon-config/schema.ts. NOT a security control. */
 declare const DEFAULT_SVAROG_MODEL = "openai/gpt-5.4";
 declare const SVAROG_DESCRIPTION = "Heavy/main code executor: implements a multi-file feature or refactor from a plan or task \u2014 writes code test-first, runs the full suite/build, and returns a verified diff with a recoverable checkpoint. Stops at READY (does not commit). NOT for trivial 1-2 file mechanical changes (use stribog), secrets (use zmora-setup), or work needing an unsettled design decision (plan with veles).";

@@ -1,9 +1,10 @@
 interface SvarogToolHookDeps {
     /** Resolve a session's agent key. Returns undefined when unknown (-> fail-open). */
     resolveAgent: (sessionID: string) => Promise<string | undefined>;
-    /** Best-effort recovery snapshot, called ONCE per session before the first mutating tool
-     *  (edit/write/multiedit or a serena editor). Failures are swallowed — the checkpoint is a
-     *  recovery aid, never a gate. Omit in tests that do not exercise it. */
+    /** Best-effort recovery snapshot, invoked on the first mutating tool (edit/write/multiedit or a
+     *  serena editor) and retried on the next one if it throws — so it runs at most once successfully
+     *  per session. Failures are swallowed — the checkpoint is a recovery aid, never a gate. Omit in
+     *  tests that do not exercise it. */
     createCheckpoint?: (sessionID: string) => void;
 }
 interface SvarogToolHookInput {

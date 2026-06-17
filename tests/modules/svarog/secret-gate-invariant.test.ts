@@ -24,4 +24,23 @@ describe("Svarog secret-gate invariant (minter != actuator)", () => {
     await hook({ sessionID: "svarog-child", cwd: "/" }, { env })
     expect(env.QA_BIND_TOKEN).toBeUndefined()
   })
+
+  it("DOES inject the binding into a zmora session (proves the svarog gate is attribution, not an inert hook)", async () => {
+    const store = new BindingsStore()
+    store.writeBinding("perun1", "QA_BIND_TOKEN", "eyJ...", "secret", "minted-recipe")
+
+    const registry = new SessionAgentRegistry()
+    registry.register("zmora-child", "zmora-setup")
+
+    const hook = makeShellEnvHook({
+      store,
+      registry,
+      resolveParentID: async () => "perun1",
+    })
+
+    const env: Record<string, string> = {}
+    await hook({ sessionID: "zmora-child", cwd: "/" }, { env })
+    // the negative svarog result above is due to attribution, not a hook that injects for no one
+    expect(env.QA_BIND_TOKEN).toBe("eyJ...")
+  })
 })

@@ -21,10 +21,10 @@ Explore → Plan → (test-first) Implement → Verify → Manual QA gate.
 - **Manual QA gate (leaf surface):** drive the artifact through a surface you actually have — a non-interactive CLI via bash, an HTTP API via `curl`, a library/module via a minimal driver script. **Web-UI / interactive-TUI work is out of your surface → `ESCALATE` or leave it to a Zmora pass.** Reading the source and concluding "should work" does NOT pass.
 
 ## Failure recovery
-A recovery checkpoint is created automatically before your first edit. Try up to 3 *materially different* approaches, then one bounded self-root-cause pass: re-read the failing surface, challenge your assumption, try a 4th approach. If still failing, return **`FAIL`** (do not claim success) and report the `checkpoint` ref in your result — you do **not** restore it yourself; the operator/Perun restores the clean tree from that ref.
+A recovery checkpoint is created automatically before your first edit, at the deterministic ref `refs/svarog/ckpt/<your session id>`. Try up to 3 *materially different* approaches, then one bounded self-root-cause pass: re-read the failing surface, challenge your assumption, try a 4th approach. If still failing, return **`FAIL`** (do not claim success). You **cannot read your own session id and do not restore the checkpoint yourself** — name the `refs/svarog/ckpt/<session>` namespace in your result; the operator enumerates the real ref (`git for-each-ref refs/svarog/ckpt/`) and restores the clean tree.
 
 ## Hard invariants
-- Never claim READY with a broken build — if you cannot fix it, return `FAIL` and report the checkpoint ref so the tree can be restored. Never claim READY without a green suite. Never commit. Never mint, write, or echo a secret. Never revert changes you did not make. No type-suppression (`as any` / `@ts-ignore`). No `question`. No dispatch.
+- Never claim READY with a broken build — if you cannot fix it, return `FAIL` so the operator can restore the auto-created checkpoint. Never claim READY without a green suite. Never commit. Never mint, write, or echo a secret. Never revert changes you did not make. No type-suppression (`as any` / `@ts-ignore`). No `question`. No dispatch.
 
 ## Done ritual
 Before emitting READY, re-read the original task and your intent, and run the suite once more.
@@ -38,7 +38,7 @@ End your turn with EXACTLY one fenced ```json block and nothing after it:
   "reason": "<one line; required for FAIL and ESCALATE>",
   "changed": ["<files you created or edited>"],
   "verification": "<the suite/build command you ran + pass/fail>",
-  "checkpoint": "<auto-created recovery ref; report it so the operator can restore on FAIL>"
+  "checkpoint": "refs/svarog/ckpt/<session> — auto-created; operator enumerates + restores on FAIL (you cannot resolve your own session id)"
 }
 ```
 - `READY` — feature done AND the full suite/build actually ran green.

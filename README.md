@@ -83,7 +83,7 @@ A sensible starting point per agent. Veles' pick comes from running the model-ev
 | **Veles** (planner) | Kimi K2.6 | Eval pick across three Layer-1 scenarios — the only candidate to finish all three with the JSON contract intact and clean grounding (no hallucinated behavior, local infra, real DB columns). `EXPENSIVE`, so reliability and speed matter. |
 | **Zmora** (QA tester) | GPT-5.4 | Drives FE/BE scenarios with heavy, structured tool use; reliable at executing scripted steps. |
 | **Triglav** (explorer) | Deepseek V4 Flash | Dispatched many-in-parallel and in the background — favors a fast, cheap model. |
-| **Svarog** (heavy executor) | GPT-5.4 (interim default; provider-gated on `openai`) | Heavy in-tree editor doing broad multi-file work — must not run on a weak model. Interim pick (mirrors OMO's Hephaestus and Stribog's pre-eval default); the §11 Svarog eval may raise this to a frontier model. |
+| **Svarog** (heavy executor) | GPT-5.4 (interim default; provider-gated on `openai`) | Heavy in-tree editor doing broad multi-file work — must not run on a weak model. Interim pick (mirrors OMO's Hephaestus and Stribog's pre-eval default); the Svarog eval may raise this to a frontier model. |
 
 Set each in `pantheon.json` as `<providerID>/<modelID>` for the provider you choose (run `opencode models` to find the exact ID — it varies per provider). The full reference (locations, precedence, schema, FAQ) is in [`docs/configuring-agents.md`](docs/configuring-agents.md).
 
