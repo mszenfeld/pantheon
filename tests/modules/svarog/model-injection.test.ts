@@ -20,6 +20,7 @@ const toastInput = (showToast: ReturnType<typeof vi.fn>) =>
 describe("svarog model injection", () => {
   let tmpData: string
   let origXdg: string | undefined
+  let origHome: string | undefined
   beforeEach(() => {
     clearAgentMetadataRegistry()
     __resetCacheForTests()
@@ -27,10 +28,20 @@ describe("svarog model injection", () => {
     tmpData = mkdtempSync(path.join(tmpdir(), "pantheon-svarog-mi-"))
     origXdg = process.env["XDG_DATA_HOME"]
     process.env["XDG_DATA_HOME"] = tmpData
+    // Isolate the home dir too. provider-detect's auth.json path falls back to
+    // os.homedir() and pantheon-config's userGlobalPath (paths.ts) is rooted at
+    // os.homedir() — neither is covered by XDG_DATA_HOME. Without this, the hooks
+    // read the developer's real ~/.config/opencode/pantheon.json; if that pins
+    // `svarog`, its model leaks in and breaks the provider-absent assertions on a
+    // configured machine (CI has no such file, so the gap only shows up locally).
+    origHome = process.env["HOME"]
+    process.env["HOME"] = tmpData
   })
   afterEach(() => {
     if (origXdg === undefined) delete process.env["XDG_DATA_HOME"]
     else process.env["XDG_DATA_HOME"] = origXdg
+    if (origHome === undefined) delete process.env["HOME"]
+    else process.env["HOME"] = origHome
     rmSync(tmpData, { recursive: true, force: true })
   })
 
