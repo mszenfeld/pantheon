@@ -9,7 +9,9 @@ const SVAROG_DENIED_TOOLS = {
   dispatch_background: false,
   poll_background: false,
   wait_background: false,
-  question: false
+  question: false,
+  webfetch: false,
+  websearch: false
 };
 const svarogSpecialistInfo = {
   name: SVAROG_AGENT_KEY,

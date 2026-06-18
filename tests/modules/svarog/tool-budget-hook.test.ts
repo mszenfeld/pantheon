@@ -44,6 +44,14 @@ describe("makeSvarogToolHook", () => {
     await denies("question")
   })
 
+  it("denies network egress (webfetch/websearch) but KEEPS todowrite", async () => {
+    await denies("webfetch")
+    await denies("websearch")
+    await denies("WebFetch") // normalized match (lowercased) — casing must not bypass
+    // todowrite is a planning aid Svarog's heavy multi-step work uses — NOT denied (unlike Stribog)
+    await allows("todowrite")
+  })
+
   it("denies the immutable floor: dispatch / recipe / shell / DB-mutation / memory-write", async () => {
     await denies("task")
     await denies("dispatch_parallel")

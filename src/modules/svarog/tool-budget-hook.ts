@@ -145,6 +145,18 @@ export function makeSvarogToolHook(
         )
       }
 
+      // (3b) headless leaf: no network egress. Svarog is an in-tree executor; webfetch/websearch
+      // are denied (Stribog parity). The deny-map is default-ALLOW, so this runtime check is the
+      // load-bearing boundary — without it an action-biased model + an injected file would have a
+      // native exfil channel the floor never inspects. (`curl` stays allowed as the sanctioned
+      // Manual-QA-gate egress; this only removes the zero-friction native fetch tools.)
+      if (norm === "webfetch" || norm === "websearch") {
+        throw new Error(
+          `${TOOL_DENIED}: Svarog is a leaf in-tree executor with no network egress (\`${raw}\` ` +
+            `denied). If the task genuinely needs external data, return the ESCALATE result.`,
+        )
+      }
+
       // (4) shared immutable floor, reused unchanged: shell-escape, dispatch/task, execute_recipe,
       // DB/DDL mutation verbs, serena `_memory` writes. (Bare `edit`/`write` are exempt by design;
       // they reach step 5 and are allowed.)

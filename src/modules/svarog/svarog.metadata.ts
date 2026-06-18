@@ -4,12 +4,15 @@ import type { SpecialistInfo } from "../agent-registry/agent-metadata.js"
  *  across registration, config injection, tests, and docs. */
 export const SVAROG_AGENT_KEY = "svarog" as const
 
-/** Pinned default — the strongest GPT tier on the OpenAI subscription (a heavy executor doing
- *  broad in-tree edits must not run on a weak model). `openai/gpt-5.5` is the top standard GPT
- *  SKU on the subscription (the `-pro` tier needs higher access; `-fast`/`-mini` are weaker).
- *  Provider-gated on `openai` with a session-default fallback + one-time toast (see index.ts);
- *  the Svarog eval may still refine the tier. Must satisfy MODEL_REGEX in
- *  src/modules/pantheon-config/schema.ts. NOT a security control. */
+/** Pinned default — retained by the Svarog model eval (docs/eval/scenarios/svarog/): on
+ *  `openai/gpt-5.5` it cleared all 5 execution scenarios at high quality (loads the TDD skill,
+ *  serena diagnostics, build+test green, minimal idiomatic diffs) and never minted or wrote a
+ *  real secret value; the residual gaps are escalate-first posture + one soft test-fixture dummy.
+ *  Svarog's role (a leaf executor running a vetted plan) weights execution above refusal
+ *  discipline, so that residual does not disqualify a 5/5 executor — but a non-openai comparison
+ *  point is not yet captured (Layer-2 A/B pending). A heavy in-tree editor must not run on a weak
+ *  model. Provider-gated on `openai` with a session-default fallback + one-time toast (see
+ *  index.ts). Must satisfy MODEL_REGEX in src/modules/pantheon-config/schema.ts. NOT a security control. */
 export const DEFAULT_SVAROG_MODEL = "openai/gpt-5.5"
 
 export const SVAROG_DESCRIPTION =
@@ -26,7 +29,11 @@ export const SVAROG_SERENA_EDITORS =
 /** Native opencode deny-map for `config.agent.svarog.tools`. DEFAULT-ALLOW on opencode 1.17.3
  *  (so this only bites as an explicit deny; the tool hook is the load-bearing boundary). Kept
  *  as declared defense-in-depth + intent: no execute_recipe (minter != actuator), no
- *  task/dispatch (leaf), no question (headless -> ESCALATE). */
+ *  task/dispatch (leaf), no question (headless -> ESCALATE), no webfetch/websearch (a leaf
+ *  in-tree executor has no business reaching the network — Stribog denies these too; without it
+ *  an action-biased model + an injected source file has a native exfil channel the floor never
+ *  sees). `todowrite` is deliberately NOT denied — Svarog's heavy multi-step work benefits from a
+ *  task list (Stribog's 1-2 file scope does not, so it denies it). */
 export const SVAROG_DENIED_TOOLS: Readonly<Record<string, false>> = {
   task: false,
   execute_recipe: false,
@@ -35,6 +42,8 @@ export const SVAROG_DENIED_TOOLS: Readonly<Record<string, false>> = {
   poll_background: false,
   wait_background: false,
   question: false,
+  webfetch: false,
+  websearch: false,
 }
 
 export const svarogSpecialistInfo: SpecialistInfo = {

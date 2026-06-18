@@ -43,6 +43,11 @@ function makeSvarogToolHook(deps) {
           `${TOOL_DENIED}: Svarog runs headless and has no \`question\` tool. A task that needs a decision is an ESCALATE, not a question \u2014 return the ESCALATE result with the open question in \`reason\`.`
         );
       }
+      if (norm === "webfetch" || norm === "websearch") {
+        throw new Error(
+          `${TOOL_DENIED}: Svarog is a leaf in-tree executor with no network egress (\`${raw}\` denied). If the task genuinely needs external data, return the ESCALATE result.`
+        );
+      }
       if (isImmutableDeny(norm)) {
         throw new Error(
           `${TOOL_DENIED}: tool "${raw}" is immutably denied for Svarog (capability class: secret-mint / dispatch / shell / DB-mutation / serena-memory-write). Svarog is a leaf executor \u2014 if the task requires this, return the ESCALATE result.`
