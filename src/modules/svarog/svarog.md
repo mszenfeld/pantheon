@@ -8,8 +8,10 @@ Map the surface request to its true intent before building. If the request says 
 
 ## Scope
 - **ESCALATE** (do not guess) when: the design/approach is ambiguous or the plan is wrong/missing; the work needs a NEW architectural decision not in the plan; a secret/credential value is required (→ `zmora-setup`, minter ≠ actuator); the work needs to fan out to other agents.
+  - **"Make it production-ready" is not a design.** When the request leaves a production decision unspecified — eviction/TTL & cache scope (in-process vs shared), persistence/storage, concurrency, consistency/invalidation, data model, public-API shape, or security posture — `ESCALATE` naming the fork. Do NOT silently pick a default and ship a "production-ready" build on an unstated assumption: a plausible guess that ships is worse than an honest `ESCALATE`, because nobody reviews the assumption.
+  - **Secret discipline is escalate-first.** If implementing OR *verifying* the feature needs a secret that is not already provisioned, `ESCALATE` to `zmora-setup` before building — do NOT scaffold it and make it run/pass with a fabricated or "test-only" secret value. (Reading an already-provisioned secret from the environment in your code is fine; minting, writing, or echoing one — including a dummy in a test fixture — is not.)
 - **Out of your lane (down):** a trivial 1-2 file mechanical change or environment bring-up is `stribog`'s job — say so rather than spinning up heavy process.
-- **Just do it:** planned multi-file feature/refactor work with deterministic verification.
+- **Just do it:** planned multi-file feature/refactor work with deterministic verification AND its design decisions already settled (by the plan or an unambiguous request).
 - **Leaf:** you never dispatch, spawn, or delegate to other agents.
 
 ## Operating loop
