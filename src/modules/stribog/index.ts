@@ -22,7 +22,7 @@ import {
 import { buildStribogPrompt } from "./prompt.js"
 import { makeStribogToolHook } from "./tool-budget-hook.js"
 
-/** Provider id the pinned default needs (`openai` for `openai/gpt-5.4`). */
+/** Provider id the pinned default needs (`opencode-go` for `opencode-go/kimi-k2.7-code`). */
 const DEFAULT_MODEL_PROVIDER = providerIdOf(DEFAULT_STRIBOG_MODEL)
 
 export const AppVerkStribogPlugin: Plugin = async ({ client }) => {
@@ -32,8 +32,14 @@ export const AppVerkStribogPlugin: Plugin = async ({ client }) => {
   // which — unlike the dispatch-only SessionAgentRegistry — resolves direct/eval sessions too).
   // Edit-budget state is owned by this factory call's closure (see makeStribogToolHook,
   // mirroring BackgroundTaskStore) rather than a module-global.
+  const extraTools =
+    loadPantheonConfig().agents[STRIBOG_AGENT_KEY]?.extraTools ?? []
+  // Entries are already lowercase (enforced by config validation); normalize defensively.
+  const extraPatterns = extraTools.map((p) => p.toLowerCase())
+
   const { hook, clearSession } = makeStribogToolHook({
     resolveAgent: (sessionID) => getSessionAgentCached(sessionID, client),
+    extraPatterns,
   })
 
   // One-time degraded-mode warning, mirroring the serena-gate pattern in
@@ -52,17 +58,18 @@ export const AppVerkStribogPlugin: Plugin = async ({ client }) => {
       config.agent[STRIBOG_AGENT_KEY] = {
         description: stribogSpecialistInfo.description,
         mode: "subagent",
-        // DECLARATIVE only: a 2026-06-10 live probe found config.agent[x].tools is INERT in
-        // opencode 1.15.10 (a denied tool still executed). The tool-budget hook is the real
-        // boundary; this map documents intent (no execute_recipe → minter != actuator; no task
-        // → leaf) and yields free defense-in-depth if a future opencode honors it.
+        // DECLARATIVE intent: a binary check on opencode 1.17.3 found config.agent[x].tools is
+        // honored but DEFAULT-ALLOW (a tool absent from the map still executes), so this deny-map
+        // only bites as an explicit deny and is not load-bearing. The tool-budget hook is the real
+        // boundary; this map documents intent (no execute_recipe → minter != actuator; no
+        // task/dispatch → leaf) and yields defense-in-depth via its explicit denies.
         tools: { ...STRIBOG_DENIED_TOOLS },
         get prompt() {
           return buildStribogPrompt()
         },
       }
-      // Stribog pins an explicit eval-picked default (`openai/gpt-5.4`) — it is a
-      // doer, not cheap retrieval — overridable via `agents.stribog.model`, and
+      // Stribog pins an explicit eval-picked default (`opencode-go/kimi-k2.7-code`)
+      // — a cost-efficient doer — overridable via `agents.stribog.model`, and
       // a user's opencode.json `agent.stribog.model` overrides even that. The
       // shared helper resolves user > override > default per the documented
       // precedence and registers the `stribog` slug for typo detection. The
@@ -70,10 +77,10 @@ export const AppVerkStribogPlugin: Plugin = async ({ client }) => {
       // src/modules/pantheon-config/schema.ts — so an invalid value is already
       // absent and falls through to the default.
       //
-      // L3: that default needs the `openai` provider. On a fresh install where
-      // OpenAI is absent (e.g. opencode-subscription / Anthropic-only), pinning
-      // it would yield a stribog whose dispatch fails at model resolution. So we
-      // only pass the default when the provider is configured; otherwise we pass
+      // L3: that default needs the `opencode-go` provider. On an install where
+      // opencode-go is absent, pinning it would yield a stribog whose dispatch
+      // fails at model resolution. So we only pass the default when the provider
+      // is configured; otherwise we pass
       // `undefined` and stribog inherits the session default (one-time toast
       // below documents the dependency). User opencode.json and pantheon.json
       // overrides take precedence over the default leg, so they still win even
@@ -96,6 +103,20 @@ export const AppVerkStribogPlugin: Plugin = async ({ client }) => {
       )
     },
     "tool.execute.before": hook,
+    // NO `tool.execute.after` — this is a DELIBERATE exclusion, not an oversight.
+    // The hook above is an allow/deny gate on tool *invocation*; it does not (and
+    // is not meant to) transform or scrub tool *results*. Stribog DB-tool results
+    // (e.g. a granted `supabase_execute_sql`) are returned to model context
+    // VERBATIM — only `zmora-*` results pass the QA stderr scrubber
+    // (`scrubSecrets` in src/modules/qa/scrubber.ts), which protects zmora, not
+    // stribog. The compensating control is therefore a read-restricted,
+    // least-privilege DB role on the configured MCP connection — a REQUIRED
+    // operator precondition, not optional hardening (spec §3.6 "Least-privilege
+    // is a hard precondition"; see docs/light-execution.md "accepted trust
+    // assumption"). A Stribog result-scrubber / column-denylist is a tracked,
+    // forward-looking follow-up — intentionally out of scope here because a
+    // half-complete scrubber on a security boundary is worse than a documented,
+    // enforced-by-the-DB-role precondition.
     event: async ({ event }) => {
       if (event.type === "session.deleted") {
         const deletedID = event.properties?.info?.id

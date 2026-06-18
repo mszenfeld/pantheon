@@ -48,4 +48,14 @@ describe("buildStribogPrompt", () => {
       "Producing or refreshing a SECRET / credential value is NOT your job",
     )
   })
+
+  it("carries the hardened secret HARD STOP (generation = ESCALATE; tripwire named)", () => {
+    const prompt = buildStribogPrompt()
+    expect(prompt).toContain("Secrets — HARD STOP")
+    // names the runtime tripwire so a denial is read as ESCALATE, not a thing to route around
+    expect(prompt).toContain("STRIBOG_SECRET_DENIED")
+    // forbids the generation primitives + writing/echoing a value
+    expect(prompt).toMatch(/Never run a secret-generating command/i)
+    expect(prompt).toMatch(/Never write a secret value to a file/i)
+  })
 })

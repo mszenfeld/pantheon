@@ -23,8 +23,11 @@ import { makeStribogToolHook } from "./tool-budget-hook.js";
 const DEFAULT_MODEL_PROVIDER = providerIdOf(DEFAULT_STRIBOG_MODEL);
 const AppVerkStribogPlugin = async ({ client }) => {
   registerAgentMetadata(stribogSpecialistInfo);
+  const extraTools = loadPantheonConfig().agents[STRIBOG_AGENT_KEY]?.extraTools ?? [];
+  const extraPatterns = extraTools.map((p) => p.toLowerCase());
   const { hook, clearSession } = makeStribogToolHook({
-    resolveAgent: (sessionID) => getSessionAgentCached(sessionID, client)
+    resolveAgent: (sessionID) => getSessionAgentCached(sessionID, client),
+    extraPatterns
   });
   let providerMissing = false;
   let toastShown = false;
@@ -35,10 +38,11 @@ const AppVerkStribogPlugin = async ({ client }) => {
       config.agent[STRIBOG_AGENT_KEY] = {
         description: stribogSpecialistInfo.description,
         mode: "subagent",
-        // DECLARATIVE only: a 2026-06-10 live probe found config.agent[x].tools is INERT in
-        // opencode 1.15.10 (a denied tool still executed). The tool-budget hook is the real
-        // boundary; this map documents intent (no execute_recipe → minter != actuator; no task
-        // → leaf) and yields free defense-in-depth if a future opencode honors it.
+        // DECLARATIVE intent: a binary check on opencode 1.17.3 found config.agent[x].tools is
+        // honored but DEFAULT-ALLOW (a tool absent from the map still executes), so this deny-map
+        // only bites as an explicit deny and is not load-bearing. The tool-budget hook is the real
+        // boundary; this map documents intent (no execute_recipe → minter != actuator; no
+        // task/dispatch → leaf) and yields defense-in-depth via its explicit denies.
         tools: { ...STRIBOG_DENIED_TOOLS },
         get prompt() {
           return buildStribogPrompt();
@@ -56,6 +60,20 @@ const AppVerkStribogPlugin = async ({ client }) => {
       );
     },
     "tool.execute.before": hook,
+    // NO `tool.execute.after` — this is a DELIBERATE exclusion, not an oversight.
+    // The hook above is an allow/deny gate on tool *invocation*; it does not (and
+    // is not meant to) transform or scrub tool *results*. Stribog DB-tool results
+    // (e.g. a granted `supabase_execute_sql`) are returned to model context
+    // VERBATIM — only `zmora-*` results pass the QA stderr scrubber
+    // (`scrubSecrets` in src/modules/qa/scrubber.ts), which protects zmora, not
+    // stribog. The compensating control is therefore a read-restricted,
+    // least-privilege DB role on the configured MCP connection — a REQUIRED
+    // operator precondition, not optional hardening (spec §3.6 "Least-privilege
+    // is a hard precondition"; see docs/light-execution.md "accepted trust
+    // assumption"). A Stribog result-scrubber / column-denylist is a tracked,
+    // forward-looking follow-up — intentionally out of scope here because a
+    // half-complete scrubber on a security boundary is worse than a documented,
+    // enforced-by-the-DB-role precondition.
     event: async ({ event }) => {
       if (event.type === "session.deleted") {
         const deletedID = event.properties?.info?.id;

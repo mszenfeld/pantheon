@@ -1,10 +1,9 @@
 // Advisory-only provider probe for the harness's ONE pinned default
-// (`DEFAULT_STRIBOG_MODEL = "openai/gpt-5.4"`). A fresh install on the
-// opencode-subscription / Anthropic-only path has no `openai` provider, so
-// unconditionally pinning that default produces a stribog whose dispatch fails
-// at model resolution. This probe lets the caller fall back to the session
-// default (leave the model unset) when the required provider is absent — never
-// a security control, only a "don't pin an unresolvable model" guard.
+// (`DEFAULT_STRIBOG_MODEL = "opencode-go/kimi-k2.7-code"`). On an install without
+// the `opencode-go` provider, unconditionally pinning that default would produce a
+// stribog whose dispatch fails at model resolution. This probe lets the caller fall
+// back to the session default (leave the model unset) when the required provider is
+// absent — never a security control, only a "don't pin an unresolvable model" guard.
 //
 // Structural ConfigLike (rather than the SDK `Config` type) keeps the probe
 // decoupled from the exact SDK shape; we only read the three fields that decide

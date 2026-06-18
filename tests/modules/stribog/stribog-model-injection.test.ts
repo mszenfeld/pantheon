@@ -52,13 +52,13 @@ describe("AppVerkStribogPlugin model injection", () => {
     writeFileSync(path.join(dir, "pantheon.json"), content)
   }
 
-  // The pinned default needs the `openai` provider; declare it so the default
+  // The pinned default needs the `opencode-go` provider; declare it so the default
   // leg actually fires (the provider-absent degraded path has its own tests
   // below). The plugin probes two config-time availability signals — custom
   // provider config AND opencode's auth.json — see _shared/provider-detect.ts;
   // this helper exercises the former, the auth.json test below the latter.
   async function runConfig(
-    provider: Record<string, unknown> = { openai: {} },
+    provider: Record<string, unknown> = { "opencode-go": {} },
   ): Promise<Config> {
     const plugin = await AppVerkStribogPlugin({} as never)
     const config: Config = { agent: {}, provider } as Config
@@ -66,7 +66,7 @@ describe("AppVerkStribogPlugin model injection", () => {
     return config
   }
 
-  it("defaults to the eval-picked model (openai/gpt-5.4) when no pantheon.json exists and the openai provider is configured", async () => {
+  it("defaults to the eval-picked model (opencode-go/kimi-k2.7-code) when no pantheon.json exists and the opencode-go provider is configured", async () => {
     const config = await runConfig()
     expect(config.agent![STRIBOG_AGENT_KEY]!.model).toBe(DEFAULT_STRIBOG_MODEL)
   })
@@ -95,54 +95,53 @@ describe("AppVerkStribogPlugin model injection", () => {
     expect(config.agent![STRIBOG_AGENT_KEY]!.model).toBe(DEFAULT_STRIBOG_MODEL)
   })
 
-  // L3: a fresh install on a non-OpenAI path (opencode-subscription / Anthropic)
-  // has no `openai` provider. Pinning the default would dispatch an unresolvable
-  // model, so the default leg is skipped and stribog inherits the session default
-  // (model left unset). User/pantheon overrides are unaffected — see below.
-  it("does NOT pin the default when the openai provider is absent (no pantheon override)", async () => {
+  // L3: a fresh install without the `opencode-go` provider. Pinning the default
+  // would dispatch an unresolvable model, so the default leg is skipped and stribog
+  // inherits the session default (model left unset). User/pantheon overrides are
+  // unaffected — see below.
+  it("does NOT pin the default when the opencode-go provider is absent (no pantheon override)", async () => {
     const config = await runConfig({})
     expect(config.agent![STRIBOG_AGENT_KEY]!.model).toBeUndefined()
   })
 
-  // The common real-world path: `opencode auth login openai` writes an OAuth
-  // entry to auth.json, but the provider never appears under config.provider.
-  // The probe must count that as configured — before this leg existed the
-  // plugin warned "provider not configured" and unpinned the default even
-  // though dispatching openai/gpt-5.4 worked fine.
-  it("pins the default when openai is configured via auth.json only", async () => {
+  // The common real-world path: `opencode auth login` writes an OAuth entry to
+  // auth.json, but the provider never appears under config.provider. The probe
+  // must count that as configured — otherwise the plugin warns "provider not
+  // configured" and unpins the default even though dispatching the model works.
+  it("pins the default when opencode-go is configured via auth.json only", async () => {
     const authDir = path.join(tmpHome, ".local", "share", "opencode")
     mkdirSync(authDir, { recursive: true })
     writeFileSync(
       path.join(authDir, "auth.json"),
-      JSON.stringify({ openai: { type: "oauth" } }),
+      JSON.stringify({ "opencode-go": { type: "oauth" } }),
     )
     const config = await runConfig({})
     expect(config.agent![STRIBOG_AGENT_KEY]!.model).toBe(DEFAULT_STRIBOG_MODEL)
   })
 
-  it("does NOT pin the default when openai is in disabled_providers", async () => {
+  it("does NOT pin the default when opencode-go is in disabled_providers", async () => {
     const plugin = await AppVerkStribogPlugin({} as never)
     const config: Config = {
       agent: {},
-      provider: { openai: {} },
-      disabled_providers: ["openai"],
+      provider: { "opencode-go": {} },
+      disabled_providers: ["opencode-go"],
     } as Config
     await plugin.config?.(config)
     expect(config.agent![STRIBOG_AGENT_KEY]!.model).toBeUndefined()
   })
 
-  it("does NOT pin the default when enabled_providers omits openai", async () => {
+  it("does NOT pin the default when enabled_providers omits opencode-go", async () => {
     const plugin = await AppVerkStribogPlugin({} as never)
     const config: Config = {
       agent: {},
-      provider: { openai: {} },
+      provider: { "opencode-go": {} },
       enabled_providers: ["anthropic"],
     } as Config
     await plugin.config?.(config)
     expect(config.agent![STRIBOG_AGENT_KEY]!.model).toBeUndefined()
   })
 
-  it("still honours a valid pantheon override even when the openai provider is absent", async () => {
+  it("still honours a valid pantheon override even when the opencode-go provider is absent", async () => {
     writeUserGlobal(
       `{ "agents": { "stribog": { "model": "opencode/claude-haiku-4-5" } } }`,
     )

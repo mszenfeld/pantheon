@@ -254,3 +254,190 @@ describe("validateConfigFile", () => {
     expect(msg.length).toBeLessThan(500)
   })
 })
+
+describe("validateConfigFile – extraTools", () => {
+  // §3.2 HEADLINE: extraTools-only agent (no model) must NOT be dropped
+  it("stores stribog with only extraTools (no model) — guard for §3.2 store-fix", () => {
+    const result = validateConfigFile({
+      agents: { stribog: { extraTools: ["supabase_*"] } },
+    })
+    expect(result.config.agents.stribog).toEqual({ extraTools: ["supabase_*"] })
+    expect(result.errors).toEqual([])
+  })
+
+  it("stores both model and extraTools when both are provided", () => {
+    const result = validateConfigFile({
+      agents: {
+        stribog: {
+          model: "openai/gpt-5.4",
+          extraTools: ["supabase_*", "supabase_execute_sql"],
+        },
+      },
+    })
+    expect(result.config.agents.stribog).toEqual({
+      model: "openai/gpt-5.4",
+      extraTools: ["supabase_*", "supabase_execute_sql"],
+    })
+    expect(result.errors).toEqual([])
+  })
+
+  it("existing model-only snapshots remain unchanged (model stored without extraTools key)", () => {
+    const result = validateConfigFile({
+      agents: { perun: { model: "anthropic/claude-opus-4-7" } },
+    })
+    expect(result.config.agents.perun).toEqual({
+      model: "anthropic/claude-opus-4-7",
+    })
+    expect(result.errors).toEqual([])
+  })
+
+  // Valid pattern: serena_* — accepted at schema time (runtime denies children)
+  it("accepts serena_* as a valid extraTools entry (broad glob is runtime-only concern)", () => {
+    const result = validateConfigFile({
+      agents: { stribog: { extraTools: ["serena_*"] } },
+    })
+    expect(result.config.agents.stribog).toEqual({ extraTools: ["serena_*"] })
+    expect(result.errors).toEqual([])
+  })
+
+  // Invalid entries dropped, valid siblings kept, errors recorded
+  it("drops CamelCase entry, keeps valid sibling, pushes error", () => {
+    const result = validateConfigFile({
+      agents: {
+        stribog: { extraTools: ["CamelCase", "supabase_execute_sql"] },
+      },
+    })
+    expect(result.config.agents.stribog).toEqual({
+      extraTools: ["supabase_execute_sql"],
+    })
+    expect(result.errors).toHaveLength(1)
+    expect(result.errors[0]).toMatch(/CamelCase/)
+  })
+
+  it("drops entry with a space, keeps valid sibling, pushes error", () => {
+    const result = validateConfigFile({
+      agents: {
+        stribog: { extraTools: ["with space", "supabase_execute_sql"] },
+      },
+    })
+    expect(result.config.agents.stribog).toEqual({
+      extraTools: ["supabase_execute_sql"],
+    })
+    expect(result.errors).toHaveLength(1)
+    expect(result.errors[0]).toMatch(/with space/)
+  })
+
+  it("drops execute_recipe (denied id), keeps valid sibling, pushes error", () => {
+    const result = validateConfigFile({
+      agents: {
+        stribog: { extraTools: ["execute_recipe", "supabase_execute_sql"] },
+      },
+    })
+    expect(result.config.agents.stribog).toEqual({
+      extraTools: ["supabase_execute_sql"],
+    })
+    expect(result.errors).toHaveLength(1)
+    expect(result.errors[0]).toMatch(/execute_recipe/)
+  })
+
+  it("drops execute_* glob (covers denied id), keeps valid sibling, pushes error", () => {
+    const result = validateConfigFile({
+      agents: {
+        stribog: { extraTools: ["execute_*", "supabase_execute_sql"] },
+      },
+    })
+    expect(result.config.agents.stribog).toEqual({
+      extraTools: ["supabase_execute_sql"],
+    })
+    expect(result.errors).toHaveLength(1)
+    expect(result.errors[0]).toMatch(/execute_\*/)
+  })
+
+  it("drops supabase_delete_rows (exact denied by capability), keeps valid sibling, pushes error", () => {
+    const result = validateConfigFile({
+      agents: {
+        stribog: {
+          extraTools: ["supabase_delete_rows", "supabase_execute_sql"],
+        },
+      },
+    })
+    expect(result.config.agents.stribog).toEqual({
+      extraTools: ["supabase_execute_sql"],
+    })
+    expect(result.errors).toHaveLength(1)
+    expect(result.errors[0]).toMatch(/supabase_delete_rows/)
+  })
+
+  it("errors when extraTools is not an array", () => {
+    const result = validateConfigFile({
+      agents: { stribog: { extraTools: "supabase_*" } },
+    })
+    expect(result.config.agents.stribog).toBeUndefined()
+    expect(result.errors).toHaveLength(1)
+    expect(result.errors[0]).toMatch(/extraTools.*array/i)
+  })
+
+  it("emits diagnostic/warning when non-stribog agent uses extraTools", () => {
+    const result = validateConfigFile({
+      agents: {
+        perun: {
+          model: "anthropic/claude-opus-4-7",
+          extraTools: ["supabase_*"],
+        },
+      },
+    })
+    // extraTools on non-stribog should be warned about
+    expect(
+      result.errors.some((e) => /extraTools/.test(e) && /perun/.test(e)),
+    ).toBe(true)
+    // ...and extraTools must NOT be smuggled into the stored non-stribog agent shape.
+    expect(result.config.agents.perun).toEqual({
+      model: "anthropic/claude-opus-4-7",
+    })
+  })
+
+  it("stores nothing for an empty extraTools array (no model) and emits no error", () => {
+    const result = validateConfigFile({
+      agents: { stribog: { extraTools: [] } },
+    })
+    expect(result.config.agents.stribog).toBeUndefined()
+    expect(result.errors).toEqual([])
+  })
+
+  it("stores nothing when every extraTools entry is invalid, but records each error", () => {
+    const result = validateConfigFile({
+      agents: { stribog: { extraTools: ["CamelCase", "execute_recipe"] } },
+    })
+    expect(result.config.agents.stribog).toBeUndefined()
+    expect(result.errors).toHaveLength(2)
+  })
+
+  it("drops a non-string entry, keeps the valid sibling, pushes an error", () => {
+    const result = validateConfigFile({
+      agents: {
+        stribog: { extraTools: [42, "supabase_execute_sql"] },
+      },
+    })
+    expect(result.config.agents.stribog).toEqual({
+      extraTools: ["supabase_execute_sql"],
+    })
+    expect(result.errors).toHaveLength(1)
+  })
+
+  // §3.5 LOAD-BEARING: an invalid model MUST NEVER be stored (CWE-117), yet a
+  // valid extraTools sibling must still survive. This is the exact invariant
+  // the now-removed early-store + `continue` used to guarantee in the
+  // invalid-model branch; the unified store block must reproduce it.
+  it("stores ONLY extraTools (no model key) when the model is invalid (CWE-117 invariant)", () => {
+    const result = validateConfigFile({
+      agents: {
+        stribog: { model: "no-slash-here", extraTools: ["supabase_*"] },
+      },
+    })
+    expect(result.config.agents.stribog).toEqual({ extraTools: ["supabase_*"] })
+    expect(result.config.agents.stribog).not.toHaveProperty("model")
+    expect(
+      result.errors.some((e) => /invalid model "no-slash-here"/.test(e)),
+    ).toBe(true)
+  })
+})

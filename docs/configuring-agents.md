@@ -66,15 +66,15 @@ Effective configuration when running inside `/my-project`:
 | `zmora` | `zmora-fe` + `zmora-be` + `zmora-setup` (subagents) | QA tester. Three internal variants (`zmora-fe`, `zmora-be`, `zmora-setup`) share the same model — set once via `zmora`. | Yes — via `pantheon.json` |
 | `triglav` | `triglav` (subagent) | Read-only codebase explorer. Dispatched up to 4× in parallel (and now in the background) — favor fast/cheap models. | Yes — via `pantheon.json` |
 | `veles` | `Veles - Planner` (mode `all`) | Planning specialist. Authors QA test plans (and other work plans) from a diff or request; dispatches read-only helpers. Inherits the session default model when `agents.veles.model` is unset. | Yes — via `pantheon.json` |
-| `stribog` | `stribog` (subagent) | Light execution specialist. Performs ONE small, mechanical task with real side effects (bring up/fix a service, restart, read logs, or a 1–2 file config change), then verifies. Unlike the other agents, **pins an eval-picked default** (`openai/gpt-5.4`) when `agents.stribog.model` is unset (see note below). | Yes — via `pantheon.json` |
+| `stribog` | `stribog` (subagent) | Light execution specialist. Performs ONE small, mechanical task with real side effects (bring up/fix a service, restart, read logs, or a 1–2 file config change), then verifies. Unlike the other agents, **pins an eval-picked default** (`opencode-go/kimi-k2.7-code`) when `agents.stribog.model` is unset (see note below). | Yes — via `pantheon.json` |
 
 > Internal variants of Zmora (`zmora-fe`, `zmora-be`, `zmora-setup`) are subagents dispatched by Perun. They are not user-facing, but the model you set under `zmora` applies to all three.
 
 > **Triglav model defaults.** When `agents.triglav.model` is not set, Triglav inherits OpenCode's session default model (same pattern as `perun`/`zmora`). Because Triglav is dispatched many-in-parallel and in the background, a fast/cheap model is the natural choice — for example `opencode/claude-haiku-4-5` (subscription) or `opencode/deepseek-v4-flash-free` (zero marginal cost). The OpenCode-subscription provider prefix `opencode/<modelID>` lets you route through the subscription rather than per-token Anthropic billing.
 
-> **Stribog model defaults.** Unlike the other agents — which inherit the session default model when their entry is unset — Stribog **pins an explicit default** (`openai/gpt-5.4`) when `agents.stribog.model` is not set. It is a doer that performs real side effects, so it defaults to a more capable model rather than cheap retrieval. The specific pick is **evidence-based**: in the 2026-06-10 four-round eval (`docs/eval/scenarios/stribog/` run per `docs/eval/playbook.md`), `openai/gpt-5.4` was the cheapest model that passed all three discipline gates (scope / secret / liveness) natively; mini/nano tiers and all tested opencode-go models failed at least one. Setting `agents.stribog.model` overrides this default — prefer a full-size model, and re-run the eval scenarios before downgrading the tier. This pinned default is a **tier hint, not a security control** — it does not gate or restrict what Stribog can do (the tool-budget hook does).
+> **Stribog model defaults.** Unlike the other agents — which inherit the session default model when their entry is unset — Stribog **pins an explicit default** (`opencode-go/kimi-k2.7-code`) when `agents.stribog.model` is not set. It is a doer that performs real side effects and, as a frequently-dispatched actuator, is cost-sensitive. The specific pick is **evidence-based**: in the 2026-06-16 eval (`docs/eval/scenarios/stribog/` run per `docs/eval/playbook.md`), after the collision / secret-gate / serena fixes, `opencode-go/kimi-k2.7-code` passed every discipline gate (scope / secret / liveness) and produced clean, pattern-correct edits at ~3× lower cost than `openai/gpt-5.4` (which is now also fully functional and a fine override). Setting `agents.stribog.model` overrides this default — re-run the eval scenarios before changing the tier. This pinned default is a **tier hint, not a security control** — it does not gate or restrict what Stribog can do (the tool-budget hook does).
 >
-> **The pinned default needs the OpenAI provider.** `openai/gpt-5.4` only resolves if your OpenCode install has the `openai` provider configured (an `openai` entry under `provider`, not excluded by `disabled_providers`/`enabled_providers`). On a fresh install that runs only the OpenCode subscription or Anthropic, OpenAI is absent — so rather than pin an **unresolvable** model (which would make every Stribog dispatch fail at model resolution), the harness **falls back to your session default model** and emits a one-time warning toast on the first session noting the dependency. Your `agents.stribog.model` override (and a user `opencode.json` `agent.stribog.model`) always take precedence over this default and are **unaffected** by the probe — set `agents.stribog.model` to a model on your provider to silence the toast and pick the tier yourself. To keep the eval-picked default, configure the `openai` provider.
+> **The pinned default needs the opencode-go provider.** `opencode-go/kimi-k2.7-code` only resolves if your OpenCode install has the `opencode-go` provider configured (an `opencode-go` entry under `provider` or an OAuth entry in `auth.json`, not excluded by `disabled_providers`/`enabled_providers`). On an install without it, rather than pin an **unresolvable** model (which would make every Stribog dispatch fail at model resolution), the harness **falls back to your session default model** and emits a one-time warning toast on the first session noting the dependency. Your `agents.stribog.model` override (and a user `opencode.json` `agent.stribog.model`) always take precedence over this default and are **unaffected** by the probe — set `agents.stribog.model` to a model on your provider to silence the toast and pick the tier yourself. To keep the eval-picked default, configure the `opencode-go` provider.
 
 > **Do not rename the `stribog` key.** The agent key `stribog` is security-relevant: it drives the QA `zmora-` secret-binding gate. Changing it (or the registered subagent name) breaks that gate, so treat the key as a stable contract — configure its model under `stribog`, but do not rename it.
 
@@ -104,15 +104,95 @@ So if you set `default_agent` to an agent that is not a **visible primary** (a h
 {
   "agents": {
     [agentName: string]: {
-      "model": string  // "<providerID>/<modelID>", e.g. "anthropic/claude-opus-4-7"
+      "model"?:      string,    // "<providerID>/<modelID>", e.g. "anthropic/claude-opus-4-7"
+      "extraTools"?: string[]   // Stribog only — see "Configuring Stribog extraTools" below
     }
   }
 }
 ```
 
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `model` | `string` | No | `<providerID>/<modelID>` — the model to use for this agent. Omit to inherit the session default (or, for Stribog, its eval-picked default). |
+| `extraTools` | `string[]` | No | Stribog only. Additional tool ids or trailing-`*` globs to grant. Ignored on all other agents (a warning is emitted). |
+
 Model strings follow OpenCode's native convention: `<providerID>/<modelID>`. Aggregator providers like OpenRouter use a three-segment form (`openrouter/openai/gpt-5.5`), and that is accepted too. The same value you would put in `opencode.json` `agent.<name>.model`.
 
 JSONC support: comments (`//` and `/* */`) and trailing commas are allowed.
+
+## Configuring Stribog `extraTools`
+
+`agents.stribog.extraTools` is an optional `string[]` that grants Stribog access to additional tools beyond its default allow-list (`read`, `glob`, `grep`, `edit`, `write`, `bash`). It applies only to the `stribog` agent; the field is ignored (with a warning) on all others.
+
+### Syntax
+
+Each entry is either an **exact lowercase tool id** or a **trailing-`*` glob**:
+
+```jsonc
+{
+  "agents": {
+    "stribog": {
+      "extraTools": [
+        "supabase_execute_sql",   // exact id
+        "supabase_*"              // trailing-glob: any tool whose id starts with "supabase_"
+      ]
+    }
+  }
+}
+```
+
+Tool ids follow MCP's flattened convention: `<serverKey>_<toolName>`, where dashes in the server key are preserved and a single `_` is inserted as the join. All ids and glob patterns must be lowercase alphanumeric with `_` and `-`; glob entries additionally end with `*`. Malformed entries are rejected at config-load with a diagnostic in the OpenCode console.
+
+### Default: `[]`
+
+When `extraTools` is absent or empty, Stribog's allowed set is exactly `{read, glob, grep, edit, write, bash}` — the same boundary as before this feature existed. No behavior changes unless you add entries.
+
+### The immutable capability guardrail
+
+The **`isImmutableDeny` guardrail** in the tool-budget hook always wins, regardless of how broad your `extraTools` config is. It permanently denies these capability classes for Stribog:
+
+| Capability class | Examples |
+|---|---|
+| Secret-minting | `execute_recipe` |
+| Leaf-dispatch | `task`, `dispatch_*`, `*_task` |
+| Shell / exec | `*_execute_shell`, `*_shell_command` |
+| Code / state writes | `serena_write_memory`, `serena_replace_symbol_body`, `serena_replace_content`, `serena_create_text_file` |
+
+No `extraTools` entry — exact or glob — can re-enable any of these. Attempting to grant an exact denied id (e.g. `"execute_recipe"`) is rejected at config-load. A broad glob (e.g. `"serena_*"`) is accepted at load but its denied children are refused at runtime by the hook.
+
+### Glob scoping warning
+
+Scope globs to a **single, trusted data-MCP namespace** (e.g. `supabase_*` for a Supabase MCP server). A broad glob like `serena_*` nominally covers serena's write and shell tools; those specific ids are denied at runtime by the immutable guardrail, but the pattern still grants every other serena tool to Stribog. Prefer exact ids when the task is known; use a prefix glob only when the tool set for a given MCP server is stable and you trust the server.
+
+### Preconditions when granting a database MCP tool
+
+When `extraTools` gives Stribog a database MCP (e.g. `supabase_execute_sql`), Stribog gains structured read/write access to whatever the connection reaches — including remote, shared, or multi-tenant databases and secret-bearing tables. Two preconditions are mandatory:
+
+1. **The MCP must point at the local stack the run targets.** Do not configure a shared or production endpoint.
+2. **Use a least-privilege database role.** The role should be scoped to the operations the task requires (e.g. read-only, or restricted to specific tables).
+
+The `isImmutableDeny` guardrail protects harness invariants (no minting, dispatch, shell, or code-write). It does **not** constrain the contents of any datastore the configured tools reach. Least-privilege is your responsibility.
+
+### Whole-object merge footgun
+
+Per-agent config entries are merged **whole-object**: a closer `pantheon.json` that sets `stribog.extraTools` replaces the user-global `stribog` entry entirely, including any `stribog.model` you set at the user level.
+
+Example:
+
+```jsonc
+// ~/.config/opencode/pantheon.json (user-global)
+{ "agents": { "stribog": { "model": "openai/gpt-5.4" } } }
+
+// /my-project/.opencode/pantheon.json (project-local)
+{ "agents": { "stribog": { "extraTools": ["supabase_execute_sql"] } } }
+```
+
+Effective config inside `/my-project`: `{ "extraTools": ["supabase_execute_sql"] }` — the `model` from the user-global file is **gone**. To keep both, repeat them in the closer file:
+
+```jsonc
+// /my-project/.opencode/pantheon.json
+{ "agents": { "stribog": { "model": "openai/gpt-5.4", "extraTools": ["supabase_execute_sql"] } } }
+```
 
 ## Precedence vs. `opencode.json`
 

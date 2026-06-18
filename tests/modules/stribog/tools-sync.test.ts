@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest"
 import { STRIBOG_TOOLS } from "../../../src/modules/stribog/allowed-tools.js"
-import { STRIBOG_ALLOWED_TOOL_IDS } from "../../../src/modules/stribog/stribog.metadata.js"
+import { CORE_BUILTINS } from "../../../src/modules/stribog/stribog.metadata.js"
 
 // STRIBOG_TOOLS (display-cased prompt frontmatter, allowed-tools.ts) and
-// STRIBOG_ALLOWED_TOOL_IDS (lowercase runtime gate, stribog.metadata.ts) are two
+// CORE_BUILTINS (lowercase runtime gate, stribog.metadata.ts) are two
 // hand-maintained lists describing ONE boundary. The "kept in sync" comment is prose;
 // this test is the cross-check. It fails if a verb is added/removed on one side only —
 // which would desync what the model is TOLD it can do from what the hook actually allows
@@ -25,7 +25,7 @@ function deriveRuntimeIds(tools: readonly string[]) {
 describe("Stribog tool-id gate <-> prompt list sync", () => {
   it("derives the gate's non-bash ids exactly from STRIBOG_TOOLS' structured entries", () => {
     const { structured } = deriveRuntimeIds(STRIBOG_TOOLS)
-    const gateWithoutBash = new Set(STRIBOG_ALLOWED_TOOL_IDS)
+    const gateWithoutBash = new Set(CORE_BUILTINS)
     gateWithoutBash.delete("bash")
 
     // Both directions: lowercasing the structured prompt entries must reproduce the gate
@@ -37,6 +37,6 @@ describe("Stribog tool-id gate <-> prompt list sync", () => {
     const { hasBash } = deriveRuntimeIds(STRIBOG_TOOLS)
     // Removing all Bash(...) verbs from the prompt OR dropping `bash` from the gate
     // (on one side only) flips exactly one of these and fails the equality.
-    expect(hasBash).toBe(STRIBOG_ALLOWED_TOOL_IDS.has("bash"))
+    expect(hasBash).toBe(CORE_BUILTINS.has("bash"))
   })
 })

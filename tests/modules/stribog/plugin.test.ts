@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
-import { mkdtempSync, rmSync } from "node:fs"
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs"
 import path from "node:path"
 import { tmpdir } from "node:os"
 import { AppVerkStribogPlugin } from "../../../src/modules/stribog/index.js"
@@ -97,7 +97,7 @@ describe("AppVerkStribogPlugin", () => {
     )
   })
 
-  it("declares a native tools deny-map for execute_recipe and task (inert in 1.15.10; hook enforces)", async () => {
+  it("declares a native tools deny-map for execute_recipe and task (default-allow in 1.17.3; hook enforces)", async () => {
     const hooks = await AppVerkStribogPlugin(fakeInput())
     const config: {
       agent?: Record<string, { tools?: Record<string, boolean> }>
@@ -121,10 +121,10 @@ describe("AppVerkStribogPlugin", () => {
     } as never)
   })
 
-  // L3: when the openai provider the pinned default needs is absent, the default
+  // L3: when the opencode-go provider the pinned default needs is absent, the default
   // is skipped (stribog inherits the session default) AND a one-time warning toast
   // documents the dependency — the serena-gate pattern from plan/explore.
-  it("warns exactly once on session.created when the openai provider is absent", async () => {
+  it("warns exactly once on session.created when the opencode-go provider is absent", async () => {
     const showToast = vi.fn(async () => {})
     const hooks = await AppVerkStribogPlugin(toastInput(showToast))
     await hooks.config?.({ agent: {}, provider: {} } as never)
@@ -133,10 +133,10 @@ describe("AppVerkStribogPlugin", () => {
     expect(showToast).toHaveBeenCalledTimes(1)
   })
 
-  it("does not warn when the openai provider is configured", async () => {
+  it("does not warn when the opencode-go provider is configured", async () => {
     const showToast = vi.fn(async () => {})
     const hooks = await AppVerkStribogPlugin(toastInput(showToast))
-    await hooks.config?.({ agent: {}, provider: { openai: {} } } as never)
+    await hooks.config?.({ agent: {}, provider: { "opencode-go": {} } } as never)
     await hooks.event?.({ event: { type: "session.created" } } as never)
     expect(showToast).not.toHaveBeenCalled()
   })
@@ -166,5 +166,81 @@ describe("AppVerkStribogPlugin", () => {
     await expect(
       before(beforeInput("write", sessionID), beforeOutput("/repo/d.ts")),
     ).resolves.toBeUndefined()
+  })
+})
+
+describe("AppVerkStribogPlugin – extraTools wiring", () => {
+  let tmpHome: string
+  let origHome: string | undefined
+  let origXdgData: string | undefined
+  let origCwd: string
+
+  beforeEach(() => {
+    __resetCacheForTests()
+    clearAgentMetadataRegistry()
+    tmpHome = mkdtempSync(path.join(tmpdir(), "pantheon-stribog-et-"))
+    origHome = process.env.HOME
+    process.env.HOME = tmpHome
+    origXdgData = process.env["XDG_DATA_HOME"]
+    process.env["XDG_DATA_HOME"] = path.join(tmpHome, ".local", "share")
+    origCwd = process.cwd()
+    const projectDir = path.join(tmpHome, "project")
+    mkdirSync(projectDir, { recursive: true })
+    process.chdir(projectDir)
+  })
+
+  afterEach(() => {
+    process.chdir(origCwd)
+    if (origHome === undefined) delete process.env.HOME
+    else process.env.HOME = origHome
+    if (origXdgData === undefined) delete process.env["XDG_DATA_HOME"]
+    else process.env["XDG_DATA_HOME"] = origXdgData
+    rmSync(tmpHome, { recursive: true, force: true })
+    __resetCacheForTests()
+    clearAgentMetadataRegistry()
+  })
+
+  function writeUserGlobal(content: string): void {
+    const dir = path.join(tmpHome, ".config", "opencode")
+    mkdirSync(dir, { recursive: true })
+    writeFileSync(path.join(dir, "pantheon.json"), content)
+  }
+
+  /**
+   * Build a plugin instance whose hook attributes EVERY session to `stribog`,
+   * so the tool enforcement path is exercised end-to-end.
+   */
+  async function makePlugin() {
+    const plugin = await AppVerkStribogPlugin({
+      client: {
+        session: {
+          messages: async () => ({
+            data: [{ info: { role: "user", agent: STRIBOG_AGENT_KEY } }],
+          }),
+        },
+      },
+    } as never)
+    return plugin
+  }
+
+  it("allows a pattern from extraTools when configured via pantheon.json", async () => {
+    writeUserGlobal(
+      `{ "agents": { "stribog": { "extraTools": ["supabase_*"] } } }`,
+    )
+    const plugin = await makePlugin()
+    const before = plugin["tool.execute.before"]!
+    // supabase_execute_sql matches the "supabase_*" glob — must pass.
+    await expect(
+      before({ tool: "supabase_execute_sql", sessionID: "s1", callID: "c" }, { args: {} }),
+    ).resolves.toBeUndefined()
+  })
+
+  it("denies the same pattern when extraTools is absent (strict default)", async () => {
+    // No pantheon.json at all → extraPatterns defaults to [] → deny.
+    const plugin = await makePlugin()
+    const before = plugin["tool.execute.before"]!
+    await expect(
+      before({ tool: "supabase_execute_sql", sessionID: "s1", callID: "c" }, { args: {} }),
+    ).rejects.toThrow(/STRIBOG_TOOL_DENIED/)
   })
 })

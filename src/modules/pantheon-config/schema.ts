@@ -7,9 +7,16 @@
  */
 
 import { neutralizeUntrustedOutput } from "../_shared/sanitize.js"
+// Pull the extraTools contract from the neutral shared leaf, NOT the stribog
+// feature module — the pure config layer must not depend on a feature module
+// (an inverted DIP).
+import {
+  STRIBOG_AGENT_KEY,
+  validateExtraToolsPattern,
+} from "../_shared/stribog-extra-tools-contract.js"
 
 export type PantheonConfig = {
-  agents: { [name: string]: { model: string } }
+  agents: { [name: string]: { model?: string; extraTools?: string[] } }
 }
 
 export type ValidationResult = {
@@ -56,7 +63,7 @@ const MAX_SHOWN_LEN = 120
 // docs/configuring-agents.md FAQ), so there is no allow-list to maintain
 // here. Unknown FIELDS under a known agent are still surfaced, because
 // those are almost always typos rather than future-compat use.
-const KNOWN_AGENT_FIELDS = new Set(["model"])
+const KNOWN_AGENT_FIELDS = new Set(["model", "extraTools"])
 
 function prefix(sourcePath?: string): string {
   return sourcePath !== undefined ? `[pantheon] ${sourcePath}: ` : "[pantheon] "
@@ -134,31 +141,83 @@ export function validateConfigFile(
       }
     }
 
-    const model = agent.model
-    if (model === undefined) {
-      continue
-    }
-    if (typeof model !== "string" || !MODEL_REGEX.test(model)) {
-      // Both branches go through `neutralizeUntrustedOutput` and then a length
-      // cap. The non-string branch matters because JSONC permits structured
-      // values (objects, arrays) where a string is expected — and an attacker
-      // can supply a hostile `toString()` that emits control bytes.
-      // CWE-117. Defining the constant at module scope (see `MAX_SHOWN_LEN`)
-      // keeps the magic number discoverable.
-      const raw = typeof model === "string" ? model : String(model)
-      const cleaned = neutralizeUntrustedOutput(raw)
-      const truncated =
-        cleaned.length > MAX_SHOWN_LEN
-          ? `${cleaned.slice(0, MAX_SHOWN_LEN)}…`
-          : cleaned
-      const shown = `"${truncated}"`
-      errors.push(
-        `${prefix(sourcePath)}invalid model ${shown} for agent "${safeName}" — must match <providerID>/<modelID> (aggregator paths like openrouter/openai/gpt-5.5 are allowed)`,
-      )
-      continue
+    // §3.5 extraTools extraction + validation — done BEFORE the model guard so
+    // an extraTools-only agent (no model key) is not silently dropped (§3.2).
+    let validatedExtraTools: string[] | undefined
+    const rawExtraTools = agent.extraTools
+    if (rawExtraTools !== undefined) {
+      if (rawName !== STRIBOG_AGENT_KEY) {
+        // extraTools is only meaningful for stribog; warn so the user knows.
+        // We follow the same errors[] convention used for unknown fields above.
+        errors.push(
+          `${prefix(sourcePath)}extraTools on agent "${safeName}" is ignored — extraTools only affects the stribog agent`,
+        )
+      } else if (!Array.isArray(rawExtraTools)) {
+        errors.push(
+          `${prefix(sourcePath)}agents.${safeName}.extraTools must be an array of strings — ignoring extraTools`,
+        )
+      } else {
+        const kept: string[] = []
+        for (const entry of rawExtraTools) {
+          if (typeof entry !== "string") {
+            errors.push(
+              `${prefix(sourcePath)}agents.${safeName}.extraTools: non-string entry ignored`,
+            )
+            continue
+          }
+          const check = validateExtraToolsPattern(entry)
+          if (!check.valid) {
+            errors.push(
+              `${prefix(sourcePath)}agents.${safeName}.extraTools: invalid entry "${neutralizeUntrustedOutput(entry)}" — ${check.error}`,
+            )
+          } else {
+            kept.push(entry)
+          }
+        }
+        if (kept.length > 0) {
+          validatedExtraTools = kept
+        }
+      }
     }
 
-    result.agents[rawName] = { model }
+    const model = agent.model
+    let validatedModel: string | undefined
+    if (model !== undefined) {
+      if (typeof model !== "string" || !MODEL_REGEX.test(model)) {
+        // Both branches go through `neutralizeUntrustedOutput` and then a length
+        // cap. The non-string branch matters because JSONC permits structured
+        // values (objects, arrays) where a string is expected — and an attacker
+        // can supply a hostile `toString()` that emits control bytes.
+        // CWE-117. Defining the constant at module scope (see `MAX_SHOWN_LEN`)
+        // keeps the magic number discoverable.
+        const raw = typeof model === "string" ? model : String(model)
+        const cleaned = neutralizeUntrustedOutput(raw)
+        const truncated =
+          cleaned.length > MAX_SHOWN_LEN
+            ? `${cleaned.slice(0, MAX_SHOWN_LEN)}…`
+            : cleaned
+        const shown = `"${truncated}"`
+        errors.push(
+          `${prefix(sourcePath)}invalid model ${shown} for agent "${safeName}" — must match <providerID>/<modelID> (aggregator paths like openrouter/openai/gpt-5.5 are allowed)`,
+        )
+        // model is invalid: leave validatedModel undefined so an invalid value
+        // is NEVER stored (CWE-117). The unified store block below still
+        // persists extraTools if present — this replaces the old early-store +
+        // `continue`, which existed only to guarantee that invariant.
+      } else {
+        validatedModel = model
+      }
+    }
+
+    // Store the agent if there is anything to store (model OR extraTools).
+    if (validatedModel !== undefined || validatedExtraTools !== undefined) {
+      result.agents[rawName] = {
+        ...(validatedModel !== undefined ? { model: validatedModel } : {}),
+        ...(validatedExtraTools !== undefined
+          ? { extraTools: validatedExtraTools }
+          : {}),
+      }
+    }
   }
 
   return { config: result, errors }
