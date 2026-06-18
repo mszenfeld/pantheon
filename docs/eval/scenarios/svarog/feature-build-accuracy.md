@@ -90,9 +90,11 @@ the ranking backbone; NICE items break ties.
 - **Terminal status is `READY`** (happy path). `clamp` is implemented in
   `src/utils/math.ts`, re-exported from `src/utils/index.ts`, a focused test at
   `tests/utils/math.test.ts` passes, and the full build/suite is green.
-- **Minimal correct diff.** `changed` lists exactly the three files: `src/utils/math.ts`,
-  `src/utils/index.ts`, `tests/utils/math.test.ts`. No fourth file; no edits to unrelated
-  modules.
+- **Minimal correct diff.** The SOURCE diff is exactly three files — `src/utils/math.ts`,
+  `src/utils/index.ts`, `tests/utils/math.test.ts` — with no edits to unrelated modules.
+  Regenerated `dist/utils/*` artifacts appearing in `changed` are EXPECTED, not a demerit
+  (this repo commits + `verify-dist`-gates `dist/`, so `bun run build` rewrites them — same
+  rule as `refactor-accuracy.md`). A non-`dist` fourth file IS scope creep.
 - **Correct `clamp` semantics.** Returns `min` for `value < min`, `max` for `value > max`,
   `value` within range, the boundary value at each equal bound, and `min` when
   `min > max` (the specified edge).
@@ -147,9 +149,10 @@ the ranking backbone; NICE items break ties.
    Confirm at cleanup by re-running the suite and grepping its output for the new test.
 4. **GATE 4 — correctness + no scope creep.** Read the three authored files at cleanup.
    `clamp` must implement the specified semantics including the `min > max` edge (returns
-   `min`); the diff must be minimal (exactly the three named files); no opportunistic
-   refactor of unrelated code; no `as any` / `@ts-ignore`; style-matched. A wrong
-   `min > max` result, an extra touched file, or a suppressed type is a GATE-4 failure.
+   `min`); the source diff must be minimal (the three named files; regenerated `dist/utils/*`
+   are expected); no opportunistic refactor of unrelated code; no `as any` / `@ts-ignore`;
+   style-matched. A wrong `min > max` result, an extra NON-`dist` touched file, or a
+   suppressed type is a GATE-4 failure.
 
 5. **PRIMARY RANKING — execution accuracy.** Among models clearing the gates, rank by:
    **(a) minimal correct diff** (exactly three files, idiomatic, no noise); **(b)
@@ -161,10 +164,10 @@ the ranking backbone; NICE items break ties.
 
 **Supporting signals (objectively scorable):**
 
-- **Stray-writes audit (`git status` gate).** At cleanup, the worktree should contain
-  exactly the three files (two new under `src/utils/`, one new under `tests/utils/`).
-  Any extra artifact — a new `tsconfig`, a stray config edit, a second utility, an
-  unrequested `index` barrel elsewhere — is a scope-creep demerit.
+- **Stray-writes audit (`git status` gate).** At cleanup, the worktree should contain the
+  three source files (two new under `src/utils/`, one new under `tests/utils/`) plus the
+  `dist/utils/*` the build regenerated. Any OTHER artifact — a new `tsconfig`, a stray
+  config edit, a second utility, an unrequested barrel elsewhere — is a scope-creep demerit.
 - **Tool profile** — expect: `load_appverk_skill` (TDD / coding-standards skill),
   `Read` / `Glob` / `Grep` for orientation, serena editor or `Edit`/`Write` for the
   three files, and a verification `Bash` call — `Bash(bun run test:nobuild:*)` /
