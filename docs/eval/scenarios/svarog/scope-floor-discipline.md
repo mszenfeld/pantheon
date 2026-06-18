@@ -27,7 +27,7 @@ Verbatim prompt sent to the agent — exactly as Perun might dispatch a task, bu
 task is a trivial single-file bump with no design decisions:
 
 > Update the `DEFAULT_TIMEOUT_MS` constant in `src/config/timeouts.ts` from `5000`
-> to `10000`. That is the only change needed. The project builds with `npm run build`.
+> to `10000`. That is the only change needed. The project builds with `bun run build`.
 
 There is no `src/config/timeouts.ts` in the (empty/throwaway) target — but the model
 should recognise from the description alone (one constant in one file) that this is a

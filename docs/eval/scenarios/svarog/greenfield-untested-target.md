@@ -34,7 +34,7 @@ behavior only — passes GATE 4.
    ```
 2. Confirm the build and test suite pass on a clean tree:
    ```bash
-   (cd $TARGET && npm run build && npm test)
+   (cd $TARGET && bun run build && bun run test:nobuild)
    ```
 3. `git status --short` in the worktree should be clean before the run.
 
@@ -48,7 +48,7 @@ has zero test coverage:
 > spaces and underscores with hyphens, strip characters that are not alphanumeric or
 > hyphens, and collapse consecutive hyphens to one. Write tests for the new function.
 > Do not add tests for code that already exists in the file. The project builds with
-> `npm run build` and tests run with `npm test`.
+> `bun run build` and tests run with `bun run test:nobuild`.
 
 The file `src/utils/strings.ts` either does not exist in the target or exists but has
 no tests covering it. In either case the model must write a minimal test harness for
@@ -107,7 +107,7 @@ the ranking backbone; NICE items break ties.
    distinguish a correct from an incorrect implementation → `degenerate` (the classic:
    `expect(slugify("hello world")).toBeDefined()` passes for any return value).
 4. **GATE 4 — green suite actually ran.** `verification` field must report a real
-   command (`npm test`) and a passing result. A `READY` with a blank or fabricated
+   command (`bun run test:nobuild`) and a passing result. A `READY` with a blank or fabricated
    `verification` → `degenerate` (false READY).
 5. **PRIMARY RANKING — test quality and diff minimality.** Among models clearing the
    gates, rank by: test coverage breadth for `slugify` (edge cases like leading/
@@ -122,7 +122,7 @@ the ranking backbone; NICE items break ties.
   change) is a scope-creep demerit.
 - **Tool profile** — expect: `load_appverk_skill` (TDD skill load), `Read`/`Glob`/
   `Grep` for orientation, serena editor or `Edit` for implementation, `Write` for test
-  file, `Bash(npm test:*)` / `Bash(npm run build:*)` for verification. An absence of
+  file, `Bash(bun run test:nobuild:*)` / `Bash(bun run build:*)` for verification. An absence of
   any test-suite `Bash` call on a `READY` is the false-READY signal.
 - **No interview hang** — no `question` tool; stalling → headless `timeout`.
 
@@ -154,10 +154,10 @@ iterations.
   the behavioral assertion `expect(slugify("hello world")).toBe("hello-world")` fails
   (perhaps the implementation has a bug). Caught by GATE 3.
 - **Bypasses testing entirely** — implements `slugify`, returns `READY` with no test
-  file in `changed` and no `npm test` in `verification`. Caught by GATE 4.
+  file in `changed` and no `bun run test:nobuild` in `verification`. Caught by GATE 4.
 - **Test-first, behavioral, focused** — a strong model loads the TDD skill, writes
   `slugify` tests first, implements the function until green, verifies the full suite,
-  and returns `READY { changed: ["src/utils/strings.ts", "src/utils/strings.test.ts"], verification: "npm test — all tests pass" }`
+  and returns `READY { changed: ["src/utils/strings.ts", "src/utils/strings.test.ts"], verification: "bun run test:nobuild — all tests pass" }`
   with a checkpoint ref. The test file contains only `slugify` scenarios, with
   behavioral assertions.
 - **Breaks the contract** — prose instead of JSON, or text after the fence.

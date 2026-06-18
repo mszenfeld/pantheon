@@ -601,7 +601,7 @@ The generic procedure mostly applies, with these amendments.
 - **Multi-file target stand-up.** The greenfield, recovery, and four execution
   scenarios (`feature-build-accuracy`, `refactor-accuracy`, `test-scope-discipline`,
   `manual-qa-gate`) require a runnable test suite. Use a **disposable git worktree**
-  (`git worktree add /tmp/svarog-eval HEAD`) as the target. Confirm `npm run build && npm test` is green
+  (`git worktree add /tmp/svarog-eval HEAD`) as the target. Confirm `bun run build && bun run test:nobuild` is green
   on a clean tree before starting the server. Point `TARGET` at the worktree path.
   The recovery scenario additionally requires injecting a deliberate type error into
   the target **before** starting `opencode serve` — see the scenario file for the
