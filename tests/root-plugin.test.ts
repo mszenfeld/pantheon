@@ -317,7 +317,11 @@ describe("AppVerkPlugins", () => {
     } finally {
       rmSync(tmpDir, { recursive: true, force: true })
     }
-  })
+    // E2E: packs + extracts + `bun install` + a child `bun -e` import (4 spawned
+    // processes). It runs ~1.5s in isolation but brushes the 5s unit-test default
+    // under parallel suite load — give it generous headroom so it never flakes
+    // the suite (a spurious timeout here would corrupt any run gated on a green suite).
+  }, 60_000)
 
   it("registers the Pantheon session-notification event hook", async () => {
     const { AppVerkPlugins } = await loadRootModule()

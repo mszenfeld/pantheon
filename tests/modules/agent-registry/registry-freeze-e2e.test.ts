@@ -6,6 +6,7 @@ import {
 import { AppVerkCoordinatorPlugin } from "../../../src/modules/coordinator/index.js"
 import { AppVerkExplorePlugin } from "../../../src/modules/explore/index.js"
 import { AppVerkQAPlugin } from "../../../src/modules/qa/index.js"
+import { AppVerkSvarogPlugin } from "../../../src/modules/svarog/index.js"
 import type { SpecialistInfo } from "../../../src/modules/agent-registry/agent-metadata.js"
 import type { Config } from "@opencode-ai/plugin"
 
@@ -37,9 +38,11 @@ describe("late registration after Perun prompt snapshot fails loud", () => {
     // Mirror the real defaultPluginFactories ORDER: every agent-registering
     // module constructs BEFORE the coordinator. explore (triglav) + qa (zmora)
     // back the {USE_AVOID:triglav} and specialist rows perun.md references; the
-    // coordinator factory itself registers fix-auto.
+    // coordinator factory itself registers fix-auto. svarog registers itself and
+    // backs the {WORKFLOW:svarog} placeholder in perun.md.
     await AppVerkExplorePlugin(toastClient)
     await AppVerkQAPlugin({ client: fakeClient } as never)
+    await AppVerkSvarogPlugin({ client: fakeClient } as never)
     const coord = await AppVerkCoordinatorPlugin({
       client: fakeClient,
     } as never)

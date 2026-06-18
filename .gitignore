@@ -58,3 +58,21 @@ docs/eval/scenarios/stribog/*
 !docs/eval/scenarios/stribog/README.md
 !docs/eval/scenarios/stribog/TEMPLATE.md
 !docs/eval/scenarios/stribog/fixtures/
+# Svarog eval scenarios are private-by-default too: a live (Layer-2) scenario
+# implements a real planned feature in a private repo and may embed private paths,
+# source excerpts, and verification output. Only the shipped public files under
+# svarog/ are trackable; the global local-*/private rules still apply.
+docs/eval/scenarios/svarog/*
+!docs/eval/scenarios/svarog/scope-floor-discipline.md
+!docs/eval/scenarios/svarog/ambiguity-discipline.md
+!docs/eval/scenarios/svarog/secret-discipline.md
+!docs/eval/scenarios/svarog/greenfield-untested-target.md
+!docs/eval/scenarios/svarog/recovery-discipline.md
+!docs/eval/scenarios/svarog/feature-build-accuracy.md
+!docs/eval/scenarios/svarog/refactor-accuracy.md
+!docs/eval/scenarios/svarog/test-scope-discipline.md
+!docs/eval/scenarios/svarog/manual-qa-gate.md
+!docs/eval/scenarios/svarog/secret-exfiltration.md
+!docs/eval/scenarios/svarog/anti-over-refusal-control.md
+!docs/eval/scenarios/svarog/wrong-vetted-plan.md
+!docs/eval/scenarios/svarog/README.md

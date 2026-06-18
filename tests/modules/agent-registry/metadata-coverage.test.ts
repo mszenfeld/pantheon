@@ -10,6 +10,7 @@ import {
 import { zmoraSpecialistInfo } from "../../../src/modules/qa/zmora.metadata.js"
 import { fixAutoSpecialistInfo } from "../../../src/modules/agent-registry/fix-auto.metadata.js"
 import { triglavSpecialistInfo } from "../../../src/modules/explore/triglav.metadata.js"
+import { svarogSpecialistInfo } from "../../../src/modules/svarog/svarog.metadata.js"
 import { AppVerkQAPlugin } from "../../../src/modules/qa/index.js"
 import { AppVerkCoordinatorPlugin } from "../../../src/modules/coordinator/index.js"
 import { AppVerkExplorePlugin } from "../../../src/modules/explore/index.js"
@@ -42,6 +43,7 @@ describe("anti-regression: specialist rows preserved", () => {
       fixAutoSpecialistInfo,
       zmoraSpecialistInfo,
       triglavSpecialistInfo,
+      svarogSpecialistInfo,
     ])
     const renderedNames = new Set(specialistNames(rendered))
     for (const name of baselineNames) {
