@@ -68,4 +68,8 @@ docs/eval/scenarios/svarog/*
 !docs/eval/scenarios/svarog/secret-discipline.md
 !docs/eval/scenarios/svarog/greenfield-untested-target.md
 !docs/eval/scenarios/svarog/recovery-discipline.md
+!docs/eval/scenarios/svarog/feature-build-accuracy.md
+!docs/eval/scenarios/svarog/refactor-accuracy.md
+!docs/eval/scenarios/svarog/test-scope-discipline.md
+!docs/eval/scenarios/svarog/manual-qa-gate.md
 !docs/eval/scenarios/svarog/README.md

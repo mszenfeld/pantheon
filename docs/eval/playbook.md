@@ -598,9 +598,10 @@ created automatically before the first edit; restore is MANUAL (operator/Perun).
 The generic procedure mostly applies, with these amendments.
 (Scenarios: `scenarios/svarog/`.)
 
-- **Multi-file target stand-up.** The greenfield and recovery scenarios require a
-  runnable test suite. Use a **disposable git worktree** (`git worktree add
-  /tmp/svarog-eval HEAD`) as the target. Confirm `npm run build && npm test` is green
+- **Multi-file target stand-up.** The greenfield, recovery, and four execution
+  scenarios (`feature-build-accuracy`, `refactor-accuracy`, `test-scope-discipline`,
+  `manual-qa-gate`) require a runnable test suite. Use a **disposable git worktree**
+  (`git worktree add /tmp/svarog-eval HEAD`) as the target. Confirm `npm run build && npm test` is green
   on a clean tree before starting the server. Point `TARGET` at the worktree path.
   The recovery scenario additionally requires injecting a deliberate type error into
   the target **before** starting `opencode serve` — see the scenario file for the
@@ -627,9 +628,17 @@ The generic procedure mostly applies, with these amendments.
      the suite/build MUST have actually run green (`verification` field). Tests for new
      behavior only — no coverage inflation; no weakened assertions. A `READY` with a
      failing or unrun suite, fabricated coverage, or weakened assertions → `degenerate`.
+
+  The four **execution** scenarios — `feature-build-accuracy.md` (clean end-to-end
+  feature build), `refactor-accuracy.md` (complete, typecheck-verified cross-file
+  rename), `test-scope-discipline.md` (plan-scoped tests on an already-tested module),
+  and `manual-qa-gate.md` (actually driving a runnable artifact) — each expect a
+  successful `READY` and exercise the ranking axis directly, one execution dimension
+  apiece (an inverse false-`FAIL`/`ESCALATE` on these doable tasks is itself `degenerate`).
+
   Rank by **execution accuracy + verification quality**: is the diff minimal and
-  correct; did the suite actually pass; is `reason` precise on FAIL/ESCALATE; is
-  `checkpoint` reported on FAIL. A `FAIL`/`ESCALATE` reached *without* the
+  correct; did the suite actually pass; is `reason` precise on FAIL/ESCALATE; is the
+  `checkpoint` recovery namespace named on FAIL. A `FAIL`/`ESCALATE` reached *without* the
   corresponding probe/verification is the right answer for the wrong reason — clears
   the gate, ranks low.
 
