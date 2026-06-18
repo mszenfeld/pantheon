@@ -15,8 +15,17 @@ const SECRET_GEN_BASH =
 const PREFILTER_READS: ReadonlySet<string> = new Set(["read", "glob", "grep"])
 
 // Native tools that mutate the working tree -> trigger the one-time recovery checkpoint (a serena
-// editor also triggers it, matched via SVAROG_SERENA_EDITORS).
-const MUTATING_NATIVE: ReadonlySet<string> = new Set(["edit", "write", "multiedit"])
+// editor also triggers it, matched via SVAROG_SERENA_EDITORS). `patch`/`apply_patch` are opencode's
+// native patch tools: GPT-class models edit almost exclusively through `apply_patch`, so omitting it
+// left the recovery checkpoint NEVER firing for those models (an eval on openai/gpt-5.5 produced 0
+// checkpoints across 12 runs). Matched case-insensitively against `norm` at the call site.
+const MUTATING_NATIVE: ReadonlySet<string> = new Set([
+  "edit",
+  "write",
+  "multiedit",
+  "patch",
+  "apply_patch",
+])
 
 export interface SvarogToolHookDeps {
   /** Resolve a session's agent key. Returns undefined when unknown (-> fail-open). */
@@ -90,7 +99,7 @@ export function makeSvarogToolHook(
       // the operator enumerates the deterministic ref (`git for-each-ref refs/svarog/ckpt/`) and runs
       // restoreCheckpoint. Mutating = native edit/write/multiedit OR a serena editor.
       const mutating =
-        MUTATING_NATIVE.has(raw) || SVAROG_SERENA_EDITORS.test(norm)
+        MUTATING_NATIVE.has(norm) || SVAROG_SERENA_EDITORS.test(norm)
       if (
         mutating &&
         deps.createCheckpoint &&

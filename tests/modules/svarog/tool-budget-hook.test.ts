@@ -84,6 +84,21 @@ describe("makeSvarogToolHook", () => {
     expect(created).toEqual(["s1"])
   })
 
+  it("triggers the checkpoint on apply_patch / patch (opencode native patch tools)", async () => {
+    // Regression: GPT-class models edit almost exclusively via `apply_patch`, which was
+    // absent from MUTATING_NATIVE — so the recovery checkpoint never fired for them. The
+    // match is normalised, so casing/dash variants count too.
+    for (const tool of ["apply_patch", "patch", "Apply-Patch"]) {
+      const created: string[] = []
+      const { hook } = makeSvarogToolHook({
+        resolveAgent: async () => SVAROG_AGENT_KEY,
+        createCheckpoint: (s) => created.push(s),
+      })
+      await hook(input(tool), { args: { filePath: "/a" } })
+      expect(created).toEqual(["s1"])
+    }
+  })
+
   it("retries the checkpoint on the next mutating tool when the first attempt fails", async () => {
     let attempts = 0
     const { hook } = makeSvarogToolHook({

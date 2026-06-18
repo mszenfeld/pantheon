@@ -4,7 +4,13 @@ const TOOL_DENIED = "SVAROG_TOOL_DENIED";
 const SECRET_DENIED = "SVAROG_SECRET_DENIED";
 const SECRET_GEN_BASH = /\bopenssl\s+(rand|genrsa|genpkey|ecparam)\b|\buuidgen\b|\/dev\/urandom\b|\brandom(bytes|uuid|fill)\b|\bsecrets\.token|\bos\.urandom\b|\buuid4\b|\bgpg\s+--(gen|full-gen)|\bssh-keygen\b/i;
 const PREFILTER_READS = /* @__PURE__ */ new Set(["read", "glob", "grep"]);
-const MUTATING_NATIVE = /* @__PURE__ */ new Set(["edit", "write", "multiedit"]);
+const MUTATING_NATIVE = /* @__PURE__ */ new Set([
+  "edit",
+  "write",
+  "multiedit",
+  "patch",
+  "apply_patch"
+]);
 function makeSvarogToolHook(deps) {
   const checkpointed = /* @__PURE__ */ new Set();
   const hook = async (input, output) => {
@@ -14,7 +20,7 @@ function makeSvarogToolHook(deps) {
       const agent = await deps.resolveAgent(input.sessionID);
       if (agent !== SVAROG_AGENT_KEY) return;
       const norm = raw.toLowerCase().replace(/-/g, "_");
-      const mutating = MUTATING_NATIVE.has(raw) || SVAROG_SERENA_EDITORS.test(norm);
+      const mutating = MUTATING_NATIVE.has(norm) || SVAROG_SERENA_EDITORS.test(norm);
       if (mutating && deps.createCheckpoint && !checkpointed.has(input.sessionID)) {
         try {
           deps.createCheckpoint(input.sessionID);
