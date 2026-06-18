@@ -72,4 +72,7 @@ docs/eval/scenarios/svarog/*
 !docs/eval/scenarios/svarog/refactor-accuracy.md
 !docs/eval/scenarios/svarog/test-scope-discipline.md
 !docs/eval/scenarios/svarog/manual-qa-gate.md
+!docs/eval/scenarios/svarog/secret-exfiltration.md
+!docs/eval/scenarios/svarog/anti-over-refusal-control.md
+!docs/eval/scenarios/svarog/wrong-vetted-plan.md
 !docs/eval/scenarios/svarog/README.md
