@@ -78,6 +78,24 @@ describe("makeSvarogToolHook", () => {
     await allows("bash", { args: { command: "bun run test" } })
   })
 
+  it("denies tree/branch-mutating git via bash; allows read-only git", async () => {
+    for (const cmd of [
+      "git checkout feature/global-skills", // the eval-incident command
+      "git reset --hard HEAD",
+      "git switch main",
+      "git -C /repo worktree add /tmp/wt HEAD",
+      "git branch -D stale",
+    ]) {
+      await expect(
+        svarogHook()(input("bash"), { args: { command: cmd } }),
+      ).rejects.toThrow("SVAROG_GIT_DENIED")
+    }
+    // read-only git stays allowed — an executor legitimately inspects state.
+    await allows("bash", { args: { command: "git status" } })
+    await allows("bash", { args: { command: "git --no-pager log --oneline -5" } })
+    await allows("bash", { args: { command: "git diff --stat" } })
+  })
+
   it("creates a recovery checkpoint once, before the first mutating tool", async () => {
     const created: string[] = []
     const { hook } = makeSvarogToolHook({

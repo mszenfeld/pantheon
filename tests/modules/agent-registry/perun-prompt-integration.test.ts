@@ -84,4 +84,17 @@ describe("perun prompt integration", () => {
     expect(out).toContain("heavy/main executor")
     expect(out).not.toContain("{WORKFLOW:svarog}")
   })
+
+  it("ships a free-form triage workflow that routes orientation to triglav (QW-1)", () => {
+    const out = render()
+    expect(out).toContain("Workflow 0")
+    // the orient is a DISPATCH to the read-only explorer, never self-run git
+    expect(out).toContain("Dispatch triglav to orient")
+    // worked example keyed to the exact role-discipline eval phrasing
+    expect(out).toContain("Review the changes on this branch")
+  })
+
+  it("routes branch/diff review to triglav via its metadata (QW-2)", () => {
+    expect(render()).toContain("review or summarize the changes")
+  })
 })

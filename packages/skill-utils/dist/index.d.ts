@@ -111,7 +111,12 @@ interface ViolationInfo {
 }
 /**
  * Build the rejection error. The message embeds a machine-readable marker + JSON
- * (so it surfaces in `info.error`, which the eval reads) and a human/LLM redirect (G).
+ * and a human/LLM redirect (G). The hook throws this, so opencode records the
+ * marker in the offending TOOL PART's `state.error` (`part.type === "tool" &&
+ * part.state?.status === "error"`) — the path the eval counts. It reaches the
+ * assistant message's `info.error` only when the turn dies at the wall on it (the
+ * non-cooperative path); when the model cooperatively continues after the
+ * rejection, `info.error` stays empty. See docs/eval/playbook.md "Marker counting".
  */
 declare function buildViolationError(info: ViolationInfo): Error;
 

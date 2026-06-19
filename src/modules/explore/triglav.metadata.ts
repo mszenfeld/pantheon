@@ -18,12 +18,13 @@ export const triglavSpecialistInfo: SpecialistInfo = {
   description: TRIGLAV_DESCRIPTION,
   metadata: {
     keyTrigger:
-      "2+ modules / unfamiliar area involved → fire `triglav` before planning",
+      "2+ modules / unfamiliar area, or reviewing the changes/diff on a branch → fire `triglav` before planning",
     useWhen: [
       "Multiple search angles needed",
       "Unfamiliar module structure",
       "Cross-layer pattern discovery",
       "User asks where/how something works in the codebase",
+      "User asks to review or summarize the changes/diff on a branch",
     ],
     avoidWhen: [
       "You already know the exact file/location",
@@ -35,6 +36,11 @@ export const triglavSpecialistInfo: SpecialistInfo = {
         domain: "Code exploration",
         trigger:
           "Find definitions, references, structure, and patterns in the local codebase",
+      },
+      {
+        domain: "Branch / diff review",
+        trigger:
+          "Review or summarize the changes on a branch (the diff vs base) before planning or testing",
       },
     ],
   },

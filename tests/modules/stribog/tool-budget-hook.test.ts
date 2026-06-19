@@ -52,6 +52,31 @@ describe("stribog tool-budget hook", () => {
     }
   })
 
+  it("denies tree/branch-mutating git via bash; allows read-only git", async () => {
+    const h = hook(STRIBOG)
+    for (const cmd of [
+      "git checkout feature/global-skills", // the eval-incident command
+      "git reset --hard HEAD",
+      "git switch main",
+      "git -C /repo worktree add /tmp/wt HEAD",
+      "git branch -D stale",
+    ]) {
+      await expect(
+        h(input("bash"), { args: { command: cmd } }),
+      ).rejects.toThrow("STRIBOG_GIT_DENIED")
+    }
+    // read-only git stays allowed — an executor legitimately inspects state.
+    for (const cmd of [
+      "git status",
+      "git --no-pager log --oneline -5",
+      "git diff --stat",
+    ]) {
+      await expect(
+        h(input("bash"), { args: { command: cmd } }),
+      ).resolves.toBeUndefined()
+    }
+  })
+
   it("skips attribution (no resolveAgent call) for read/glob/grep (bash is now attributed)", async () => {
     // Cheap pre-filter: read/glob/grep are allow-listed, not edit/write, and have nothing to
     // enforce, so the hook must NOT pay for the (full-transcript) attribution call. bash is NO

@@ -1,4 +1,5 @@
 import { isAbsolute, resolve } from "node:path";
+import { isMutatingGitCommand } from "../_shared/mutating-git.js";
 import {
   STRIBOG_AGENT_KEY,
   CORE_BUILTINS,
@@ -9,6 +10,7 @@ import {
 const TOOL_DENIED = "STRIBOG_TOOL_DENIED";
 const SCOPE_VIOLATION = "STRIBOG_SCOPE_VIOLATION";
 const SECRET_DENIED = "STRIBOG_SECRET_DENIED";
+const GIT_DENIED = "STRIBOG_GIT_DENIED";
 const SECRET_GEN_BASH = /\bopenssl\s+(rand|genrsa|genpkey|ecparam)\b|\buuidgen\b|\/dev\/urandom\b|\brandom(bytes|uuid|fill)\b|\bsecrets\.token|\bos\.urandom\b|\buuid4\b|\bgpg\s+--(gen|full-gen)|\bssh-keygen\b/i;
 const SKILL_META_TOOL = /(^|_)skills?($|_)/;
 const EDIT_EQUIVALENT_TOOL = /(^|_)apply_?patch($|_)|str_replace/;
@@ -52,6 +54,11 @@ function makeStribogToolHook(deps) {
         if (SECRET_GEN_BASH.test(command)) {
           throw new Error(
             `${SECRET_DENIED}: this command generates a secret/credential value, which is NOT Stribog's job \u2014 minting belongs to zmora-setup (minter != actuator). Do not mint, write, or echo a secret. Return the ESCALATE result and state that the value must be provided (or minted by zmora-setup) before you can actuate.`
+          );
+        }
+        if (isMutatingGitCommand(command)) {
+          throw new Error(
+            `${GIT_DENIED}: this command mutates the git working tree/branch (checkout/switch/reset/restore/clean/stash/rebase/merge/cherry-pick/worktree or branch -d/-D), which Stribog \u2014 a leaf actuator \u2014 must never do (it would move or rewrite the operator's worktree). Read-only git (status/log/diff/blame/show) is allowed. Do NOT switch branches; if the task genuinely requires a branch/tree operation, return the ESCALATE result.`
           );
         }
         return;
@@ -118,7 +125,7 @@ function makeStribogToolHook(deps) {
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : "";
-      if (message.startsWith(TOOL_DENIED) || message.startsWith(SCOPE_VIOLATION) || message.startsWith(SECRET_DENIED))
+      if (message.startsWith(TOOL_DENIED) || message.startsWith(SCOPE_VIOLATION) || message.startsWith(SECRET_DENIED) || message.startsWith(GIT_DENIED))
         throw error;
     }
   };

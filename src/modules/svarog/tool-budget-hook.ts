@@ -1,8 +1,10 @@
 import { isImmutableDeny } from "../_shared/stribog-extra-tools-contract.js"
+import { isMutatingGitCommand } from "../_shared/mutating-git.js"
 import { SVAROG_AGENT_KEY, SVAROG_SERENA_EDITORS } from "./svarog.metadata.js"
 
 const TOOL_DENIED = "SVAROG_TOOL_DENIED"
 const SECRET_DENIED = "SVAROG_SECRET_DENIED"
+const GIT_DENIED = "SVAROG_GIT_DENIED"
 
 // Bash secret-GENERATION tripwire (minter != actuator) — same invariant as Stribog. Defense-in-depth
 // behind the hardened svarog.md refusal; the real boundary is that secrets are minted by zmora-setup
@@ -116,7 +118,12 @@ export function makeSvarogToolHook(
         }
       }
 
-      // (2b) bash secret-generation tripwire. Every other bash command passes (host-shell trust).
+      // (2b) bash tripwires. Every other bash command passes (host-shell trust) EXCEPT (i) secret
+      // GENERATION (minter != actuator) and (ii) a TREE-mutating git command. The git carve-out
+      // closes a 2026-06-18 role-discipline-eval footgun: a dispatched executor ran
+      // `git checkout feature/global-skills`, silently moving the operator's worktree off `master`
+      // and breaking the build. Svarog is an in-tree leaf — it inspects state (read-only git is
+      // allowed) but must never switch/rewrite the tree.
       if (raw === "bash") {
         const command =
           typeof output.args?.command === "string" ? output.args.command : ""
@@ -126,6 +133,16 @@ export function makeSvarogToolHook(
               `Svarog's job — minting belongs to zmora-setup (minter != actuator). Do not mint, ` +
               `write, or echo a secret. Return the ESCALATE result and state the value must be ` +
               `provided (or minted by zmora-setup).`,
+          )
+        }
+        if (isMutatingGitCommand(command)) {
+          throw new Error(
+            `${GIT_DENIED}: this command mutates the git working tree/branch ` +
+              `(checkout/switch/reset/restore/clean/stash/rebase/merge/cherry-pick/worktree or ` +
+              `branch -d/-D), which Svarog — an in-tree leaf executor — must never do (it would ` +
+              `move or rewrite the operator's worktree). Read-only git ` +
+              `(status/log/diff/blame/show) is allowed. Do NOT switch branches; if the task ` +
+              `genuinely requires a branch/tree operation, return the ESCALATE result.`,
           )
         }
         return
@@ -172,7 +189,11 @@ export function makeSvarogToolHook(
       return
     } catch (error) {
       const message = error instanceof Error ? error.message : ""
-      if (message.startsWith(TOOL_DENIED) || message.startsWith(SECRET_DENIED))
+      if (
+        message.startsWith(TOOL_DENIED) ||
+        message.startsWith(SECRET_DENIED) ||
+        message.startsWith(GIT_DENIED)
+      )
         throw error
       // never throw from a hook on internal / attribution errors (fail-open)
     }

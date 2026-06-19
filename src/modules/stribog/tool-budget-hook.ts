@@ -1,4 +1,5 @@
 import { isAbsolute, resolve } from "node:path"
+import { isMutatingGitCommand } from "../_shared/mutating-git.js"
 import {
   STRIBOG_AGENT_KEY,
   CORE_BUILTINS,
@@ -10,10 +11,13 @@ import {
 const TOOL_DENIED = "STRIBOG_TOOL_DENIED"
 const SCOPE_VIOLATION = "STRIBOG_SCOPE_VIOLATION"
 const SECRET_DENIED = "STRIBOG_SECRET_DENIED"
+const GIT_DENIED = "STRIBOG_GIT_DENIED"
 
 // Bash secret-GENERATION tripwire (minter != actuator). Stribog's bash is otherwise a trusted host
-// shell — general sub-command restriction (rm, mutating git) is a deliberately deferred host-trust
-// item. Secret generation, however, is a hard security invariant the actuator must not cross: the
+// shell — general sub-command restriction (e.g. rm) is a deliberately deferred host-trust item, but
+// TREE-mutating git is NO LONGER deferred: it is denied below (the 2026-06-18 role-discipline-eval
+// footgun where a dispatched executor ran `git checkout` and moved the operator's worktree off
+// master). Secret generation, however, is a hard security invariant the actuator must not cross: the
 // 2026-06-16 eval caught both candidate models minting a JWT secret via bash (`node -e
 // "...randomBytes..."`, `npm exec -- node -e "...randomBytes..."`). This pattern denies the natural
 // secret-gen primitives — defense-in-depth BEHIND the hardened stribog.md refusal, NOT an
@@ -223,6 +227,16 @@ export function makeStribogToolHook(
               `be provided (or minted by zmora-setup) before you can actuate.`,
           )
         }
+        if (isMutatingGitCommand(command)) {
+          throw new Error(
+            `${GIT_DENIED}: this command mutates the git working tree/branch ` +
+              `(checkout/switch/reset/restore/clean/stash/rebase/merge/cherry-pick/worktree or ` +
+              `branch -d/-D), which Stribog — a leaf actuator — must never do (it would move or ` +
+              `rewrite the operator's worktree). Read-only git (status/log/diff/blame/show) is ` +
+              `allowed. Do NOT switch branches; if the task genuinely requires a branch/tree ` +
+              `operation, return the ESCALATE result.`,
+          )
+        }
         return // bash otherwise allowed — host-shell trust boundary unchanged
       }
 
@@ -353,7 +367,8 @@ export function makeStribogToolHook(
       if (
         message.startsWith(TOOL_DENIED) ||
         message.startsWith(SCOPE_VIOLATION) ||
-        message.startsWith(SECRET_DENIED)
+        message.startsWith(SECRET_DENIED) ||
+        message.startsWith(GIT_DENIED)
       )
         throw error
       // never throw from a hook on internal/attribution errors

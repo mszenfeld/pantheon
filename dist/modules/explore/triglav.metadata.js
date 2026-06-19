@@ -5,12 +5,13 @@ const triglavSpecialistInfo = {
   mode: "subagent",
   description: TRIGLAV_DESCRIPTION,
   metadata: {
-    keyTrigger: "2+ modules / unfamiliar area involved \u2192 fire `triglav` before planning",
+    keyTrigger: "2+ modules / unfamiliar area, or reviewing the changes/diff on a branch \u2192 fire `triglav` before planning",
     useWhen: [
       "Multiple search angles needed",
       "Unfamiliar module structure",
       "Cross-layer pattern discovery",
-      "User asks where/how something works in the codebase"
+      "User asks where/how something works in the codebase",
+      "User asks to review or summarize the changes/diff on a branch"
     ],
     avoidWhen: [
       "You already know the exact file/location",
@@ -21,6 +22,10 @@ const triglavSpecialistInfo = {
       {
         domain: "Code exploration",
         trigger: "Find definitions, references, structure, and patterns in the local codebase"
+      },
+      {
+        domain: "Branch / diff review",
+        trigger: "Review or summarize the changes on a branch (the diff vs base) before planning or testing"
       }
     ]
   }
