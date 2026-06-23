@@ -135,14 +135,19 @@ When fully exercising the contract needs more than one human action (e.g. remove
 
 ## Step 4: Detect available tools
 
+**BE / shell tools** — detected on `PATH` (the runner shells out to these):
+
 ```bash
 command -v curl >/dev/null 2>&1 && echo "curl: available" || echo "curl: unavailable"
 command -v http >/dev/null 2>&1 && echo "httpie: available" || echo "httpie: unavailable"
 command -v psql >/dev/null 2>&1 && echo "psql: available" || echo "psql: unavailable"
 command -v sqlite3 >/dev/null 2>&1 && echo "sqlite3: available" || echo "sqlite3: unavailable"
 command -v mysql >/dev/null 2>&1 && echo "mysql: available" || echo "mysql: unavailable"
-command -v playwright >/dev/null 2>&1 && echo "Playwright CLI: available" || echo "Playwright CLI: unavailable"
+# Optional Playwright *CLI fallback* only — NOT how FE testing runs (see the note below):
+command -v playwright >/dev/null 2>&1 && echo "Playwright CLI fallback: available" || echo "Playwright CLI fallback: unavailable"
 ```
+
+**Playwright is a harness capability, not a `PATH` binary — never gate it on `command -v playwright`.** The runner (`zmora`) is *always* granted the native `playwright_browser_*` MCP tools (`src/modules/qa/allowed-tools.ts`), and `overlay-fe.md` has it verify Playwright by *attempting `playwright_browser_navigate`*, using the CLI only as a fallback. So **treat Playwright (browser automation) as available by default and include `playwright` in `detected-tools`** regardless of the `command -v playwright` result — that probe finds only an optional CLI fallback and must **never** flip Playwright to unavailable. (If the MCP server is genuinely absent at run time, the runner's own `overlay-fe.md` check returns `NEED_INFO`; the planner does not predict that.)
 
 ## Step 4.5: Harness execution scope — plan only what the runner can execute
 

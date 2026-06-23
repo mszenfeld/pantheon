@@ -94,6 +94,15 @@ describe("qa-plan-authoring skill", () => {
     expect(md).toContain("dispatches scenarios in parallel")
   })
 
+  it("Step 4 treats Playwright as an MCP harness capability, not a PATH binary (root-cause fix)", () => {
+    // `command -v playwright` only finds a CLI binary; FE testing runs on the
+    // playwright_browser_* MCP tools the runner is always granted. The CLI probe
+    // must never be the thing that flips Playwright to unavailable.
+    expect(md).toContain("Playwright is a harness capability, not a")
+    expect(md).toContain("never gate it on `command -v playwright`")
+    expect(md).toContain("Playwright CLI fallback")
+  })
+
   it("Step 6.9 sequences shared-quota scenarios via Depends-on", () => {
     expect(md).toContain("Step 6.9")
     expect(md).toContain("terminal wave")
