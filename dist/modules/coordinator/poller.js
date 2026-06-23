@@ -3,10 +3,12 @@ import { truncateBytes } from "./truncate-bytes.js";
 class PollerTimeoutError extends Error {
   kind = "timeout";
   elapsedMs;
-  constructor(elapsedMs) {
-    super(`pollUntilIdle: timeout after ${elapsedMs}ms`);
+  reason;
+  constructor(elapsedMs, reason = "wall-clock") {
+    super(`pollUntilIdle: ${reason} timeout after ${elapsedMs}ms`);
     this.name = "PollerTimeoutError";
     this.elapsedMs = elapsedMs;
+    this.reason = reason;
   }
 }
 class PollerAbortError extends Error {
@@ -25,19 +27,36 @@ async function pollUntilIdle(options) {
     pollIntervalMs,
     signal,
     maxBytes,
-    isSessionActive
+    isSessionActive,
+    idleTimeoutMs
   } = options;
   const startTime = Date.now();
+  let lastProgressAt = startTime;
+  let lastContentBytes = -1;
   while (true) {
     if (signal?.aborted === true) {
       throw new PollerAbortError(Date.now() - startTime);
     }
     const elapsed = Date.now() - startTime;
     if (elapsed >= timeoutMs) {
-      throw new PollerTimeoutError(elapsed);
+      throw new PollerTimeoutError(elapsed, "wall-clock");
+    }
+    if (idleTimeoutMs !== void 0 && Date.now() - lastProgressAt >= idleTimeoutMs) {
+      throw new PollerTimeoutError(Date.now() - lastProgressAt, "idle");
     }
     const messages = await fetchMessages();
     const last = messages[messages.length - 1];
+    if (idleTimeoutMs !== void 0) {
+      const contentBytes = last !== void 0 && last.role === "assistant" ? Buffer.byteLength(last.content, "utf8") : lastContentBytes;
+      let progressed = contentBytes !== lastContentBytes;
+      lastContentBytes = contentBytes;
+      if (!progressed && await probeSessionActive(isSessionActive)) {
+        progressed = true;
+      }
+      if (progressed) {
+        lastProgressAt = Date.now();
+      }
+    }
     if (last !== void 0 && last.role === "assistant" && last.finish_reason) {
       if (!await probeSessionActive(isSessionActive)) {
         return maxBytes === void 0 ? last.content : truncateBytes(last.content, maxBytes);
@@ -48,9 +67,14 @@ async function pollUntilIdle(options) {
     }
     const remaining = timeoutMs - (Date.now() - startTime);
     if (remaining <= 0) {
-      throw new PollerTimeoutError(Date.now() - startTime);
+      throw new PollerTimeoutError(Date.now() - startTime, "wall-clock");
     }
-    await sleepOrAbort(Math.min(pollIntervalMs, remaining), signal, startTime);
+    const idleRemaining = idleTimeoutMs !== void 0 ? idleTimeoutMs - (Date.now() - lastProgressAt) : Number.POSITIVE_INFINITY;
+    await sleepOrAbort(
+      Math.min(pollIntervalMs, remaining, idleRemaining),
+      signal,
+      startTime
+    );
   }
 }
 function sleepOrAbort(ms, signal, startTime) {

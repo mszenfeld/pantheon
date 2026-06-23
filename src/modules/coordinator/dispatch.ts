@@ -228,37 +228,64 @@ export interface DispatchParallelInput {
 // during the inter-poll sleep). Shared with the background path.
 export const DEFAULT_POLL_INTERVAL_MS = 1000
 export const DEFAULT_TASK_TIMEOUT_MS = 5 * 60 * 1000
-// Per-agent foreground-dispatch timeout overrides (ms). Agents absent from this
-// map use DEFAULT_TASK_TIMEOUT_MS. The planner (Veles) runs the heaviest single
-// workload in the system — the multi-step `qa-plan-authoring` skill (Step 0→7)
-// with a code-re-reading refute pass — AND it nests its own read-only dispatch
-// (triglav) inside its own turn. The flat 5-min default starves it on a
-// non-trivial diff: the parent budget (Perun→Veles) must contain the nested
-// child run PLUS all of Veles's authoring + verification, yet a leaf agent's
-// 5 min is the same ceiling. This raises ONLY the planner's budget; every other
-// agent keeps the fast-fail default so a real hang is still detected promptly.
+/**
+ * Per-agent foreground-dispatch timeout. Two bounds, both governing the ENTIRE
+ * turn (the turn runs fire-and-forget via `promptAsync`, so `pollUntilIdle` is
+ * what enforces them):
+ *  - `wallClockMs` — absolute ceiling regardless of progress (the backstop).
+ *  - `idleMs` (optional) — INACTIVITY window: the max time with no sign of life
+ *    before the task is treated as hung. The poller resets it on every observed
+ *    progress (assistant output growing, OR the child still reporting busy), so
+ *    a healthy-but-slow agent runs to completion while a genuinely wedged one is
+ *    caught within `idleMs`. Omitted ⇒ pure wall-clock (the historical model).
+ */
+export interface AgentTimeout {
+  wallClockMs: number
+  idleMs?: number
+}
+
+// Veles heartbeat budget. The planner runs the heaviest single workload in the
+// system — the multi-step `qa-plan-authoring` skill (Step 0→7) with a
+// code-re-reading refute pass, often reading the whole diff in its own turn —
+// and on a large diff with a cheaper model it legitimately streams for well past
+// the old flat 15-min ceiling (observed: continuous output right up to the
+// 15-min mark, then killed mid-stream). A bigger flat number just defers the
+// same false kill, so the planner instead uses an INACTIVITY timeout: it may run
+// as long as it keeps producing/working, bounded only by a generous absolute
+// backstop for the pathological "busy forever, never finishes" case. Every other
+// agent keeps the fast-fail pure-wall-clock default, so a real leaf hang is still
+// detected in 5 min.
 //
 // Keyed by the registered agent name. Kept as a literal (not imported from the
 // plan module) for the same reason as DISPATCHABLE_ALL_AGENTS above — avoid a
 // coordinator→plan import; `agent-task-timeout.test.ts` pins the key against
 // `VELES_AGENT_KEY` so it cannot drift from the planner's real registered name.
-export const VELES_TASK_TIMEOUT_MS = 15 * 60 * 1000
-export const AGENT_TASK_TIMEOUT_MS_OVERRIDES: ReadonlyMap<string, number> =
-  new Map<string, number>([["Veles - Planner", VELES_TASK_TIMEOUT_MS]])
+export const VELES_IDLE_TIMEOUT_MS = 5 * 60 * 1000 // no sign of life ⇒ hung
+export const VELES_WALLCLOCK_BACKSTOP_MS = 45 * 60 * 1000 // absolute ceiling
+export const AGENT_TIMEOUT_OVERRIDES: ReadonlyMap<string, AgentTimeout> =
+  new Map<string, AgentTimeout>([
+    [
+      "Veles - Planner",
+      {
+        wallClockMs: VELES_WALLCLOCK_BACKSTOP_MS,
+        idleMs: VELES_IDLE_TIMEOUT_MS,
+      },
+    ],
+  ])
 
 /**
  * Resolve the foreground dispatch timeout for a given agent. Agents absent from
- * `AGENT_TASK_TIMEOUT_MS_OVERRIDES` fall back to `defaultMs`
- * (`DEFAULT_TASK_TIMEOUT_MS`). An explicit `taskTimeoutMs` passed to
- * `dispatchParallel` still wins over this — that is a deliberate per-call
+ * `AGENT_TIMEOUT_OVERRIDES` get a pure wall-clock budget of `defaultMs`
+ * (`DEFAULT_TASK_TIMEOUT_MS`, no heartbeat). An explicit `taskTimeoutMs` passed
+ * to `dispatchParallel` still wins over this — a deliberate per-call wall-clock
  * override (used by tests and any caller that knows its own budget); this
  * resolver governs only the unspecified-timeout path.
  */
-export function resolveTaskTimeoutMs(
+export function resolveAgentTimeout(
   agentName: string,
   defaultMs: number = DEFAULT_TASK_TIMEOUT_MS,
-): number {
-  return AGENT_TASK_TIMEOUT_MS_OVERRIDES.get(agentName) ?? defaultMs
+): AgentTimeout {
+  return AGENT_TIMEOUT_OVERRIDES.get(agentName) ?? { wallClockMs: defaultMs }
 }
 export const DEFAULT_RESULT_MAX_BYTES = 100 * 1024
 // Aggregate (whole-wave) byte budget for the SUCCESSFUL results returned from a
@@ -293,7 +320,8 @@ export async function dispatchParallel(
     pollIntervalMs = DEFAULT_POLL_INTERVAL_MS,
     // No default here: an explicit value is a deliberate per-call override; when
     // omitted, each task's timeout is resolved per-agent in the worker below so
-    // the planner gets a longer budget than leaf agents (resolveTaskTimeoutMs).
+    // the planner gets the inactivity-based budget while leaf agents keep the
+    // flat wall-clock (resolveAgentTimeout).
     taskTimeoutMs,
     resultMaxBytes = DEFAULT_RESULT_MAX_BYTES,
     aggregateMaxBytes = DEFAULT_AGGREGATE_MAX_BYTES,
@@ -386,9 +414,14 @@ export async function dispatchParallel(
       const task = tasks[i]!
       results[i] = await runTask(task, specialist, {
         pollIntervalMs,
-        // Explicit per-call override wins; otherwise resolve per-agent so the
-        // planner (Veles) gets a longer budget than leaf agents.
-        taskTimeoutMs: taskTimeoutMs ?? resolveTaskTimeoutMs(task.name),
+        // Explicit per-call override wins (as a pure wall-clock budget, no
+        // heartbeat — back-compat for callers/tests that pass their own number);
+        // otherwise resolve per-agent so the planner (Veles) gets the
+        // inactivity-based budget while leaf agents keep the flat wall-clock.
+        timeout:
+          taskTimeoutMs !== undefined
+            ? { wallClockMs: taskTimeoutMs }
+            : resolveAgentTimeout(task.name),
         resultMaxBytes,
         signal,
         sessionAgentRegistry,
@@ -550,7 +583,7 @@ async function runTask(
   specialist: DispatchSpecialist,
   options: {
     pollIntervalMs: number
-    taskTimeoutMs: number
+    timeout: AgentTimeout
     resultMaxBytes: number
     signal?: AbortSignal
     sessionAgentRegistry?: SessionAgentRegistry
@@ -588,9 +621,11 @@ async function runTask(
       fetchMessages: () => specialist.fetchMessages(id),
       // Status gate: only collect once the child session reports inactive —
       // a terminal-looking message alone can be the inter-step finish race
-      // (see DispatchSpecialist.isSessionActive).
+      // (see DispatchSpecialist.isSessionActive). The same probe doubles as the
+      // heartbeat's liveness fallback when `idleTimeoutMs` is set below.
       isSessionActive: () => specialist.isSessionActive(id),
-      timeoutMs: options.taskTimeoutMs,
+      timeoutMs: options.timeout.wallClockMs,
+      idleTimeoutMs: options.timeout.idleMs,
       pollIntervalMs: options.pollIntervalMs,
       signal: options.signal,
       // Bound in-flight memory in the poller too: the per-poll cap matches

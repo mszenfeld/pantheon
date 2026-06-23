@@ -172,21 +172,37 @@ interface DispatchParallelInput {
 }
 declare const DEFAULT_POLL_INTERVAL_MS = 1000;
 declare const DEFAULT_TASK_TIMEOUT_MS: number;
-declare const VELES_TASK_TIMEOUT_MS: number;
-declare const AGENT_TASK_TIMEOUT_MS_OVERRIDES: ReadonlyMap<string, number>;
+/**
+ * Per-agent foreground-dispatch timeout. Two bounds, both governing the ENTIRE
+ * turn (the turn runs fire-and-forget via `promptAsync`, so `pollUntilIdle` is
+ * what enforces them):
+ *  - `wallClockMs` — absolute ceiling regardless of progress (the backstop).
+ *  - `idleMs` (optional) — INACTIVITY window: the max time with no sign of life
+ *    before the task is treated as hung. The poller resets it on every observed
+ *    progress (assistant output growing, OR the child still reporting busy), so
+ *    a healthy-but-slow agent runs to completion while a genuinely wedged one is
+ *    caught within `idleMs`. Omitted ⇒ pure wall-clock (the historical model).
+ */
+interface AgentTimeout {
+    wallClockMs: number;
+    idleMs?: number;
+}
+declare const VELES_IDLE_TIMEOUT_MS: number;
+declare const VELES_WALLCLOCK_BACKSTOP_MS: number;
+declare const AGENT_TIMEOUT_OVERRIDES: ReadonlyMap<string, AgentTimeout>;
 /**
  * Resolve the foreground dispatch timeout for a given agent. Agents absent from
- * `AGENT_TASK_TIMEOUT_MS_OVERRIDES` fall back to `defaultMs`
- * (`DEFAULT_TASK_TIMEOUT_MS`). An explicit `taskTimeoutMs` passed to
- * `dispatchParallel` still wins over this — that is a deliberate per-call
+ * `AGENT_TIMEOUT_OVERRIDES` get a pure wall-clock budget of `defaultMs`
+ * (`DEFAULT_TASK_TIMEOUT_MS`, no heartbeat). An explicit `taskTimeoutMs` passed
+ * to `dispatchParallel` still wins over this — a deliberate per-call wall-clock
  * override (used by tests and any caller that knows its own budget); this
  * resolver governs only the unspecified-timeout path.
  */
-declare function resolveTaskTimeoutMs(agentName: string, defaultMs?: number): number;
+declare function resolveAgentTimeout(agentName: string, defaultMs?: number): AgentTimeout;
 declare const DEFAULT_RESULT_MAX_BYTES: number;
 declare const DEFAULT_AGGREGATE_MAX_BYTES: number;
 declare const DISPATCH_MAX_TASKS = 4;
 declare const DISPATCH_CONCURRENCY = 4;
 declare function dispatchParallel(input: DispatchParallelInput): Promise<DispatchResult[]>;
 
-export { AGENT_TASK_TIMEOUT_MS_OVERRIDES, type AgentInfo, DEFAULT_AGGREGATE_MAX_BYTES, DEFAULT_POLL_INTERVAL_MS, DEFAULT_RESULT_MAX_BYTES, DEFAULT_TASK_TIMEOUT_MS, DISPATCHABLE_ALL_AGENTS, DISPATCH_CONCURRENCY, DISPATCH_MAX_TASKS, type DispatchParallelInput, type DispatchResult, type DispatchSpecialist, type DispatchTask, VELES_TASK_TIMEOUT_MS, dispatchParallel, resolveTaskTimeoutMs, validateDispatchable };
+export { AGENT_TIMEOUT_OVERRIDES, type AgentInfo, type AgentTimeout, DEFAULT_AGGREGATE_MAX_BYTES, DEFAULT_POLL_INTERVAL_MS, DEFAULT_RESULT_MAX_BYTES, DEFAULT_TASK_TIMEOUT_MS, DISPATCHABLE_ALL_AGENTS, DISPATCH_CONCURRENCY, DISPATCH_MAX_TASKS, type DispatchParallelInput, type DispatchResult, type DispatchSpecialist, type DispatchTask, VELES_IDLE_TIMEOUT_MS, VELES_WALLCLOCK_BACKSTOP_MS, dispatchParallel, resolveAgentTimeout, validateDispatchable };

@@ -112,7 +112,7 @@ opencode agent perun "napraw QA-001, QA-003 z docs/testing/reports/2026-05-18-ex
 | Element | Type | Mode | Purpose |
 |---|---|---|---|
 | `@perun` | Agent | `primary` | Coordinator — delegates, synthesizes, proposes next steps. System prompt at `src/agents/perun.md`. |
-| `dispatch_parallel` | Tool | n/a | Parallel session dispatch with a 4-wide worker pool. 1 s poll interval, 5 min per-task timeout, 100 KB result cap, **max 4 tasks per call** (caller chunks for larger workloads). |
+| `dispatch_parallel` | Tool | n/a | Parallel session dispatch with a 4-wide worker pool. 1 s poll interval, 5 min per-task timeout (leaf agents; the planner uses an inactivity-based budget — see runtime characteristics), 100 KB result cap, **max 4 tasks per call** (caller chunks for larger workloads). |
 | `assign_issue_ids` | Tool | n/a | Pure function — deterministic, zero-padded 3-digit IDs (e.g. `QA-001`). |
 | `compute_waves` | Tool | n/a | Pure function — deterministic dependency-graph → wave grouping via topological sort, with cycle detection. |
 | `dispatch_background` | Tool | n/a | Fire-and-forget: starts a single specialist task via `session.promptAsync`, returns `{ id: "bg_…", agent, status: "running" }` immediately. Per-session cap of 4 concurrent background tasks. See [Background dispatch (within-turn overlap)](#background-dispatch-within-turn-overlap). |
@@ -193,13 +193,16 @@ At init, `getPerunPrompt()` (`src/modules/coordinator/index.ts`) loads the templ
 | Parameter | Default | Constant in `src/modules/coordinator/dispatch.ts` |
 |---|---|---|
 | Poll interval | 1000 ms | `DEFAULT_POLL_INTERVAL_MS` |
-| Per-task timeout | 5 min (300 000 ms) | `DEFAULT_TASK_TIMEOUT_MS` |
+| Per-task timeout (leaf agents) | 5 min (300 000 ms), pure wall-clock | `DEFAULT_TASK_TIMEOUT_MS` |
+| Planner (Veles) timeout | **inactivity** 5 min (no sign of life) under a 45 min absolute backstop | `VELES_IDLE_TIMEOUT_MS` / `VELES_WALLCLOCK_BACKSTOP_MS` (via `AGENT_TIMEOUT_OVERRIDES`) |
 | Result max bytes | 100 KB (102 400 B) | `DEFAULT_RESULT_MAX_BYTES` |
 | Worker pool concurrency | 4 | `DISPATCH_CONCURRENCY` |
 | Max tasks per call | 4 | `DISPATCH_MAX_TASKS` (enforced pre-flight; equals `DISPATCH_CONCURRENCY`) |
 | Result ordering | Same order as input `tasks[]` | guaranteed |
 
 Oversize results are truncated with a `\n[…truncated…]` marker. Specialist output passes through `neutralizeUntrustedOutput` (see Security model) before being handed back to `@perun`.
+
+**Per-agent timeout model.** Leaf agents use a flat wall-clock timeout — fast hang-detection for short, bounded work. The planner (Veles) authors the heaviest single workload in the system (the multi-step `qa-plan-authoring` skill, often re-reading the whole diff), which on a large diff with a cheaper model legitimately streams for well past any fixed ceiling. A flat cap there either kills healthy work or, raised high enough to avoid that, fails to catch a real hang for just as long. So the planner instead uses an **inactivity (heartbeat) timeout**: `pollUntilIdle` resets the deadline on every sign of life — the assistant's output growing, or the child still reporting `busy` (the status probe is consulted as a fallback only on a poll where the visible content did not grow, so a streaming turn pays no extra HTTP). A healthy-but-slow planner runs to completion; a genuinely wedged one (no new output **and** not busy) is caught within `VELES_IDLE_TIMEOUT_MS`, faster than the old flat cap. `VELES_WALLCLOCK_BACKSTOP_MS` is the absolute ceiling for the pathological "busy forever, never finishes" case. `PollerTimeoutError.reason` (`"idle"` vs `"wall-clock"`) records which bound fired. Per-agent budgets live in `AGENT_TIMEOUT_OVERRIDES`, resolved by `resolveAgentTimeout`; an explicit `taskTimeoutMs` passed to `dispatch_parallel` overrides both as a pure wall-clock budget.
 
 #### Worker pool semantics
 
@@ -290,7 +293,7 @@ The coordinator's security posture has two layers. Code-enforced rules cannot be
 | Layer | Control | Where |
 |---|---|---|
 | Code-enforced | Anti-recursion default-deny (`validateDispatchable`): a task `name` is dispatchable only if it resolves to a strict `mode: subagent` agent, **or** to an `all`-mode agent on the `DISPATCHABLE_ALL_AGENTS` allowlist (currently just `Veles - Planner`) dispatched by a `callerMode === "primary"` caller (Perun→Veles planning). Everything else throws pre-flight: any `mode: primary` target (`*→Perun`), any non-allowlisted `all` target, and — because the allowlisted path requires a `primary` caller — Veles→Veles and any other non-primary→`all` dispatch. `callerMode` is resolved from `agentRegistry[context.agent].mode`; when it is omitted (legacy callers / unit tests) the allowlisted-`all` path is closed, so the default stays fail-safe (subagent-only). Unknown agents are rejected up front. **Maintainers:** widening `DISPATCHABLE_ALL_AGENTS` enlarges the anti-recursion surface — keep it minimal. | `src/modules/coordinator/dispatch.ts` (`validateDispatchable`, `DISPATCHABLE_ALL_AGENTS`) |
-| Code-enforced | Per-task timeout (default 5 min) — long-running specialists are cut off, returned as `status: "timeout"`. | `src/modules/coordinator/dispatch.ts` + `src/modules/coordinator/poller.ts` (`PollerTimeoutError`) |
+| Code-enforced | Per-task timeout — leaf agents: flat 5 min wall-clock; planner (Veles): 5 min **inactivity** under a 45 min backstop (resets on output growth / `busy`). Timed-out specialists are cut off and returned as `status: "timeout"` (`error` names the bound: `idle` vs `wall-clock`). | `src/modules/coordinator/dispatch.ts` (`resolveAgentTimeout`, `AGENT_TIMEOUT_OVERRIDES`) + `src/modules/coordinator/poller.ts` (`PollerTimeoutError`) |
 | Code-enforced | Result truncation at 100 KB with `[…truncated…]` marker — bounds prompt re-injection surface. | `src/modules/coordinator/dispatch.ts` |
 | Code-enforced | Max 4 tasks per `dispatch_parallel` call (matches worker pool size); rejected pre-flight with explicit error. Bounds per-call session-spawn count and keeps the `×N` label honest. Larger workloads are chunked into multiple sequential calls by the caller. | `src/modules/coordinator/dispatch.ts` (`DISPATCH_MAX_TASKS`) |
 | Code-enforced | Worker pool concurrency capped at 4 — bounds wall-clock concurrency regardless of `tasks.length`. | `src/modules/coordinator/dispatch.ts` (`DISPATCH_CONCURRENCY`) |
