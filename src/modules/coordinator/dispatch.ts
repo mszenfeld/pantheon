@@ -228,6 +228,38 @@ export interface DispatchParallelInput {
 // during the inter-poll sleep). Shared with the background path.
 export const DEFAULT_POLL_INTERVAL_MS = 1000
 export const DEFAULT_TASK_TIMEOUT_MS = 5 * 60 * 1000
+// Per-agent foreground-dispatch timeout overrides (ms). Agents absent from this
+// map use DEFAULT_TASK_TIMEOUT_MS. The planner (Veles) runs the heaviest single
+// workload in the system — the multi-step `qa-plan-authoring` skill (Step 0→7)
+// with a code-re-reading refute pass — AND it nests its own read-only dispatch
+// (triglav) inside its own turn. The flat 5-min default starves it on a
+// non-trivial diff: the parent budget (Perun→Veles) must contain the nested
+// child run PLUS all of Veles's authoring + verification, yet a leaf agent's
+// 5 min is the same ceiling. This raises ONLY the planner's budget; every other
+// agent keeps the fast-fail default so a real hang is still detected promptly.
+//
+// Keyed by the registered agent name. Kept as a literal (not imported from the
+// plan module) for the same reason as DISPATCHABLE_ALL_AGENTS above — avoid a
+// coordinator→plan import; `agent-task-timeout.test.ts` pins the key against
+// `VELES_AGENT_KEY` so it cannot drift from the planner's real registered name.
+export const VELES_TASK_TIMEOUT_MS = 15 * 60 * 1000
+export const AGENT_TASK_TIMEOUT_MS_OVERRIDES: ReadonlyMap<string, number> =
+  new Map<string, number>([["Veles - Planner", VELES_TASK_TIMEOUT_MS]])
+
+/**
+ * Resolve the foreground dispatch timeout for a given agent. Agents absent from
+ * `AGENT_TASK_TIMEOUT_MS_OVERRIDES` fall back to `defaultMs`
+ * (`DEFAULT_TASK_TIMEOUT_MS`). An explicit `taskTimeoutMs` passed to
+ * `dispatchParallel` still wins over this — that is a deliberate per-call
+ * override (used by tests and any caller that knows its own budget); this
+ * resolver governs only the unspecified-timeout path.
+ */
+export function resolveTaskTimeoutMs(
+  agentName: string,
+  defaultMs: number = DEFAULT_TASK_TIMEOUT_MS,
+): number {
+  return AGENT_TASK_TIMEOUT_MS_OVERRIDES.get(agentName) ?? defaultMs
+}
 export const DEFAULT_RESULT_MAX_BYTES = 100 * 1024
 // Aggregate (whole-wave) byte budget for the SUCCESSFUL results returned from a
 // single `dispatch_parallel` call. The per-task `DEFAULT_RESULT_MAX_BYTES` cap
@@ -259,7 +291,10 @@ export async function dispatchParallel(
     agentRegistry,
     specialist,
     pollIntervalMs = DEFAULT_POLL_INTERVAL_MS,
-    taskTimeoutMs = DEFAULT_TASK_TIMEOUT_MS,
+    // No default here: an explicit value is a deliberate per-call override; when
+    // omitted, each task's timeout is resolved per-agent in the worker below so
+    // the planner gets a longer budget than leaf agents (resolveTaskTimeoutMs).
+    taskTimeoutMs,
     resultMaxBytes = DEFAULT_RESULT_MAX_BYTES,
     aggregateMaxBytes = DEFAULT_AGGREGATE_MAX_BYTES,
     signal,
@@ -351,7 +386,9 @@ export async function dispatchParallel(
       const task = tasks[i]!
       results[i] = await runTask(task, specialist, {
         pollIntervalMs,
-        taskTimeoutMs,
+        // Explicit per-call override wins; otherwise resolve per-agent so the
+        // planner (Veles) gets a longer budget than leaf agents.
+        taskTimeoutMs: taskTimeoutMs ?? resolveTaskTimeoutMs(task.name),
         resultMaxBytes,
         signal,
         sessionAgentRegistry,

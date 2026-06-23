@@ -30,6 +30,11 @@ function validateDispatchable(agentRegistry, name, callerMode) {
 }
 const DEFAULT_POLL_INTERVAL_MS = 1e3;
 const DEFAULT_TASK_TIMEOUT_MS = 5 * 60 * 1e3;
+const VELES_TASK_TIMEOUT_MS = 15 * 60 * 1e3;
+const AGENT_TASK_TIMEOUT_MS_OVERRIDES = /* @__PURE__ */ new Map([["Veles - Planner", VELES_TASK_TIMEOUT_MS]]);
+function resolveTaskTimeoutMs(agentName, defaultMs = DEFAULT_TASK_TIMEOUT_MS) {
+  return AGENT_TASK_TIMEOUT_MS_OVERRIDES.get(agentName) ?? defaultMs;
+}
 const DEFAULT_RESULT_MAX_BYTES = 100 * 1024;
 const DEFAULT_AGGREGATE_MAX_BYTES = 128 * 1024;
 const DISPATCH_MAX_TASKS = 4;
@@ -40,7 +45,10 @@ async function dispatchParallel(input) {
     agentRegistry,
     specialist,
     pollIntervalMs = DEFAULT_POLL_INTERVAL_MS,
-    taskTimeoutMs = DEFAULT_TASK_TIMEOUT_MS,
+    // No default here: an explicit value is a deliberate per-call override; when
+    // omitted, each task's timeout is resolved per-agent in the worker below so
+    // the planner gets a longer budget than leaf agents (resolveTaskTimeoutMs).
+    taskTimeoutMs,
     resultMaxBytes = DEFAULT_RESULT_MAX_BYTES,
     aggregateMaxBytes = DEFAULT_AGGREGATE_MAX_BYTES,
     signal,
@@ -90,7 +98,9 @@ async function dispatchParallel(input) {
       const task = tasks[i];
       results[i] = await runTask(task, specialist, {
         pollIntervalMs,
-        taskTimeoutMs,
+        // Explicit per-call override wins; otherwise resolve per-agent so the
+        // planner (Veles) gets a longer budget than leaf agents.
+        taskTimeoutMs: taskTimeoutMs ?? resolveTaskTimeoutMs(task.name),
         resultMaxBytes,
         signal,
         sessionAgentRegistry,
@@ -224,6 +234,7 @@ ${task.context}` : task.prompt;
   }
 }
 export {
+  AGENT_TASK_TIMEOUT_MS_OVERRIDES,
   DEFAULT_AGGREGATE_MAX_BYTES,
   DEFAULT_POLL_INTERVAL_MS,
   DEFAULT_RESULT_MAX_BYTES,
@@ -231,6 +242,8 @@ export {
   DISPATCHABLE_ALL_AGENTS,
   DISPATCH_CONCURRENCY,
   DISPATCH_MAX_TASKS,
+  VELES_TASK_TIMEOUT_MS,
   dispatchParallel,
+  resolveTaskTimeoutMs,
   validateDispatchable
 };

@@ -172,10 +172,21 @@ interface DispatchParallelInput {
 }
 declare const DEFAULT_POLL_INTERVAL_MS = 1000;
 declare const DEFAULT_TASK_TIMEOUT_MS: number;
+declare const VELES_TASK_TIMEOUT_MS: number;
+declare const AGENT_TASK_TIMEOUT_MS_OVERRIDES: ReadonlyMap<string, number>;
+/**
+ * Resolve the foreground dispatch timeout for a given agent. Agents absent from
+ * `AGENT_TASK_TIMEOUT_MS_OVERRIDES` fall back to `defaultMs`
+ * (`DEFAULT_TASK_TIMEOUT_MS`). An explicit `taskTimeoutMs` passed to
+ * `dispatchParallel` still wins over this — that is a deliberate per-call
+ * override (used by tests and any caller that knows its own budget); this
+ * resolver governs only the unspecified-timeout path.
+ */
+declare function resolveTaskTimeoutMs(agentName: string, defaultMs?: number): number;
 declare const DEFAULT_RESULT_MAX_BYTES: number;
 declare const DEFAULT_AGGREGATE_MAX_BYTES: number;
 declare const DISPATCH_MAX_TASKS = 4;
 declare const DISPATCH_CONCURRENCY = 4;
 declare function dispatchParallel(input: DispatchParallelInput): Promise<DispatchResult[]>;
 
-export { type AgentInfo, DEFAULT_AGGREGATE_MAX_BYTES, DEFAULT_POLL_INTERVAL_MS, DEFAULT_RESULT_MAX_BYTES, DEFAULT_TASK_TIMEOUT_MS, DISPATCHABLE_ALL_AGENTS, DISPATCH_CONCURRENCY, DISPATCH_MAX_TASKS, type DispatchParallelInput, type DispatchResult, type DispatchSpecialist, type DispatchTask, dispatchParallel, validateDispatchable };
+export { AGENT_TASK_TIMEOUT_MS_OVERRIDES, type AgentInfo, DEFAULT_AGGREGATE_MAX_BYTES, DEFAULT_POLL_INTERVAL_MS, DEFAULT_RESULT_MAX_BYTES, DEFAULT_TASK_TIMEOUT_MS, DISPATCHABLE_ALL_AGENTS, DISPATCH_CONCURRENCY, DISPATCH_MAX_TASKS, type DispatchParallelInput, type DispatchResult, type DispatchSpecialist, type DispatchTask, VELES_TASK_TIMEOUT_MS, dispatchParallel, resolveTaskTimeoutMs, validateDispatchable };
