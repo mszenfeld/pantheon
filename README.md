@@ -62,7 +62,7 @@ Per-agent model selection lives in `pantheon.json`:
 // ~/.config/opencode/pantheon.json
 {
   "agents": {
-    "perun":   { "model": "opencode-go/qwen3.7-max" },
+    "perun":   { "model": "opencode-go/kimi-k2.7-code" },
     "veles":   { "model": "opencode-go/kimi-k2.6" },
     "zmora":   { "model": "github-copilot/gpt-5.4" },
     "triglav": { "model": "opencode-go/deepseek-v4-flash" },
@@ -75,11 +75,11 @@ Per-agent model selection lives in `pantheon.json`:
 
 ### Recommended models
 
-A sensible starting point per agent. Veles' pick comes from running the model-eval playbook (`docs/eval/playbook.md`; reports aren't committed to the repo); the rest are matched to each role's job. The provider is up to you — the same model is offered by several (`opencode`, `openrouter`, `anthropic`, …), each with its own ID.
+A sensible starting point per agent. The **Perun** and **Veles** picks come from running the model-eval playbook (`docs/eval/playbook.md`; reports aren't committed to the repo); the rest are matched to each role's job. The provider is up to you — the same model is offered by several (`opencode`, `opencode-go`, `openrouter`, `anthropic`, …), each with its own ID.
 
 | Agent | Recommended model | Why |
 | --- | --- | --- |
-| **Perun** (coordinator) | Qwen3.7 Max | Plans dispatch waves, delegates, and synthesizes results — the most reasoning-heavy role. Qwen3.7 Max handles the orchestration and synthesis load; a capable model matters here. |
+| **Perun** (coordinator) | Kimi K2.7 Code | Eval pick across the two coordinator-discipline scenarios (`docs/eval/scenarios/perun/`) — clean on both gates (stays in role, zero `COORDINATOR_POLICY_VIOLATION`s; never improvises a credential) and steadier across iterations than Kimi K2.6 at comparable cost. The reasoning-heavy orchestration/synthesis role. |
 | **Veles** (planner) | Kimi K2.6 | Eval pick across three Layer-1 scenarios — the only candidate to finish all three with the JSON contract intact and clean grounding (no hallucinated behavior, local infra, real DB columns). `EXPENSIVE`, so reliability and speed matter. |
 | **Zmora** (QA tester) | GPT-5.4 | Drives FE/BE scenarios with heavy, structured tool use; reliable at executing scripted steps. |
 | **Triglav** (explorer) | Deepseek V4 Flash | Dispatched many-in-parallel and in the background — favors a fast, cheap model. |
