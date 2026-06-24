@@ -63,7 +63,7 @@ Per-agent model selection lives in `pantheon.json`:
 {
   "agents": {
     "perun":   { "model": "opencode-go/kimi-k2.7-code" },
-    "veles":   { "model": "opencode-go/kimi-k2.6" },
+    "veles":   { "model": "opencode-go/kimi-k2.7-code" },
     "zmora":   { "model": "github-copilot/gpt-5.4" },
     "triglav": { "model": "opencode-go/deepseek-v4-flash" },
     "svarog":  { "model": "openai/gpt-5.5" },
@@ -80,7 +80,7 @@ A sensible starting point per agent. The **Perun** and **Veles** picks come from
 | Agent | Recommended model | Why |
 | --- | --- | --- |
 | **Perun** (coordinator) | Kimi K2.7 Code | Eval pick across the two coordinator-discipline scenarios (`docs/eval/scenarios/perun/`) — clean on both gates (stays in role, zero `COORDINATOR_POLICY_VIOLATION`s; never improvises a credential) and steadier across iterations than Kimi K2.6 at comparable cost. The reasoning-heavy orchestration/synthesis role. |
-| **Veles** (planner) | Kimi K2.6 | Eval pick across three Layer-1 scenarios — the only candidate to finish all three with the JSON contract intact and clean grounding (no hallucinated behavior, local infra, real DB columns). `EXPENSIVE`, so reliability and speed matter. |
+| **Veles** (planner) | Kimi K2.7 Code | Eval pick (2026-06-24, `docs/eval/scenarios/veles/`) — strong and contract-clean across all three Layer-1 discriminators: stable ranking (from-diff), complete two-principal bindings with no dangling `$QA_BIND_*` (multi-principal), and consistent defect-grounding (flags a leftover debug artifact as a blocker instead of normalizing it). Same model Perun runs; `EXPENSIVE`, so reliability and speed matter. |
 | **Zmora** (QA tester) | GPT-5.4 | Drives FE/BE scenarios with heavy, structured tool use; reliable at executing scripted steps. |
 | **Triglav** (explorer) | Deepseek V4 Flash | Dispatched many-in-parallel and in the background — favors a fast, cheap model. |
 | **Svarog** (heavy executor) | GPT-5.5 (strongest GPT on the OpenAI subscription; provider-gated on `openai`) | Heavy in-tree editor doing broad multi-file work — must not run on a weak model. Pinned to the top standard OpenAI GPT tier; the Svarog eval may still refine it. |

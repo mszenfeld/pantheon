@@ -200,7 +200,7 @@ while (Date.now() - t0 < TIMEOUT_MS) {
 ```
 
 **Outcome decision tree** (per iteration — what the loop above branches on
-plus two derived cases evaluated after capture):
+plus three derived cases evaluated after capture):
 
 - `last.info.time.completed` truthy → **done**.
 - `last.info.error` populated → **error** (record the error string).
@@ -211,6 +211,13 @@ plus two derived cases evaluated after capture):
 - Empty assistant turn (< 5 s, 0 chars, 0 tool calls) → **silent-unauth**
   (per Lesson 3) — skip remaining iterations for this candidate and record
   in the report.
+- Turn that reaches **done** *or* times out with **0 output tokens, $0 cost,
+  and empty final text** despite a multi-second runtime and ≥1 tool call →
+  **empty-completion flake** (the provider returned empty completions; distinct
+  from silent-unauth's < 5 s first-call signature). Confirm via
+  `info.tokens.output` and `info.cost` both ≈ 0. Per Lesson 12 this is an
+  environment anomaly, not model degeneration — re-run; never score it as a
+  contract/normalization failure.
 
 **Determinism note.** Temperature is provider-default (Pantheon does not
 pin it for these agents). Iteration-to-iteration variance reflects sampling,
@@ -456,9 +463,14 @@ let lastPlanPath
 // never let it abort the run with the plan still on disk.
 let contract
 try {
-  contract = JSON.parse(finalText.slice(finalText.lastIndexOf("{")))
+  // Strip the prescribed json code fence FIRST (Lesson 11): veles.md tells the
+  // agent to emit the contract as a fenced final message, so a naive
+  // slice-from-last-"{" false-fails every compliant run on the trailing fence.
+  const F = "`".repeat(3)
+  const m = finalText.trim().match(new RegExp("^" + F + "[a-z]*\\s*\\n([\\s\\S]*?)\\n" + F + "\\s*$", "i"))
+  contract = JSON.parse(m ? m[1] : finalText.slice(finalText.lastIndexOf("{")))
 } catch {
-  contract = null // degenerate: broken JSON gate
+  contract = null // degenerate: broken JSON gate (after fence-strip)
 }
 if (contract?.plan_path) {
   lastPlanPath = join(TARGET, contract.plan_path)
@@ -677,9 +689,13 @@ The generic procedure mostly applies, with these amendments.
   ```javascript
   let contract
   try {
-    contract = JSON.parse(finalText.slice(finalText.lastIndexOf("{")))
+    // Strip the prescribed json code fence FIRST (Lesson 11) — the contract is
+    // emitted fenced, so slice-from-last-"{" false-fails on the trailing fence.
+    const F = "`".repeat(3)
+    const m = finalText.trim().match(new RegExp("^" + F + "[a-z]*\\s*\\n([\\s\\S]*?)\\n" + F + "\\s*$", "i"))
+    contract = JSON.parse(m ? m[1] : finalText.slice(finalText.lastIndexOf("{")))
   } catch {
-    contract = null // degenerate: broken JSON gate
+    contract = null // degenerate: broken JSON gate (after fence-strip)
   }
   // Capture changed files into report, then revert.
   if (contract?.changed?.length) {
@@ -735,9 +751,9 @@ The generic procedure mostly applies, with these amendments.
 
 ## Lessons learned
 
-These ten lessons came from the session in which we picked Triglav's model
-by ad-hoc benchmark. Read them before every run — they are why the
-procedure looks the way it does.
+These twelve lessons came from the model-eval sessions (1–10 from the Triglav
+ad-hoc benchmark; 11–12 from the 2026-06-24 Veles run). Read them before every
+run — they are why the procedure looks the way it does.
 
 1. **`promptAsync` is the right primitive** — `session.prompt` blocks for
    the full LLM turn; `session.promptAsync` returns ~immediately and the
@@ -784,6 +800,32 @@ procedure looks the way it does.
     Deliberately include queries that stress a weakness (find-references
     on poorly-named code, multi-file synthesis, output-format compliance),
     and keep at least one "easy" baseline to detect environmental issues.
+11. **The JSON-contract gate must be fence-tolerant.** Veles / Stribog / Svarog
+    are *instructed* to emit the contract as a fenced ```json``` block as the
+    final message ("nothing after it"), and no production code parses the
+    fields — the coordinator LLM reads the message. A naive
+    `JSON.parse(finalText.slice(finalText.lastIndexOf("{")))` therefore
+    FALSE-FAILS every compliant run: the trailing fence breaks the parse. Strip
+    one outer code fence first, then require exactly the contract keys with no
+    non-whitespace before or after the fenced object — "nothing after it" means
+    no prose after the fence; the fence itself is expected. (2026-06-24 Veles
+    run: all six substantive turns were initially mis-flagged as gate failures
+    by the slice-only parser; the recomputed fence-tolerant gate passed them.)
+12. **An empty turn (0 output tokens, $0 cost, empty final text) is a provider
+    flake, not a model verdict.** Distinct from silent-unauth (Lesson 3, < 5 s
+    on the first call) and from degeneration (which still emits tokens): the
+    model makes a tool call or two, then the provider returns empty completions
+    for the rest of the turn — it may even report `done`. Confirm with the token
+    accounting (`info.tokens.output` and `info.cost` both ≈ 0). Treat as an
+    environment anomaly — re-run; never score it as a contract/normalization
+    failure, and for a worst-of-N golden (defect-grounding) EXCLUDE it from the
+    normalization verdict rather than counting it as a GATE-2/GATE-3 flip. If
+    one model flakes *every* turn while another succeeds on the same fresh
+    server, suspect a provider/model-endpoint outage and confirm cross-provider
+    (same `modelID`, different `providerID`) before concluding the model
+    regressed. (2026-06-24: `opencode-go/kimi-k2.6` was empty on 9/9 turns while
+    `opencode/kimi-k2.6` authored a plan in 78 s — an opencode-go endpoint
+    degradation, not a model defect.)
 
 ## Adapting a scenario for your own codebase
 
