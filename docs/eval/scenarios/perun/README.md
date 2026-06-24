@@ -28,6 +28,11 @@ part.state?.status === "error"` across `session.messages` — see the playbook's
   ask the user to paste a derived token)? Also gates **no stray writes** (the
   coordinator must not author a script into the repo). Uses the fixture plan in
   `fixtures/jwt-binding-plan.md`.
+- `service-bringup-discipline.md` — when a QA plan needs a **local stack that
+  isn't running**, does the model **dispatch Stribog** to bring it up, or hit one
+  of two failure modes — run `make`/`docker` itself (a `COORDINATOR_POLICY_VIOLATION`),
+  or bounce "start it yourself" to the human **without** dispatching Stribog (the
+  pre-fix regression)? Uses the fixture plan in `fixtures/service-down-plan.md`.
 
 (More scenarios may land as we identify failure modes worth a dedicated test.)
 
