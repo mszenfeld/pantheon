@@ -159,7 +159,7 @@ class BindingsStore {
       if (opts.declaredInput !== true && nameMatchesCredentialPrefix(name)) {
         return {
           status: "error",
-          reason: `name '${name}' matches a credential-prefix denylist (declare it as a binding Input to use it)`
+          reason: `name '${name}' matches a credential-prefix denylist (declare it in the plan \u2014 as a binding Input or a Required environment variable \u2014 to use it)`
         };
       }
     }

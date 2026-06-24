@@ -490,6 +490,7 @@ Run QA on this plan now? Reply 'yes' to run, 'abort' to stop
 
 On the next turn:
 - Reply is `yes` (or yes-equivalent per the resume intent map) → start Workflow 1 at **Step 2** using `plan_path` (Read → sanitize → preflight → dispatch).
+- Reply includes `NAME=value` pairs (the user volunteering prerequisites early, with or without an explicit `yes`) → treat as consent and start Workflow 1 at **Step 2**, but do NOT call `record_input` yet. The plan has not been preflighted, so a credential-prefixed name (`SUPABASE_URL`, `DATABASE_URL`, `SUPABASE_ANON_KEY`, …) would be rejected by the denylist. Read → sanitize → run `preflight` FIRST (it registers the plan's `**Required environment variables:**` names), THEN `record_input` the volunteered pairs and re-run `preflight`. (`record_input`'s denylist exemption for a Required env var is sourced from the preceding `preflight` call — recording before preflighting fails.)
 - Reply is `abort` (or abort-equivalent) → stop; the plan stays saved.
 - Ambiguous reply → ask once: "Run QA on `<plan_path>`? Reply 'yes' or 'abort'."
 

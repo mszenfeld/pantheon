@@ -14,6 +14,20 @@ declare class QaRunState {
     #private;
     storePlan(parentID: string, bindings: ParsedBinding[]): void;
     getBindings(parentID: string): ParsedBinding[] | undefined;
+    /**
+     * Record env-var NAMES the plan declares as required (the `env` argument of a
+     * `preflight` call). Merged into the run's declared-env set, which
+     * `record_input` consults to exempt plan-declared prerequisites from the
+     * credential-prefix denylist. Idempotent, and materialises the run record if
+     * absent so a `preflight` that runs before any other state write still
+     * persists (the documented flow runs preflight BEFORE the paste dialog).
+     */
+    addDeclaredEnv(parentID: string, names: readonly string[]): void;
+    /**
+     * Names recorded via `addDeclaredEnv` for this run (an empty set when the
+     * parent has no record). Read by `record_input`'s denylist exemption.
+     */
+    getDeclaredEnv(parentID: string): ReadonlySet<string>;
     getDialogRound(parentID: string): number;
     incrementDialogRound(parentID: string): number;
     /**

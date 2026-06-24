@@ -141,6 +141,56 @@ describe("record_input — declared-input exemption", () => {
   })
 })
 
+describe("record_input — declared-env exemption (preflight-sourced)", () => {
+  it("accepts credential-prefix names the plan declared as Required environment variables", async () => {
+    const { store, state, handler } = makeDeps("p1")
+    // Simulates `preflight({ env: [...] })` having persisted the plan's
+    // `**Required environment variables:**` names for this run — the path that
+    // makes a plain prerequisite (NOT a recipe input) pasteable in chat.
+    state.addDeclaredEnv("p1", [
+      "SUPABASE_URL",
+      "SUPABASE_ANON_KEY",
+      "DATABASE_URL",
+    ])
+    const cases: ReadonlyArray<readonly [string, string]> = [
+      ["SUPABASE_URL", "http://127.0.0.1:54321"],
+      ["SUPABASE_ANON_KEY", "eyJhbGciOiJIUzI1NiJ9.payload.sig"],
+      ["DATABASE_URL", "postgresql://postgres:postgres@127.0.0.1:54322/postgres"],
+    ]
+    for (const [name, value] of cases) {
+      const result = await handler({ name, value }, makeContext("p1"))
+      expect(result.status).toBe("ok")
+      expect(store.getBinding("p1", name)?.value.unwrap()).toBe(value)
+    }
+  })
+
+  it("still rejects a credential-prefix name that was neither declared as Required env nor as a binding input", async () => {
+    const { handler, state } = makeDeps("p1")
+    // A DIFFERENT prerequisite is declared — the undeclared one stays blocked,
+    // so the exemption does not become a blanket bypass of the denylist.
+    state.addDeclaredEnv("p1", ["SUPABASE_URL"])
+    const result = await handler(
+      { name: "AWS_SECRET_ACCESS_KEY", value: "AKIAEXAMPLE" },
+      makeContext("p1"),
+    )
+    expect(result.status).toBe("rejected")
+    if (result.status === "rejected")
+      expect(result.reason).toContain("denylist")
+  })
+
+  it("rejects a process-control name even when it appears in declared-env (no exemption for PATH et al.)", async () => {
+    const { handler, state } = makeDeps("p1")
+    state.addDeclaredEnv("p1", ["PATH"])
+    const result = await handler(
+      { name: "PATH", value: "/tmp/evil" },
+      makeContext("p1"),
+    )
+    expect(result.status).toBe("rejected")
+    if (result.status === "rejected")
+      expect(result.reason).toContain("process-control")
+  })
+})
+
 describe("record_input — dialog round cap", () => {
   it("counts multiple pairs in a single round as ONE round", async () => {
     const { state, handler } = makeDeps("p1")

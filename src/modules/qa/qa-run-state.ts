@@ -20,7 +20,22 @@ interface RunRecord {
    */
   dialogRoundInProgress: boolean
   recipeAttempts: Map<string, number>
+  /**
+   * Env-var NAMES the plan declares as `**Required environment variables:**`,
+   * captured from each `preflight({ env })` call for this run. A name in this
+   * set is "declared in the consented plan" — the SAME authorisation basis as
+   * a minted binding's `Inputs:` — so `record_input` exempts it from the
+   * credential-prefix denylist. Without this a plain prerequisite like
+   * `SUPABASE_URL` (declared as a Required env var, NOT a recipe input) is
+   * unpasteable, contradicting the documented "paste in chat, no restart" flow.
+   * See `record-input.ts` and `preflight.ts`.
+   */
+  declaredEnv: Set<string>
 }
+
+/** Shared empty result for `getDeclaredEnv` on an uninitialised parent — avoids
+ * allocating a throwaway Set per call. Never mutated (returned as ReadonlySet). */
+const EMPTY_DECLARED_ENV: ReadonlySet<string> = new Set<string>()
 
 function makeEmptyRecord(plan: ParsedBinding[] = []): RunRecord {
   return {
@@ -28,6 +43,7 @@ function makeEmptyRecord(plan: ParsedBinding[] = []): RunRecord {
     dialogRound: 0,
     dialogRoundInProgress: false,
     recipeAttempts: new Map(),
+    declaredEnv: new Set(),
   }
 }
 
@@ -45,6 +61,31 @@ export class QaRunState {
 
   getBindings(parentID: string): ParsedBinding[] | undefined {
     return this.#map.get(parentID)?.plan
+  }
+
+  /**
+   * Record env-var NAMES the plan declares as required (the `env` argument of a
+   * `preflight` call). Merged into the run's declared-env set, which
+   * `record_input` consults to exempt plan-declared prerequisites from the
+   * credential-prefix denylist. Idempotent, and materialises the run record if
+   * absent so a `preflight` that runs before any other state write still
+   * persists (the documented flow runs preflight BEFORE the paste dialog).
+   */
+  addDeclaredEnv(parentID: string, names: readonly string[]): void {
+    let r = this.#map.get(parentID)
+    if (r === undefined) {
+      r = makeEmptyRecord()
+      this.#map.set(parentID, r)
+    }
+    for (const name of names) r.declaredEnv.add(name)
+  }
+
+  /**
+   * Names recorded via `addDeclaredEnv` for this run (an empty set when the
+   * parent has no record). Read by `record_input`'s denylist exemption.
+   */
+  getDeclaredEnv(parentID: string): ReadonlySet<string> {
+    return this.#map.get(parentID)?.declaredEnv ?? EMPTY_DECLARED_ENV
   }
 
   getDialogRound(parentID: string): number {

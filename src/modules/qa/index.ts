@@ -122,6 +122,7 @@ export const AppVerkQAPlugin: Plugin = async ({ client }) => {
 
   const preflightHandler = makePreflightHandler({
     store,
+    state,
     resolveParentID,
     processEnv: process.env,
   })
@@ -259,6 +260,8 @@ export const AppVerkQAPlugin: Plugin = async ({ client }) => {
           "A name is 'present' if it is bound in the run's bindings store (user-pasted via `record_input`, or minted) OR set to a non-empty value in OpenCode's process env (which dispatched zmora children inherit) — the same resolution order `execute_recipe` uses for recipe inputs.",
           "",
           'Service / database *liveness* is NOT probed here — a host that is up now may be down at dispatch, so reachability is verified per-scenario via the `NEED_INFO` backstop (which reports `kind: "service"`). This tool only catches the most common gap: a missing credential / binding input.',
+          "",
+          "Side effect: registers the passed `env` names as plan-declared for this run, which lets the user paste a credential-prefixed prerequisite (e.g. `SUPABASE_URL`, `DATABASE_URL`) via `record_input` — names that would otherwise hit the credential-prefix denylist. So call `preflight` with the full Required-env list BEFORE the paste dialog (the documented order), even for names you expect to be missing.",
           "",
           "Result shape (JSON-stringified):",
           '- `{ status: "ok" }` — every requested name is resolvable; proceed to dispatch.',

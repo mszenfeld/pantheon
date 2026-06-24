@@ -1,6 +1,7 @@
 function makePreflightHandler(deps) {
   return async (args, ctx) => {
     const parentID = await deps.resolveParentID(ctx.sessionID) ?? ctx.sessionID;
+    deps.state.addDeclaredEnv(parentID, args.env);
     const missing = [];
     const seen = /* @__PURE__ */ new Set();
     for (const name of args.env) {

@@ -12,7 +12,7 @@ function makeRecordInputHandler(deps) {
     const declaredInputs = new Set(
       (deps.state.getBindings(parentID) ?? []).flatMap((b) => b.inputs)
     );
-    const declaredInput = declaredInputs.has(args.name);
+    const declaredInput = declaredInputs.has(args.name) || deps.state.getDeclaredEnv(parentID).has(args.name);
     const write = deps.store.writeBinding(
       parentID,
       args.name,

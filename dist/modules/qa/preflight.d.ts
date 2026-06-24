@@ -1,5 +1,8 @@
 import { BindingsStore } from './bindings-store.js';
+import { QaRunState } from './qa-run-state.js';
 import './secret.js';
+import './binding-parser.js';
+import './recipe-validator.js';
 
 /**
  * Preflight env-presence check. Verifies that the env-var names a QA plan's
@@ -21,6 +24,16 @@ import './secret.js';
  * invocation is a compound command) and was never provisioned into target
  * repos — leaving Perun to write a script into the user's project.
  *
+ * SIDE EFFECT — registers the requested `env` NAMES as plan-declared for this
+ * run (`QaRunState.addDeclaredEnv`). These are the plan's
+ * `**Required environment variables:**`; persisting them lets a subsequent
+ * `record_input` accept a credential-prefixed prerequisite (e.g. `SUPABASE_URL`,
+ * `DATABASE_URL`) that the user pastes in chat. Authorisation basis is the same
+ * as a minted binding's `Inputs:` — "declared in the consented plan". The
+ * ordering is load-bearing: the documented flow runs `preflight` (which finds
+ * the names missing) BEFORE the user pastes, so the names are already
+ * registered when `record_input` fires. See `record-input.ts`.
+ *
  * NOTE: the "resolvable = bound in the store OR non-empty in process env;
  * liveness is NOT probed" semantics above are restated for the LLM in the
  * `preflight` tool description in `index.ts`. The two are intentionally worded
@@ -29,6 +42,7 @@ import './secret.js';
  */
 interface PreflightHandlerDeps {
     store: BindingsStore;
+    state: QaRunState;
     resolveParentID: (sessionID: string) => Promise<string | undefined>;
     processEnv: Record<string, string | undefined>;
 }

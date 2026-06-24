@@ -47,10 +47,44 @@ describe("QaRunState", () => {
     state.storePlan("p1", [fakeBinding])
     state.incrementDialogRound("p1")
     state.incrementRecipeAttempt("p1", "QA_BIND_TOKEN")
+    state.addDeclaredEnv("p1", ["SUPABASE_URL"])
     state.clearRun("p1")
     expect(state.getBindings("p1")).toBeUndefined()
     expect(state.getDialogRound("p1")).toBe(0)
     expect(state.getRecipeAttempts("p1", "QA_BIND_TOKEN")).toBe(0)
+    expect(state.getDeclaredEnv("p1").has("SUPABASE_URL")).toBe(false)
+  })
+
+  describe("declared-env (preflight-sourced denylist exemption)", () => {
+    it("returns an empty set for an uninitialised parent", () => {
+      expect(state.getDeclaredEnv("never-touched").size).toBe(0)
+    })
+
+    it("addDeclaredEnv + getDeclaredEnv round-trip, merging across calls", () => {
+      state.addDeclaredEnv("p1", ["SUPABASE_URL", "SUPABASE_ANON_KEY"])
+      state.addDeclaredEnv("p1", ["DATABASE_URL", "SUPABASE_URL"]) // dup ignored
+      const declared = state.getDeclaredEnv("p1")
+      expect([...declared].sort()).toEqual([
+        "DATABASE_URL",
+        "SUPABASE_ANON_KEY",
+        "SUPABASE_URL",
+      ])
+    })
+
+    it("materialises a record when called before storePlan, without clobbering a later plan", () => {
+      state.addDeclaredEnv("p1", ["SUPABASE_URL"])
+      // getBindings on the freshly-materialised record is the empty-plan default.
+      expect(state.getBindings("p1")).toEqual([])
+      state.storePlan("p1", [fakeBinding])
+      // storePlan must not wipe the already-declared env names.
+      expect(state.getBindings("p1")).toHaveLength(1)
+      expect(state.getDeclaredEnv("p1").has("SUPABASE_URL")).toBe(true)
+    })
+
+    it("scopes declared names per parent", () => {
+      state.addDeclaredEnv("p1", ["SUPABASE_URL"])
+      expect(state.getDeclaredEnv("p2").has("SUPABASE_URL")).toBe(false)
+    })
   })
 
   describe("dialog round on-first-input semantics", () => {

@@ -1,4 +1,5 @@
 import type { BindingsStore } from "./bindings-store.js"
+import type { QaRunState } from "./qa-run-state.js"
 
 /**
  * Preflight env-presence check. Verifies that the env-var names a QA plan's
@@ -20,6 +21,16 @@ import type { BindingsStore } from "./bindings-store.js"
  * invocation is a compound command) and was never provisioned into target
  * repos — leaving Perun to write a script into the user's project.
  *
+ * SIDE EFFECT — registers the requested `env` NAMES as plan-declared for this
+ * run (`QaRunState.addDeclaredEnv`). These are the plan's
+ * `**Required environment variables:**`; persisting them lets a subsequent
+ * `record_input` accept a credential-prefixed prerequisite (e.g. `SUPABASE_URL`,
+ * `DATABASE_URL`) that the user pastes in chat. Authorisation basis is the same
+ * as a minted binding's `Inputs:` — "declared in the consented plan". The
+ * ordering is load-bearing: the documented flow runs `preflight` (which finds
+ * the names missing) BEFORE the user pastes, so the names are already
+ * registered when `record_input` fires. See `record-input.ts`.
+ *
  * NOTE: the "resolvable = bound in the store OR non-empty in process env;
  * liveness is NOT probed" semantics above are restated for the LLM in the
  * `preflight` tool description in `index.ts`. The two are intentionally worded
@@ -28,6 +39,7 @@ import type { BindingsStore } from "./bindings-store.js"
  */
 export interface PreflightHandlerDeps {
   store: BindingsStore
+  state: QaRunState
   resolveParentID: (sessionID: string) => Promise<string | undefined>
   processEnv: Record<string, string | undefined>
 }
@@ -51,6 +63,13 @@ export function makePreflightHandler(
   return async (args, ctx) => {
     const parentID =
       (await deps.resolveParentID(ctx.sessionID)) ?? ctx.sessionID
+
+    // Register the plan-declared required-env NAMES for this run so a later
+    // `record_input` can exempt a credential-prefixed prerequisite the user
+    // pastes (see the SIDE EFFECT note above). Done before the presence check
+    // and unconditionally — the names are plan-declared whether or not they
+    // happen to be resolvable right now.
+    deps.state.addDeclaredEnv(parentID, args.env)
 
     const missing: string[] = []
     const seen = new Set<string>()

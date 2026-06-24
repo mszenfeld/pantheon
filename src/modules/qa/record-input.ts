@@ -45,16 +45,26 @@ export function makeRecordInputHandler(
       }
     }
 
-    // A name the plan declares as a recipe input is authorised by the
-    // consented plan (its egress is validated and surfaced at consent time),
-    // so it is exempt from the credential-PREFIX denylist — process-control
-    // names (PATH, LD_*, …) stay denied regardless. This lets the user paste
-    // legitimate inputs like SUPABASE_URL / SUPABASE_ANON_KEY in chat instead
-    // of being forced to export them and restart.
+    // A name the plan DECLARES is authorised by the consented plan, so it is
+    // exempt from the credential-PREFIX denylist — process-control names (PATH,
+    // LD_*, …) stay denied regardless (their denylist has no exemption). Two
+    // declaration forms count, both surfaced to the user at consent time:
+    //   1. a minted binding's `Inputs:` ($VARs its egress-validated recipe
+    //      consumes), parsed by `parse_plan`; and
+    //   2. a `**Required environment variables:**` NAME, captured when Perun
+    //      calls `preflight({ env })` (which runs BEFORE the paste dialog).
+    // Form (2) is what lets the user paste a plain prerequisite like
+    // SUPABASE_URL / SUPABASE_ANON_KEY / DATABASE_URL in chat — values declared
+    // as Required env vars but NOT consumed by any recipe — instead of being
+    // forced to export them and restart. Without it the documented
+    // "paste in chat, no restart" path is impossible for any credential-prefixed
+    // prerequisite. See preflight.ts (the persistence side) and qa-run-state.ts.
     const declaredInputs = new Set(
       (deps.state.getBindings(parentID) ?? []).flatMap((b) => b.inputs),
     )
-    const declaredInput = declaredInputs.has(args.name)
+    const declaredInput =
+      declaredInputs.has(args.name) ||
+      deps.state.getDeclaredEnv(parentID).has(args.name)
 
     const write = deps.store.writeBinding(
       parentID,
