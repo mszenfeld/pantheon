@@ -80,4 +80,17 @@ describe("svarog checkpoint", () => {
     const ref = createCheckpoint(repo, "s2")
     expect(git(repo, ["rev-parse", ref])).toMatch(/^[0-9a-f]{40}$/)
   })
+
+  it("createCheckpoint refuses to overwrite an existing same-session ref", () => {
+    const ref = createCheckpoint(repo, "ses_fixed")
+    const first = git(repo, ["rev-parse", ref])
+
+    // simulate a resumed session editing further, then re-checkpointing with the SAME session id
+    writeFileSync(path.join(repo, "tracked.txt"), "v2-partial\n")
+    const ref2 = createCheckpoint(repo, "ses_fixed")
+    const second = git(repo, ["rev-parse", ref2])
+
+    expect(ref2).toBe(ref)
+    expect(second).toBe(first) // ref still points at the ORIGINAL pre-edit tree, not v2-partial
+  })
 })

@@ -46,7 +46,14 @@ export function createCheckpoint(cwd: string, sessionId: string): string {
       "svarog checkpoint",
     ])
     const ref = `refs/svarog/ckpt/${sessionId}`
-    git(cwd, ["update-ref", ref, commit])
+    // Create-only (atomic): the all-zeros old-oid makes git reject the write if the ref
+    // already exists, so a host-restart resume re-firing the hook after partial edits keeps
+    // the ORIGINAL pre-edit snapshot. Swallow the resulting "already exists" error.
+    try {
+      git(cwd, ["update-ref", ref, commit, "0000000000000000000000000000000000000000"])
+    } catch {
+      // ref already exists — keep the original pre-edit ref
+    }
     return ref
   } finally {
     rmSync(dir, { recursive: true, force: true })
