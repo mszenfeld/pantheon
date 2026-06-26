@@ -8,6 +8,7 @@ import { QaLoopState } from "./sidecar.js"
 import { hashPlan } from "./plan-hash.js"
 import { classifyScenario } from "./classify.js"
 import { capturePreLoopRef } from "./git-ops.js"
+import { stepEnter, stepEvaluate } from "./state-machine.js"
 
 export interface QaLoopToolDeps {
   gate: Pick<CallerGate, "isCoordinatorCaller">
@@ -325,6 +326,85 @@ export function makeQaLoopTools(deps: QaLoopToolDeps) {
     },
   })
 
-  return { qa_loop_start, qa_loop_ingest }
+  const qa_loop_step = tool({
+    description: [
+      "Advance the loop state machine. Perun-only.",
+      "- `phase:\"enter\"` (2.0): increments the iteration ONLY when starting a new one; on re-entry into a not-yet-`evaluated` iteration it resumes from the stored `phase` WITHOUT a second increment (MAXI stays exact). Returns `{ action:\"fix\", issues }` | `{ action:\"stop\", stop_cause }` | `{ action:\"final\" }`.",
+      "- `phase:\"evaluate\"` (2f): no increment; regression-first then no-progress against THIS iteration's retest. Advances the row to `evaluated`. Returns `{ action:\"continue\" }` | `{ action:\"stop\", stop_cause }` | `{ action:\"final\" }`.",
+      "",
+      'Result shape: `{ status:"ok", ...decision }` or `{ status:"forbidden", reason }`.',
+    ].join("\n"),
+    args: {
+      phase: tool.schema.enum(["enter", "evaluate"]),
+    },
+    async execute(args, ctx) {
+      if (!gate.isCoordinatorCaller(ctx.sessionID)) return FORBIDDEN("qa_loop_step")
+      const parentId = await resolveParentID(ctx.sessionID)
+      const s = state.load(parentId)
+      if (!s) return JSON.stringify({ status: "error", reason: "no active loop run" })
+
+      if (args.phase === "enter") {
+        // stepEnter handles idempotency and increments budgets.iteration on fresh entry.
+        // Capture the iteration index before calling so we can detect a fresh entry.
+        const iterBefore = s.budgets.iteration
+        const decision = stepEnter(s)
+
+        if (decision.action === "fix") {
+          // If budgets.iteration advanced (fresh entry), push a new IterationRecord.
+          if (s.budgets.iteration > iterBefore) {
+            s.iterations.push({
+              n: s.budgets.iteration,
+              phase: "selecting",
+              pending: decision.issues ?? [],
+              in_flight: null,
+              attempted_so_far: [],
+              now_passing: [],
+              still_failing: [],
+              stop_cause: null,
+              regressions: [],
+              warnings: [],
+              dispatches_this_iter: 0,
+              elapsed_s: 0,
+            })
+          }
+          // On idempotent re-entry the existing row is unchanged (stepEnter already
+          // confirmed it is not yet evaluated and stop_cause is null).
+        } else if (decision.action === "stop") {
+          // Budget/MAXI fired — push the row so the stop_cause is visible.
+          s.iterations.push({
+            n: s.budgets.iteration,
+            phase: "evaluated",
+            pending: [],
+            in_flight: null,
+            attempted_so_far: [],
+            now_passing: [],
+            still_failing: [],
+            stop_cause: decision.stop_cause ?? null,
+            regressions: [],
+            warnings: [],
+            dispatches_this_iter: 0,
+            elapsed_s: 0,
+          })
+        }
+
+        s.updated_at = Date.now()
+        state.save(parentId, s)
+        return JSON.stringify({ status: "ok", ...decision })
+      }
+
+      // phase === "evaluate"
+      const decision = stepEvaluate(s)
+      const row = s.iterations[s.iterations.length - 1]
+      if (row) {
+        row.phase = "evaluated"
+        if (decision.action === "stop" && decision.stop_cause) row.stop_cause = decision.stop_cause
+      }
+      s.updated_at = Date.now()
+      state.save(parentId, s)
+      return JSON.stringify({ status: "ok", ...decision })
+    },
+  })
+
+  return { qa_loop_start, qa_loop_ingest, qa_loop_step }
 }
 
