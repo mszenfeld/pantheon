@@ -1,6 +1,6 @@
 import { tool } from "@opencode-ai/plugin"
 import { execFileSync } from "node:child_process"
-import { readFileSync } from "node:fs"
+import { readFileSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import type { CallerGate } from "../qa/caller-gate.js"
 import type { Sidecar, ScenarioRecord, ScenarioKind, Mode, SeverityFloor, IssueRecord, Coverage, ScenarioState } from "./types.js"
@@ -8,7 +8,8 @@ import { QaLoopState } from "./sidecar.js"
 import { hashPlan } from "./plan-hash.js"
 import { classifyScenario } from "./classify.js"
 import { capturePreLoopRef, refExists, restoreFailRef, antiHardcodeDiff } from "./git-ops.js"
-import { stepEnter, stepEvaluate } from "./state-machine.js"
+import { stepEnter, stepEvaluate, resultOf } from "./state-machine.js"
+import { renderReport } from "./report.js"
 
 export interface QaLoopToolDeps {
   gate: Pick<CallerGate, "isCoordinatorCaller">
@@ -487,6 +488,45 @@ export function makeQaLoopTools(deps: QaLoopToolDeps) {
     },
   })
 
-  return { qa_loop_start, qa_loop_ingest, qa_loop_step, qa_loop_record_fix }
+  const qa_loop_finalize = tool({
+    description: [
+      "Phase 4 (SUMMARY). Perun-only. Computes the run result via the Result mapping (Pass>NotVerified>BudgetExhausted>Stopped>Fail), then — and ONLY here, the oracle-separation invariant — transitions each `fix-attempted` issue to `fixed` when its scenario's `current` is `pass` after the FINAL ingest. Renders + writes the report markdown (the sole writer of `✅ Fixed`) and records `final_pass_elapsed_s`.",
+      "",
+      'Result shape: `{ status:"ok", result, report_path }` or `{ status:"forbidden", reason }`.',
+    ].join("\n"),
+    args: {
+      final_pass_elapsed_s: tool.schema.number().describe("Wall-clock seconds of the authoritative final pass (the recorded TB-overage component)."),
+    },
+    async execute(args, ctx) {
+      if (!gate.isCoordinatorCaller(ctx.sessionID)) return FORBIDDEN("qa_loop_finalize")
+      const parentId = await resolveParentID(ctx.sessionID)
+      const s = state.load(parentId)
+      if (!s) return JSON.stringify({ status: "error", reason: "no active loop run" })
+
+      // SOLE fix-attempted→fixed transition: only when the FINAL ingest shows
+      // that issue's scenario PASS (§5 status write-back discipline).
+      const finalizedAt = new Date().toISOString()
+      for (const [, issue] of Object.entries(s.issues)) {
+        if (issue.status === "fix-attempted" && s.scenarios[issue.scenario]?.current === "pass") {
+          issue.status = "fixed"
+          issue.fixed_at = finalizedAt
+        }
+      }
+
+      s.result = resultOf(s)
+      s.budgets.final_pass_elapsed_s = args.final_pass_elapsed_s
+      s.finalized_at = Date.now()
+      s.updated_at = s.finalized_at
+      state.save(parentId, s)
+
+      // Tool is the single writer of the report markdown.
+      // s.report_path is always absolute (qa_loop_start stores join(cwd, report_path)).
+      writeFileSync(s.report_path, renderReport(s))
+
+      return JSON.stringify({ status: "ok", result: s.result, report_path: s.report_path })
+    },
+  })
+
+  return { qa_loop_start, qa_loop_ingest, qa_loop_step, qa_loop_record_fix, qa_loop_finalize }
 }
 
