@@ -7,7 +7,7 @@ import type { Sidecar, ScenarioRecord, ScenarioKind, Mode, SeverityFloor, IssueR
 import { QaLoopState } from "./sidecar.js"
 import { hashPlan } from "./plan-hash.js"
 import { classifyScenario } from "./classify.js"
-import { capturePreLoopRef, refExists, restoreFailRef, antiHardcodeDiff } from "./git-ops.js"
+import { capturePreLoopRef, refExists, restoreFailRef, antiHardcodeDiff, undoToPreLoop } from "./git-ops.js"
 import { stepEnter, stepEvaluate, resultOf } from "./state-machine.js"
 import { renderReport } from "./report.js"
 
@@ -527,6 +527,35 @@ export function makeQaLoopTools(deps: QaLoopToolDeps) {
     },
   })
 
-  return { qa_loop_start, qa_loop_ingest, qa_loop_step, qa_loop_record_fix, qa_loop_finalize }
+  const qa_loop_undo = tool({
+    description: [
+      "Total undo (§6): revert the whole working tree to `refs/qa-loop/pre/<run>`, returning the user to exactly the pre-loop state (including any pre-existing dirty work). Perun-only — the coordinator cannot `git reset` itself, so it invokes this tool on request.",
+      "",
+      'Result shape: `{ status:"ok", restored_ref }` | `{ status:"error", reason }` | `{ status:"forbidden", reason }`.',
+    ].join("\n"),
+    args: {},
+    async execute(_args, ctx) {
+      if (!gate.isCoordinatorCaller(ctx.sessionID)) return FORBIDDEN("qa_loop_undo")
+      const parentId = await resolveParentID(ctx.sessionID)
+      const s = state.load(parentId)
+      if (!s) return JSON.stringify({ status: "error", reason: "no active loop run" })
+
+      const ref = s.pre_loop.undo_ref
+      if (!refExists(cwd, ref)) {
+        return JSON.stringify({ status: "error", reason: `pre-loop ref ${ref} is missing` })
+      }
+      undoToPreLoop(cwd, ref)
+      return JSON.stringify({ status: "ok", restored_ref: ref })
+    },
+  })
+
+  return {
+    qa_loop_start,
+    qa_loop_ingest,
+    qa_loop_step,
+    qa_loop_record_fix,
+    qa_loop_finalize,
+    qa_loop_undo,
+  }
 }
 
