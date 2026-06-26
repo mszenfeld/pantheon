@@ -55,6 +55,10 @@ Send POST /orders with a valid payload, expect 201.
 Send POST /orders with no token, expect 401 and no state change.
 `
 
+// No-op assignIssueIds — qa_loop_start doesn't mint QA-IDs, but the dep is required.
+const noopAssignIssueIds = async ({ findings }: { findings: any[]; startAt?: number }) =>
+  findings.map((f) => ({ ...f, id: "QA-000" }))
+
 describe("qa_loop_start", () => {
   let cwd: string
   let state: QaLoopState
@@ -74,7 +78,7 @@ describe("qa_loop_start", () => {
   afterEach(() => rmSync(cwd, { recursive: true, force: true }))
 
   it("rejects a non-coordinator caller", async () => {
-    const tools = makeQaLoopTools({ gate: fakeGate("perun"), state, cwd, resolveParentID: async (s) => s })
+    const tools = makeQaLoopTools({ gate: fakeGate("perun"), state, cwd, resolveParentID: async (s) => s, assignIssueIds: noopAssignIssueIds })
     const res = resultJson(await tools.qa_loop_start.execute(
       { plan_path: "docs/testing/plans/2026-06-26-demo-test-plan.md", topic: "demo", report_path: "docs/testing/reports/2026-06-26-demo-report.md" },
       ctx("child"),
@@ -83,7 +87,7 @@ describe("qa_loop_start", () => {
   })
 
   it("FRESH: hashes the plan, classifies, strips mutating-expected-success, captures pre-loop ref", async () => {
-    const tools = makeQaLoopTools({ gate: fakeGate("perun"), state, cwd, resolveParentID: async (s) => s })
+    const tools = makeQaLoopTools({ gate: fakeGate("perun"), state, cwd, resolveParentID: async (s) => s, assignIssueIds: noopAssignIssueIds })
     const res = resultJson(await tools.qa_loop_start.execute(
       { plan_path: "docs/testing/plans/2026-06-26-demo-test-plan.md", topic: "demo", report_path: "docs/testing/reports/2026-06-26-demo-report.md" },
       ctx("perun"),
@@ -111,7 +115,7 @@ describe("qa_loop_start", () => {
   })
 
   it("--allow-mutations keeps mutating-expected-success in the dispatch set", async () => {
-    const tools = makeQaLoopTools({ gate: fakeGate("perun"), state, cwd, resolveParentID: async (s) => s })
+    const tools = makeQaLoopTools({ gate: fakeGate("perun"), state, cwd, resolveParentID: async (s) => s, assignIssueIds: noopAssignIssueIds })
     const res = resultJson(await tools.qa_loop_start.execute(
       { plan_path: "docs/testing/plans/2026-06-26-demo-test-plan.md", topic: "demo", report_path: "docs/testing/reports/2026-06-26-demo-report.md", allow_mutations: true },
       ctx("perun"),
@@ -123,7 +127,7 @@ describe("qa_loop_start", () => {
 
   it("REUSE (cold-map cross-session): loadFromDisk finds on-disk sidecar and returns prior run state", async () => {
     // First call: FRESH — produces the on-disk sidecar.
-    const tools1 = makeQaLoopTools({ gate: fakeGate("perun"), state, cwd, resolveParentID: async (s) => s })
+    const tools1 = makeQaLoopTools({ gate: fakeGate("perun"), state, cwd, resolveParentID: async (s) => s, assignIssueIds: noopAssignIssueIds })
     const res1 = resultJson(await tools1.qa_loop_start.execute(
       { plan_path: "docs/testing/plans/2026-06-26-demo-test-plan.md", topic: "demo", report_path: "docs/testing/reports/2026-06-26-demo-report.md" },
       ctx("perun"),
@@ -132,7 +136,7 @@ describe("qa_loop_start", () => {
 
     // Simulate a new server start: brand-new QaLoopState (cold in-process map) + new tools.
     const coldState = new QaLoopState()
-    const tools2 = makeQaLoopTools({ gate: fakeGate("perun"), state: coldState, cwd, resolveParentID: async (s) => s })
+    const tools2 = makeQaLoopTools({ gate: fakeGate("perun"), state: coldState, cwd, resolveParentID: async (s) => s, assignIssueIds: noopAssignIssueIds })
 
     // Second call with the SAME plan + report paths — cold map, but sidecar is on disk.
     const res2 = resultJson(await tools2.qa_loop_start.execute(
@@ -176,7 +180,7 @@ describe("qa_loop_start", () => {
     )
     // No sidecar on disk → ADOPT (not REUSE).
 
-    const tools = makeQaLoopTools({ gate: fakeGate("perun"), state, cwd, resolveParentID: async (s) => s })
+    const tools = makeQaLoopTools({ gate: fakeGate("perun"), state, cwd, resolveParentID: async (s) => s, assignIssueIds: noopAssignIssueIds })
     const res = resultJson(await tools.qa_loop_start.execute(
       { plan_path: "docs/testing/plans/2026-06-26-demo-test-plan.md", topic: "demo", report_path: "docs/testing/reports/2026-06-26-demo-report.md" },
       ctx("perun"),
