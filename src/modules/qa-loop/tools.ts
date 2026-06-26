@@ -7,7 +7,7 @@ import type { Sidecar, ScenarioRecord, ScenarioKind, Mode, SeverityFloor, IssueR
 import { QaLoopState } from "./sidecar.js"
 import { hashPlan } from "./plan-hash.js"
 import { classifyScenario } from "./classify.js"
-import { capturePreLoopRef } from "./git-ops.js"
+import { capturePreLoopRef, refExists, restoreFailRef, antiHardcodeDiff } from "./git-ops.js"
 import { stepEnter, stepEvaluate } from "./state-machine.js"
 
 export interface QaLoopToolDeps {
@@ -405,6 +405,88 @@ export function makeQaLoopTools(deps: QaLoopToolDeps) {
     },
   })
 
-  return { qa_loop_start, qa_loop_ingest, qa_loop_step }
+  const qa_loop_record_fix = tool({
+    description: [
+      "Record one sequential Svarog dispatch result (§6). Perun-only. The SOLE writer of `child_session_id` + `dispatch_count_total++`. Perun threads `child_session_id`/`svarog_status`/`changed`/`reason` FROM the dispatch_parallel result JSON — this tool does NOT read DispatchResult.",
+      "- READY: bind `refs/svarog/ckpt/<child_session_id>` (if it exists), run anti-hardcoding on `changed[]`, mark `fix-attempted`. If `changed[]` is non-empty but the ref is MISSING → `checkpoint-integrity` stop (no restore, surfaced).",
+      "- FAIL: auto-restore that issue's checkpoint (restoreFailRef), mark `fix-failed`.",
+      "- ESCALATE: mark `deferred` with `reason`.",
+      "Increments `dispatch_count_total` exactly once for READY/FAIL/ESCALATE alike, and clears the in-iteration `in_flight` cursor.",
+      "",
+      'Result shape: `{ status:"ok", issue_status, stop_cause?, hardcode_warnings? }` or `{ status:"forbidden", reason }`.',
+    ].join("\n"),
+    args: {
+      qa_id: tool.schema.string(),
+      child_session_id: tool.schema.string().describe("DispatchResult.sessionId for this Svarog dispatch, threaded by Perun."),
+      svarog_status: tool.schema.enum(["READY", "FAIL", "ESCALATE"]),
+      changed: tool.schema.array(tool.schema.string()).describe("Svarog's self-reported changed[] paths."),
+      reason: tool.schema.string().describe("ESCALATE/FAIL reason; empty for READY."),
+      be_payloads: tool.schema.array(tool.schema.string()).optional().describe("BE scenario request-payload literals for the anti-hardcoding scan."),
+    },
+    async execute(args, ctx) {
+      if (!gate.isCoordinatorCaller(ctx.sessionID)) return FORBIDDEN("qa_loop_record_fix")
+      const parentId = await resolveParentID(ctx.sessionID)
+      const s = state.load(parentId)
+      if (!s) return JSON.stringify({ status: "error", reason: "no active loop run" })
+
+      const issue = s.issues[args.qa_id]
+      if (!issue) return JSON.stringify({ status: "error", reason: `unknown issue ${args.qa_id}` })
+      const row = s.iterations[s.iterations.length - 1]
+
+      // record_fix is the SOLE writer of child_session_id + the MAXD counter.
+      issue.fix.svarog_status = args.svarog_status
+      issue.fix.child_session_id = args.child_session_id
+      issue.fix.changed = args.changed
+      const ref = `refs/svarog/ckpt/${args.child_session_id}`
+      const hasRef = refExists(cwd, ref)
+
+      let stopCause: string | undefined
+      if (args.svarog_status === "READY") {
+        if (args.changed.length > 0 && !hasRef) {
+          // Existence integrity (§6): a READY that REPORTS changed[] but whose
+          // ref is missing — do NOT auto-restore the untrusted tree; abort.
+          stopCause = "checkpoint-integrity"
+          if (row) row.stop_cause = "checkpoint-integrity"
+        } else {
+          if (hasRef) {
+            issue.fix.checkpoint_ref = ref
+            const warnings = antiHardcodeDiff(cwd, ref, args.changed, args.be_payloads ?? [])
+            issue.fix.hardcode_warnings = warnings
+            if (row) row.warnings.push(...warnings)
+          }
+          issue.status = "fix-attempted"
+        }
+      } else if (args.svarog_status === "FAIL") {
+        if (hasRef) {
+          issue.fix.checkpoint_ref = ref
+          restoreFailRef(cwd, ref) // cumulative-safe (§6); reverts only this issue's edits
+        }
+        issue.status = "fix-failed"
+      } else {
+        // ESCALATE — edit aborted/none
+        issue.status = "deferred"
+        issue.fix.escalate_reason = args.reason
+      }
+
+      // dispatch_count_total++ exactly once, READY/FAIL/ESCALATE alike (§4).
+      s.budgets.dispatch_count_total++
+      if (row) {
+        row.dispatches_this_iter++
+        row.in_flight = null
+        if (!row.attempted_so_far.includes(args.qa_id)) row.attempted_so_far.push(args.qa_id)
+      }
+      s.updated_at = Date.now()
+      state.save(parentId, s)
+
+      return JSON.stringify({
+        status: "ok",
+        issue_status: issue.status,
+        ...(stopCause !== undefined ? { stop_cause: stopCause } : {}),
+        hardcode_warnings: issue.fix.hardcode_warnings,
+      })
+    },
+  })
+
+  return { qa_loop_start, qa_loop_ingest, qa_loop_step, qa_loop_record_fix }
 }
 
