@@ -145,7 +145,7 @@ export const AppVerkCoordinatorPlugin: Plugin = async (input) => {
         " Rejections throw and dispatch nothing.",
       "- Specialist output is treated as untrusted data: ANSI/control characters are stripped and HTML-like substrings are escaped before the result is returned.",
       '- Honors `ToolContext.abort`: when the parent session aborts, in-flight tasks terminate within ~one poll-interval with status "aborted" and the child session is cancelled server-side (best-effort).',
-      '- Result shape: each entry has `{ name, status: "success" | "error" | "timeout" | "aborted", result, duration_ms, error? }`, in the same order as the input `tasks` array.',
+      '- Result shape: each entry has `{ name, status: "success" | "error" | "timeout" | "aborted", result, duration_ms, error?, sessionId? }`, in the same order as the input `tasks` array.',
     ].join("\n"),
     args: {
       // `agent` + `summary` are both REQUIRED, primitive top-level args.
