@@ -1,4 +1,7 @@
-import { describe, it, expect, beforeEach } from "vitest"
+import { describe, it, expect, beforeEach, afterEach } from "vitest"
+import { mkdtempSync, rmSync } from "node:fs"
+import { tmpdir } from "node:os"
+import { join } from "node:path"
 import type { ToolContext } from "@opencode-ai/plugin"
 import { makeQaLoopTools } from "../../../src/modules/qa-loop/tools.js"
 import { QaLoopState } from "../../../src/modules/qa-loop/sidecar.js"
@@ -28,14 +31,14 @@ function resultJson(r: unknown): Record<string, unknown> {
   return JSON.parse(s) as Record<string, unknown>
 }
 
-function seedSidecar(state: QaLoopState, parentId: string) {
+function seedSidecar(state: QaLoopState, parentId: string, dir: string) {
   const now = Date.now()
   const s: Sidecar = {
     version: 1,
     run_id: "qa-loop-demo-1",
-    plan_path: "p.md",
+    plan_path: join(dir, "p.md"),
     plan_sha256: "x".repeat(64),
-    report_path: "r.md",
+    report_path: join(dir, "2026-06-26-demo-report.md"),
     config: { mode: "approve", severity_floor: "LOW", max_iterations: 3, max_dispatches: 50, time_budget_s: 1800, allow_mutations: false },
     started_at: now, updated_at: now, finalized_at: null,
     budgets: { iteration: 0, dispatch_count_total: 0, elapsed_s: 0, final_pass_elapsed_s: null },
@@ -55,11 +58,14 @@ function seedSidecar(state: QaLoopState, parentId: string) {
 }
 
 describe("qa_loop_ingest", () => {
+  let dir: string
   let state: QaLoopState
   beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), "qa-loop-ingest-"))
     state = new QaLoopState()
-    seedSidecar(state, "perun")
+    seedSidecar(state, "perun", dir)
   })
+  afterEach(() => rmSync(dir, { recursive: true, force: true }))
 
   // Fake the coordinator assign_issue_ids: deterministic QA-NNN from startAt.
   const assignIssueIds = async ({ findings, startAt }: { findings: any[]; startAt?: number }) => {
