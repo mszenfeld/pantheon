@@ -491,11 +491,12 @@ export function makeQaLoopTools(deps: QaLoopToolDeps) {
   const qa_loop_finalize = tool({
     description: [
       "Phase 4 (SUMMARY). Perun-only. Computes the run result via the Result mapping (Pass>NotVerified>BudgetExhausted>Stopped>Fail), then — and ONLY here, the oracle-separation invariant — transitions each `fix-attempted` issue to `fixed` when its scenario's `current` is `pass` after the FINAL ingest. Renders + writes the report markdown (the sole writer of `✅ Fixed`) and records `final_pass_elapsed_s`.",
+      "The tool records `final_pass_elapsed_s` itself: it measures wall-clock from the FINAL ingest (`s.updated_at`, last set by `qa_loop_ingest({phase:\"final\"})`) to this finalize call — Perun cannot measure wall-clock, so it does NOT supply it. `final_pass_elapsed_s` is an OPTIONAL override only (e.g. for deterministic tests).",
       "",
       'Result shape: `{ status:"ok", result, report_path }` or `{ status:"forbidden", reason }`.',
     ].join("\n"),
     args: {
-      final_pass_elapsed_s: tool.schema.number().describe("Wall-clock seconds of the authoritative final pass (the recorded TB-overage component)."),
+      final_pass_elapsed_s: tool.schema.number().optional().describe("Optional override for the final-pass wall-clock seconds; omit to let the tool compute it from the FINAL-ingest timestamp."),
     },
     async execute(args, ctx) {
       if (!gate.isCoordinatorCaller(ctx.sessionID)) return FORBIDDEN("qa_loop_finalize")
@@ -503,9 +504,15 @@ export function makeQaLoopTools(deps: QaLoopToolDeps) {
       const s = state.load(parentId)
       if (!s) return JSON.stringify({ status: "error", reason: "no active loop run" })
 
+      // Compute the final-pass elapsed from the recorded FINAL-ingest timestamp
+      // BEFORE we overwrite updated_at below. The final ingest set s.updated_at, so
+      // (now - updated_at) is the final-pass→finalize wall-clock the tool measures itself.
+      const now = Date.now()
+      const computedFinalElapsed = Math.max(0, Math.round((now - s.updated_at) / 1000))
+
       // SOLE fix-attempted→fixed transition: only when the FINAL ingest shows
       // that issue's scenario PASS (§5 status write-back discipline).
-      const finalizedAt = new Date().toISOString()
+      const finalizedAt = new Date(now).toISOString()
       for (const [, issue] of Object.entries(s.issues)) {
         if (issue.status === "fix-attempted" && s.scenarios[issue.scenario]?.current === "pass") {
           issue.status = "fixed"
@@ -514,8 +521,8 @@ export function makeQaLoopTools(deps: QaLoopToolDeps) {
       }
 
       s.result = resultOf(s)
-      s.budgets.final_pass_elapsed_s = args.final_pass_elapsed_s
-      s.finalized_at = Date.now()
+      s.budgets.final_pass_elapsed_s = args.final_pass_elapsed_s ?? computedFinalElapsed
+      s.finalized_at = now
       s.updated_at = s.finalized_at
       state.save(parentId, s)
 

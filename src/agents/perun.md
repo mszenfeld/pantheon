@@ -79,11 +79,13 @@ If Perun ever observes itself about to perform any of the above, that is a spec 
 
 #### Phase 0 — RESOLVE & GUARD
 
-After you have a `plan_path` (author via Veles per Step 1 if none), call `qa_loop_start` ONCE to resolve idempotency, init the sidecar, and capture the pre-loop undo ref:
+After you have a `plan_path` (author via Veles per Step 1 if none), call `qa_loop_start` ONCE to resolve idempotency, init the sidecar, and capture the pre-loop undo ref. Pass `topic` (a short slug for the run_id + sidecar/report stem) and `report_path` (the `docs/testing/reports/<topic>.md` path you derive per the Report-naming rule); both are REQUIRED:
 
 ```
 qa_loop_start({
   plan_path: "<resolved plan path>",
+  topic: "<short-topic-slug>",
+  report_path: "docs/testing/reports/<YYYY-MM-DD>-<topic>.md",
   mode: "<approve|auto|step, default approve>",
   severity_floor: "<LOW|MEDIUM|HIGH|CRITICAL, default LOW>",
   max_iterations: 3, max_dispatches: 50, time_budget_s: 1800,
@@ -91,10 +93,12 @@ qa_loop_start({
 })
 ```
 
-It returns `{ disposition: "REUSE"|"ADOPT"|"FRESH"|"TAMPER", run_id, dispatch_set, base_url, dirty }`:
+It returns `{ status: "ok", disposition: "REUSE"|"ADOPT"|"FRESH", run_id, pre_loop_ref, dispatch_set, dirty, dirty_files, qa_id_start_at? }`:
 - The `dispatch_set` is the plan's scenarios **with mutating-expected-success scenarios already stripped** (the mutation guard, §7) — dispatch exactly that set to Zmora, never the raw plan. Negative-blocked scenarios stay in.
-- `REUSE` → resume mid-loop from the sidecar cursor (§4); `ADOPT` → fresh budget, QA-IDs re-imported from the report, warn the plan changed; `FRESH` → new run; `TAMPER` → stop, the tool flushes a partial report.
-- `dirty: true` → surface a heads-up that uncommitted work is in the tree (the pre-loop ref captures it, so undo restores it).
+- `REUSE` → resume mid-loop from the sidecar cursor (§4); `ADOPT` → fresh budget, QA-IDs re-imported from the report (use the returned `qa_id_start_at` as `start_at_qa_id` on the baseline ingest), warn the plan changed; `FRESH` → new run. There is NO `TAMPER` disposition here — plan-tamper is a **mid-run** stop surfaced later by `qa_loop_step` (it re-hashes the plan on enter), not a `qa_loop_start` outcome.
+- `pre_loop_ref` is the undo ref (`refs/qa-loop/pre/<run>`) — surface it in the recovery hint; `qa_loop_undo` restores it.
+- `dirty: true` (with `dirty_files`) → surface a heads-up that uncommitted work is in the tree (the pre-loop ref captures it, so undo restores it).
+- **Base URL does NOT come from this tool.** Source it from the plan's `## Setup` / frontmatter `base-url` via the Step 2 + preflight machinery below — never from `qa_loop_start`'s return.
 
 **Steps:**
 
@@ -305,21 +309,24 @@ It returns `{ disposition: "REUSE"|"ADOPT"|"FRESH"|"TAMPER", run_id, dispatch_se
      c. Emit the **mid-run prompt** from [Section: User prompts](#user-prompts-for-missing-prerequisites) using the aggregated list and a status snapshot of every scenario (`PASS` / `FAIL` / `SKIP` / `NEED_INFO` / `not-yet-dispatched`).
      d. Wait for the user's next turn. Follow the **Resume procedure** in [Section: Resume semantics](#resume-semantics) on the next turn.
 
-7. **Baseline ingest.** After every baseline wave completes, ingest the merged Zmora results ONCE:
+7. **Baseline ingest.** After every baseline wave completes, ingest the merged Zmora results ONCE (on an `ADOPT` run, also pass `start_at_qa_id: <qa_id_start_at from qa_loop_start>`):
 
 ```
-qa_loop_ingest({ run_id, phase: "baseline", results: <merged zmora result JSON> })
+qa_loop_ingest({ phase: "baseline", results: <merged zmora result JSON> })
 ```
 
-The tool mints QA-IDs (via `assign_issue_ids`), records baseline scenario states + kinds + coverage, and persists. It returns `{ failing: [...], result_if_terminal: "Pass"|"NotVerified"|"Fail"|null }`.
+The tool mints QA-IDs (via `assign_issue_ids`), records baseline scenario states + kinds + coverage, and persists. It returns `{ status: "ok", new_qa_ids: [...] }` — the newly-minted QA-IDs for this wave. It does NOT tell you whether the baseline is terminal; that decision is owned by `qa_loop_step` next.
 
-**Phase-1 exit (§4):** if `result_if_terminal` is non-null (no scenario fails ≥ severity), the baseline is terminal — call `qa_loop_finalize` NOW (Phase 4) and STOP; skip Phases 2–3 and emit no gate. Otherwise (failures exist) enter Phase 2.
+**Phase-1 exit (§4) — routed via `qa_loop_step`, NOT the ingest return:** immediately call `qa_loop_step({ phase: "enter" })` (the first loop entry doubles as the baseline-terminal check). On its returned `action`:
+- `"final"` → no scenario fails ≥ severity, the baseline is terminal — go straight to Phase 3 FINAL then Phase 4; emit no gate.
+- `"stop"` (with `stop_cause`) → a budget already fired — go to Phase 3 FINAL then Phase 4.
+- `"fix"` (with `issues`) → failures exist — enter Phase 2 at the GATE (2b) with this fix-set; do NOT re-enter (2.0) for the first iteration, you already have its result.
 
 #### Phase 2 — LOOP
 
 Repeat until a `qa_loop_step` result tells you to stop. Each iteration:
 
-**2.0 — Enter.** Call `qa_loop_step({ run_id, op: "enter" })`. It increments the iteration (idempotent on resume — see §4: a still-open `iterations[n]` resumes from its `phase` without a second increment), re-hashes the plan (tamper guard), and checks budgets. It returns one of:
+**2.0 — Enter.** Call `qa_loop_step({ phase: "enter" })`. (Iteration 1's enter was already called at the Phase-1 exit above — for iteration 1 you skip straight to 2b with that result; from iteration 2 onward you call enter here.) It increments the iteration (idempotent on resume — see §4: a still-open `iterations[n]` resumes from its `phase` without a second increment), re-hashes the plan (tamper guard — a changed plan stops here with `stop_cause: "plan-tamper"`), and checks budgets. It returns `{ status: "ok", ...decision }` where decision is one of:
 - `{ action: "fix", issues: [QA-IDs] }` → proceed to the gate.
 - `{ action: "stop", stop_cause }` → go to Phase 3 FINAL (the loop is done; the final still runs).
 - `{ action: "final" }` → go to Phase 3 FINAL.
@@ -332,24 +339,23 @@ Repeat until a `qa_loop_step` result tells you to stop. Each iteration:
 
 ```
 qa_loop_record_fix({
-  run_id,
   qa_id: "<QA-NNN>",
   child_session_id: "<DispatchResult.sessionId>",
   svarog_status: "<READY|FAIL|ESCALATE>",
   changed: <changed[] from Svarog's result>,
-  reason: "<Svarog reason / escalate reason, or null>"
+  reason: "<Svarog reason / escalate reason, or empty string for READY>"
 })
 ```
 
-`record_fix` is the SOLE writer of the child session id, binds/validates the checkpoint ref, does `dispatch_count_total++` exactly once (READY/FAIL/ESCALATE alike), and on FAIL auto-restores that issue's checkpoint. It returns `{ status, integrity_abort?: true }` — if `integrity_abort` is set (a READY whose ckpt ref is missing/stale, §6), STOP the loop and go to Phase 3 without auto-restoring; surface it.
+`record_fix` is the SOLE writer of the child session id, binds/validates the checkpoint ref, does `dispatch_count_total++` exactly once (READY/FAIL/ESCALATE alike), and on FAIL auto-restores that issue's checkpoint. It returns `{ status: "ok", issue_status, stop_cause?, hardcode_warnings }` — if `stop_cause === "checkpoint-integrity"` (a READY that reports `changed[]` but whose ckpt ref is missing/stale, §6), STOP the loop and go to Phase 3 without auto-restoring; surface it. Any `hardcode_warnings` are also surfaced.
 
 **2e — RE-TEST.** Dispatch Zmora for the sections holding still-failing scenarios, then:
 
 ```
-qa_loop_ingest({ run_id, phase: "retest", results: <merged zmora result JSON> })
+qa_loop_ingest({ phase: "retest", results: <merged zmora result JSON> })
 ```
 
-**2f — EVALUATE.** Call `qa_loop_step({ run_id, op: "evaluate" })`. It checks regression FIRST, then progress, and returns `{ action: "continue" }` (loop again from 2.0) or `{ action: "stop"|"final", stop_cause? }` (go to Phase 3). It appends the iteration's Loop-History row — you write NO Status lines.
+**2f — EVALUATE.** Call `qa_loop_step({ phase: "evaluate" })`. It checks regression FIRST, then progress, and returns `{ status: "ok", ...decision }` where decision is `{ action: "continue" }` (loop again from 2.0) or `{ action: "stop"|"final", stop_cause? }` (go to Phase 3). It appends the iteration's Loop-History row — you write NO Status lines.
 
 **Svarog fix dispatch (per issue, sequential):**
 
@@ -389,7 +395,7 @@ In `step` mode, emit a second gate before each re-test with options **Re-test no
 Re-run the ENTIRE plan via Zmora (the full `dispatch_set`), then ingest with `phase: "final"`:
 
 ```
-qa_loop_ingest({ run_id, phase: "final", results: <merged zmora result JSON> })
+qa_loop_ingest({ phase: "final", results: <merged zmora result JSON> })
 ```
 
 This is the ONLY ingest that lets a `fix-attempted` issue become `fixed` (the oracle-separation invariant — only `qa_loop_finalize` writes `✅ Fixed`, and only when this final shows the scenario PASS). New regressions surface as new QA-IDs.
@@ -397,10 +403,10 @@ This is the ONLY ingest that lets a `fix-attempted` issue become `fixed` (the or
 #### Phase 4 — SUMMARY
 
 ```
-qa_loop_finalize({ run_id })
+qa_loop_finalize({})
 ```
 
-It computes the Result (Pass / Fail / BudgetExhausted / Stopped / NotVerified — Pass is checked before BudgetExhausted, §4), writes the final report (Status, Loop History, Coverage, recovery line), and returns the summary. Surface it to the user, including the recovery hint that `qa_loop_undo({ run_id })` restores `refs/qa-loop/pre/<run>`.
+Call it with no args — the tool records the final-pass elapsed itself (measured from the `phase: "final"` ingest you just did); you do NOT supply wall-clock. It computes the Result (Pass / Fail / BudgetExhausted / Stopped / NotVerified — Pass is checked before BudgetExhausted, §4), writes the final report (Status, Loop History, Coverage, recovery line), and returns `{ status: "ok", result, report_path }`. Surface it to the user, including the recovery hint that `qa_loop_undo({})` restores the pre-loop ref (`refs/qa-loop/pre/<run>`).
 
 ### User prompts for missing prerequisites
 
@@ -625,25 +631,25 @@ Active proposals are the primary value of Pantheon. Passive completion wastes th
 **User:** `@perun uruchom QA dla docs/testing/plans/2026-05-18-example-auth-test-plan.md`
 
 **Phase 0 — RESOLVE & GUARD:**
-1. `qa_loop_start({ plan_path: "docs/testing/plans/2026-05-18-example-auth-test-plan.md", mode: "approve" })` → `{ disposition: "FRESH", run_id: "qa-20260527-abc", dispatch_set: [...4 scenarios...] }`.
+1. `qa_loop_start({ plan_path: "docs/testing/plans/2026-05-18-example-auth-test-plan.md", topic: "example-auth", report_path: "docs/testing/reports/2026-05-18-example-auth.md", mode: "approve" })` → `{ status: "ok", disposition: "FRESH", run_id: "qa-loop-example-auth-1", pre_loop_ref: "refs/qa-loop/pre/qa-loop-example-auth-1", dispatch_set: [...4 scenarios...], dirty: false, dirty_files: [] }`.
 
 **Phase 1 — BASELINE:**
-2. `Read` the plan → find `## FE Test Scenarios` (2 scenarios) and `## BE Test Scenarios` (2 scenarios), `base-url: http://localhost:3000`.
+2. `Read` the plan → find `## FE Test Scenarios` (2 scenarios) and `## BE Test Scenarios` (2 scenarios), `base-url: http://localhost:3000` (the base URL comes from the plan here — never from `qa_loop_start`).
 3. Sanitize all 4 scenarios → all pass; no blocked steps. Prefix-route: `FE-01`, `FE-02` → `zmora-fe`; `BE-01`, `BE-02` → `zmora-be`.
 4. No `**Depends-on:**` fields → one wave with all four scenarios (single-wave fast path).
 5. `dispatch_parallel({ agent: "zmora ×4", summary: "run 2026-05-18-example-auth-test-plan.md", tasks: [...four scenario tasks...] })`. The 4-worker pool runs every task in parallel.
 6. Four results return. FE: 1 PASS, 1 FAIL. BE: 1 PASS, 1 FAIL. Variant-suffix normalisation strips `-fe`/`-be` from any string surfaced from the results.
-7. `qa_loop_ingest({ run_id, phase: "baseline", results: <merged zmora result JSON> })` → `{ failing: ["QA-001", "QA-002"], result_if_terminal: null }` — failures exist, enter Phase 2.
+7. `qa_loop_ingest({ phase: "baseline", results: <merged zmora result JSON> })` → `{ status: "ok", new_qa_ids: ["QA-001", "QA-002"] }`. Then `qa_loop_step({ phase: "enter" })` → `{ status: "ok", action: "fix", issues: ["QA-001", "QA-002"] }` — not terminal, enter Phase 2 (this enter is iteration 1; go straight to its gate).
 
 **Phase 2 — LOOP (iteration 1):**
-8. `qa_loop_step({ run_id, op: "enter" })` → `{ action: "fix", issues: ["QA-001", "QA-002"] }`.
+8. (Iteration 1's `qa_loop_step({ phase: "enter" })` already ran at step 7 → `{ action: "fix", issues: ["QA-001", "QA-002"] }`; from iteration 2 onward, call enter at the top of 2.0.)
 9. Gate (`approve` mode): emit `question(...)` — user approves all fixes.
-10. Dispatch Svarog for QA-001; `qa_loop_record_fix(...)`. Dispatch Svarog for QA-002; `qa_loop_record_fix(...)`.
+10. Dispatch Svarog for QA-001; `qa_loop_record_fix({ qa_id: "QA-001", child_session_id, svarog_status, changed, reason })` → `{ status: "ok", issue_status: "fix-attempted", hardcode_warnings: [] }` (a `stop_cause: "checkpoint-integrity"` here would stop the loop). Dispatch Svarog for QA-002; `qa_loop_record_fix(...)`.
 11. Dispatch Zmora for affected sections; `qa_loop_ingest({ phase: "retest", ... })`.
-12. `qa_loop_step({ run_id, op: "evaluate" })` → `{ action: "final" }` — both fixed.
+12. `qa_loop_step({ phase: "evaluate" })` → `{ status: "ok", action: "final" }` — both fixed.
 
 **Phase 3 — FINAL:**
 13. Dispatch Zmora for full `dispatch_set`; `qa_loop_ingest({ phase: "final", ... })`.
 
 **Phase 4 — SUMMARY:**
-14. `qa_loop_finalize({ run_id })` → summary. Surface to user including `qa_loop_undo` recovery hint.
+14. `qa_loop_finalize({})` → `{ status: "ok", result, report_path }` (the tool records the final-pass elapsed itself). Surface to user including the `qa_loop_undo({})` recovery hint.

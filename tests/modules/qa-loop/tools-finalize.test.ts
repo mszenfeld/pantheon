@@ -83,6 +83,20 @@ describe("qa_loop_finalize", () => {
     expect(report).toContain("✅ Fixed")
   })
 
+  it("computes final_pass_elapsed_s itself when no override is passed", async () => {
+    const s0 = sidecar(join(cwd, "docs/testing/reports/r.md"), "pass")
+    // Simulate a FINAL ingest that happened ~5s before finalize is called.
+    s0.updated_at = Date.now() - 5000
+    state.save("perun", s0)
+    const res = resultJson(await tools().qa_loop_finalize.execute({}, ctx("perun")))
+    expect(res.status).toBe("ok")
+    const s = state.load("perun")!
+    // Tool-recorded (not Perun-supplied): rounded seconds since the FINAL ingest, ≥ 0.
+    expect(typeof s.budgets.final_pass_elapsed_s).toBe("number")
+    expect(s.budgets.final_pass_elapsed_s).toBeGreaterThanOrEqual(4)
+    expect(s.budgets.final_pass_elapsed_s).toBeLessThanOrEqual(7)
+  })
+
   it("FINAL still-failing: does NOT transition to fixed; result Fail", async () => {
     state.save("perun", sidecar(join(cwd, "docs/testing/reports/r.md"), "fail"))
     const res = resultJson(await tools().qa_loop_finalize.execute({ final_pass_elapsed_s: 30 }, ctx("perun")))
