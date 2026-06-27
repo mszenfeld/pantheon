@@ -78,6 +78,7 @@ export const AppVerkQaLoopPlugin: Plugin = async ({ client }) => {
       if (typeof deletedID !== "string" || deletedID.length === 0) return
       registry.unregister(deletedID)
       parentIDCache.delete(deletedID)
+      state.clearRun(deletedID)
       // Sweep child entries whose cached parent is the deleted ID.
       for (const [childID, parentID] of parentIDCache.entries()) {
         if (parentID === deletedID) parentIDCache.delete(childID)

@@ -94,4 +94,17 @@ describe("QaLoopState", () => {
     const expectedPath = join(dir, "2026-06-26-demo-loop-state.json")
     expect((JSON.parse(readFileSync(expectedPath, "utf8")) as Sidecar).updated_at).toBe(2000)
   })
+
+  it("clearRun removes the in-process map entry but leaves the disk sidecar intact", () => {
+    const st = new QaLoopState()
+    const s = makeSidecar(dir)
+    st.save("ses_parent", s)
+
+    st.clearRun("ses_parent")
+
+    // in-process map is gone
+    expect(st.load("ses_parent")).toBeUndefined()
+    // disk sidecar survives for cross-session resume
+    expect(st.loadFromDisk(s.report_path)).toEqual(s)
+  })
 })

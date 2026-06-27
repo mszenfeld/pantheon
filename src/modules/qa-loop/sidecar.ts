@@ -48,4 +48,10 @@ export class QaLoopState {
     if (!existsSync(path)) return undefined
     return JSON.parse(readFileSync(path, "utf8")) as Sidecar
   }
+
+  /** Drop the in-process entry for a parent session (called on session.deleted).
+   * Does NOT delete the on-disk sidecar — that is the durable cross-session resume artifact. */
+  clearRun(parentId: string): void {
+    this.mem.delete(parentId)
+  }
 }
