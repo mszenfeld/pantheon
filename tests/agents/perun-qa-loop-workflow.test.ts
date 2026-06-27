@@ -56,3 +56,14 @@ describe("Perun unified QA-loop workflow", () => {
     expect(perun).not.toMatch(/Edit.*Status:.*✅ Fixed/)
   })
 })
+
+describe("Perun Workflow 0 routing points at the QA loop", () => {
+  it("the test-it branch routes into the QA loop, not a one-pass run", () => {
+    const wf0 = perun.slice(
+      perun.indexOf("### Workflow 0"),
+      perun.indexOf("### Workflow 1"),
+    )
+    expect(wf0).toMatch(/QA loop|Workflow 1.*QA Loop/)
+    expect(wf0).not.toMatch(/per Workflow 1\b(?!.*Loop)/)
+  })
+})
