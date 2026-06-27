@@ -16,9 +16,11 @@ declare function stepEnter(s: Sidecar): {
 };
 /**
  * §4 step 2f (evaluate). No increment. Regression is checked FIRST (a scenario that passed
- * baseline now fails ⇒ stop), THEN no-progress (no scenario newly passes ⇒ stop). Both are
- * collected and resolved by precedence so regression wins when both fire. `final` when zero
- * scenarios still fail; otherwise `continue`.
+ * baseline now fails ⇒ stop), THEN all-deferred (every issue attempted this iteration returned
+ * ESCALATE/deferred — more informative than no-progress per §4 AC6+AC15), THEN no-progress
+ * (no scenario newly passes ⇒ stop). All are collected and resolved by precedence so regression
+ * wins when both regression and all-deferred fire, and all-deferred wins over no-progress when
+ * the entire attempted set is deferred. `final` when zero scenarios still fail; otherwise `continue`.
  */
 declare function stepEvaluate(s: Sidecar): {
     action: "continue" | "stop" | "final";

@@ -148,10 +148,10 @@ declare function makeQaLoopTools(deps: QaLoopToolDeps): {
     qa_loop_finalize: {
         description: string;
         args: {
-            final_pass_elapsed_s: zod.ZodNumber;
+            final_pass_elapsed_s: zod.ZodOptional<zod.ZodNumber>;
         };
         execute(args: {
-            final_pass_elapsed_s: number;
+            final_pass_elapsed_s?: number | undefined;
         }, context: _opencode_ai_plugin.ToolContext): Promise<_opencode_ai_plugin.ToolResult>;
     };
     qa_loop_undo: {

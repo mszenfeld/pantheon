@@ -67,8 +67,24 @@ function stepEvaluate(s) {
   const records = Object.values(s.scenarios);
   const regressed = records.some((sc) => sc.baseline === "pass" && sc.current === "fail");
   const newlyPassing = records.some((sc) => sc.baseline === "fail" && sc.current === "pass");
+  let currentIter;
+  for (let i = s.iterations.length - 1; i >= 0; i--) {
+    const it = s.iterations[i];
+    if (it !== void 0 && it.stop_cause === null) {
+      currentIter = it;
+      break;
+    }
+  }
+  if (currentIter === void 0) {
+    for (const it of s.iterations) {
+      if (currentIter === void 0 || it.n > currentIter.n) currentIter = it;
+    }
+  }
+  const attempted = currentIter?.attempted_so_far ?? [];
+  const allDeferred = attempted.length > 0 && attempted.every((qa) => s.issues[qa]?.status === "deferred");
   const fired = [];
   if (regressed) fired.push("regression");
+  if (allDeferred) fired.push("all-deferred");
   if (!newlyPassing) fired.push("no-progress");
   const stop_cause = resolveStopCause(fired);
   if (stop_cause) return { action: "stop", stop_cause };
