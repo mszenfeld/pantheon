@@ -157,9 +157,9 @@ describe("dispatch_parallel agent + summary surfacing", () => {
     await expect(
       dispatch.execute(
         {
-          agent: "fix-auto",
+          agent: "svarog",
           summary: "QA-003 missing CSRF token",
-          tasks: [{ name: "fix-auto", prompt: "<issue body>" }],
+          tasks: [{ name: "svarog", prompt: "<issue body>" }],
         },
         makeContext(metadataSpy),
       ),
@@ -168,7 +168,7 @@ describe("dispatch_parallel agent + summary surfacing", () => {
     expect(metadataSpy).toHaveBeenCalledTimes(1)
     expect(metadataSpy).toHaveBeenCalledWith(
       expect.objectContaining({
-        title: "fix-auto — QA-003 missing CSRF token",
+        title: "svarog — QA-003 missing CSRF token",
       }),
     )
   })
