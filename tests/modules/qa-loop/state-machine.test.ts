@@ -291,6 +291,72 @@ describe("stepEvaluate — regression FIRST, then no-progress (§4)", () => {
     const r = stepEvaluate(s)
     expect(r.action).toBe("final")
   })
+
+  it("all-deferred: every attempted issue is deferred → stop with all-deferred, NOT no-progress", () => {
+    const s = base({
+      scenarios: { "FE-01": scenario({ baseline: "fail", current: "fail", qa_ids: ["QA-001"] }) },
+      issues: {
+        "QA-001": {
+          severity: "HIGH", scenario: "FE-01", location: "f:1", title: "t",
+          problem: "p", remediation: "r", status: "deferred", fixed_at: null,
+          fix: { svarog_status: "ESCALATE", escalate_reason: "blocked", child_session_id: null,
+            checkpoint_ref: null, changed: [], hardcode_warnings: [] },
+        },
+      },
+      iterations: [iter({ n: 1, phase: "evaluated", attempted_so_far: ["QA-001"], stop_cause: null })],
+    })
+    const r = stepEvaluate(s)
+    expect(r.action).toBe("stop")
+    expect(r.stop_cause).toBe("all-deferred")
+  })
+
+  it("mixed iteration (one fix-attempted + one deferred, no newly passing) → no-progress, NOT all-deferred", () => {
+    const s = base({
+      scenarios: {
+        "FE-01": scenario({ baseline: "fail", current: "fail", qa_ids: ["QA-001"] }),
+        "FE-02": scenario({ baseline: "fail", current: "fail", qa_ids: ["QA-002"] }),
+      },
+      issues: {
+        "QA-001": {
+          severity: "HIGH", scenario: "FE-01", location: "f:1", title: "t",
+          problem: "p", remediation: "r", status: "fix-attempted", fixed_at: null,
+          fix: { svarog_status: "READY", escalate_reason: null, child_session_id: null,
+            checkpoint_ref: null, changed: [], hardcode_warnings: [] },
+        },
+        "QA-002": {
+          severity: "HIGH", scenario: "FE-02", location: "f:2", title: "t",
+          problem: "p", remediation: "r", status: "deferred", fixed_at: null,
+          fix: { svarog_status: "ESCALATE", escalate_reason: "blocked", child_session_id: null,
+            checkpoint_ref: null, changed: [], hardcode_warnings: [] },
+        },
+      },
+      iterations: [iter({ n: 1, phase: "evaluated", attempted_so_far: ["QA-001", "QA-002"], stop_cause: null })],
+    })
+    const r = stepEvaluate(s)
+    expect(r.action).toBe("stop")
+    expect(r.stop_cause).toBe("no-progress")
+  })
+
+  it("regression + all-deferred both true → regression wins by precedence", () => {
+    const s = base({
+      scenarios: {
+        "FE-01": scenario({ baseline: "fail", current: "fail", qa_ids: ["QA-001"] }),
+        "BE-02": scenario({ baseline: "pass", current: "fail" }), // regression
+      },
+      issues: {
+        "QA-001": {
+          severity: "HIGH", scenario: "FE-01", location: "f:1", title: "t",
+          problem: "p", remediation: "r", status: "deferred", fixed_at: null,
+          fix: { svarog_status: "ESCALATE", escalate_reason: "blocked", child_session_id: null,
+            checkpoint_ref: null, changed: [], hardcode_warnings: [] },
+        },
+      },
+      iterations: [iter({ n: 1, phase: "evaluated", attempted_so_far: ["QA-001"], stop_cause: null })],
+    })
+    const r = stepEvaluate(s)
+    expect(r.action).toBe("stop")
+    expect(r.stop_cause).toBe("regression")
+  })
 })
 
 describe("resultOf — the §4 Result mapping (order Pass > NotVerified > BudgetExhausted > Stopped > Fail)", () => {

@@ -1,4 +1,4 @@
-import type { ScenarioRecord, Sidecar, StopCause, RunResult, SeverityFloor } from "./types.js"
+import type { ScenarioRecord, Sidecar, StopCause, RunResult, SeverityFloor, IterationRecord } from "./types.js"
 
 const SEVERITY_RANK: Record<SeverityFloor, number> = {
   LOW: 0,
@@ -102,9 +102,11 @@ function issuesFor(s: Sidecar, failing: string[]): string[] {
 
 /**
  * §4 step 2f (evaluate). No increment. Regression is checked FIRST (a scenario that passed
- * baseline now fails ⇒ stop), THEN no-progress (no scenario newly passes ⇒ stop). Both are
- * collected and resolved by precedence so regression wins when both fire. `final` when zero
- * scenarios still fail; otherwise `continue`.
+ * baseline now fails ⇒ stop), THEN all-deferred (every issue attempted this iteration returned
+ * ESCALATE/deferred — more informative than no-progress per §4 AC6+AC15), THEN no-progress
+ * (no scenario newly passes ⇒ stop). All are collected and resolved by precedence so regression
+ * wins when both regression and all-deferred fire, and all-deferred wins over no-progress when
+ * the entire attempted set is deferred. `final` when zero scenarios still fail; otherwise `continue`.
  */
 export function stepEvaluate(s: Sidecar): {
   action: "continue" | "stop" | "final"
@@ -114,8 +116,24 @@ export function stepEvaluate(s: Sidecar): {
   const regressed = records.some((sc) => sc.baseline === "pass" && sc.current === "fail")
   const newlyPassing = records.some((sc) => sc.baseline === "fail" && sc.current === "pass")
 
+  // Derive the current iteration row: last row with stop_cause === null, else highest n.
+  let currentIter: IterationRecord | undefined
+  for (let i = s.iterations.length - 1; i >= 0; i--) {
+    const it = s.iterations[i]
+    if (it !== undefined && it.stop_cause === null) { currentIter = it; break }
+  }
+  if (currentIter === undefined) {
+    for (const it of s.iterations) {
+      if (currentIter === undefined || it.n > currentIter.n) currentIter = it
+    }
+  }
+  const attempted = currentIter?.attempted_so_far ?? []
+  const allDeferred =
+    attempted.length > 0 && attempted.every((qa) => s.issues[qa]?.status === "deferred")
+
   const fired: StopCause[] = []
   if (regressed) fired.push("regression")
+  if (allDeferred) fired.push("all-deferred")
   if (!newlyPassing) fired.push("no-progress")
 
   const stop_cause = resolveStopCause(fired)

@@ -47,14 +47,10 @@ export const AppVerkQaLoopPlugin: Plugin = async ({ client }) => {
     return sessionID
   }
 
-  // assign_issue_ids passthrough: the qa-loop tools mint QA-IDs via the existing
-  // coordinator minter. The coordinator owns the canonical implementation; here
-  // we thread a thin call through the SDK tool surface so qa_loop_ingest reuses
-  // it rather than minting a second time (§5 "reuses the existing tool").
-  //
-  // Deterministic local fan-out matching assign_issue_ids' QA-NNN contract.
-  // Wired to the coordinator tool at integration time (Phase 3); kept
-  // self-contained so the module has no coordinator import cycle.
+  // Deliberate self-contained local minter: the loop owns its QA-IDs in its sidecar
+  // and must not import from the coordinator to avoid a circular dependency. This
+  // minter produces the same QA-NNN format as assign_issue_ids and is the production
+  // implementation — it is not a temporary stub to be replaced later.
   const assignIssueIds: QaLoopToolDeps["assignIssueIds"] = async ({ findings, startAt }) => {
     let n = startAt ?? 1
     return findings.map((f) => ({ ...f, id: `QA-${String(n++).padStart(3, "0")}` }))
