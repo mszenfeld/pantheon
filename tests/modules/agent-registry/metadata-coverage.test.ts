@@ -8,7 +8,6 @@ import {
   getAgentMetadataRegistry,
 } from "../../../src/modules/agent-registry/index.js"
 import { zmoraSpecialistInfo } from "../../../src/modules/qa/zmora.metadata.js"
-import { fixAutoSpecialistInfo } from "../../../src/modules/agent-registry/fix-auto.metadata.js"
 import { triglavSpecialistInfo } from "../../../src/modules/explore/triglav.metadata.js"
 import { svarogSpecialistInfo } from "../../../src/modules/svarog/svarog.metadata.js"
 import { AppVerkQAPlugin } from "../../../src/modules/qa/index.js"
@@ -33,14 +32,13 @@ function specialistNames(markdown: string): string[] {
 describe("anti-regression: specialist rows preserved", () => {
   it("renders rows for every specialist present in the pre-refactor baseline", () => {
     const baselineNames = specialistNames(readFileSync(BEFORE, "utf8"))
-    expect(baselineNames).toEqual(["fix-auto", "zmora"])
+    expect(baselineNames).toEqual(["zmora"])
 
     const template = readFileSync(PERUN_MD, "utf8")
     // triglavSpecialistInfo is required so the {USE_AVOID:triglav} placeholder
-    // resolves; it also adds a `triglav` row, so the baseline (fix-auto, zmora)
-    // must be a subset of — not equal to — the rendered specialist set.
+    // resolves; it also adds a `triglav` row, so the baseline (zmora) must be a
+    // subset of — not equal to — the rendered specialist set.
     const rendered = buildPerunPrompt(template, [
-      fixAutoSpecialistInfo,
       zmoraSpecialistInfo,
       triglavSpecialistInfo,
       svarogSpecialistInfo,
@@ -88,7 +86,7 @@ describe("anti-drift: every registered subagent has metadata", () => {
     }
 
     expect(registered.has("zmora")).toBe(true)
-    expect(registered.has("fix-auto")).toBe(true)
+    expect(registered.has("fix-auto")).toBe(false)
     expect(registered.has("triglav")).toBe(true)
   })
 })
