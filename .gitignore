@@ -76,3 +76,6 @@ docs/eval/scenarios/svarog/*
 !docs/eval/scenarios/svarog/anti-over-refusal-control.md
 !docs/eval/scenarios/svarog/wrong-vetted-plan.md
 !docs/eval/scenarios/svarog/README.md
+
+# qa-loop transient sidecar (machine state, not a deliverable)
+docs/testing/reports/*-loop-state.json
