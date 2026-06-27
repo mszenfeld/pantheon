@@ -26,7 +26,6 @@ import {
   registerAgentMetadata,
   snapshotAgentMetadataRegistry,
 } from "../agent-registry/index.js"
-import { fixAutoSpecialistInfo } from "../agent-registry/fix-auto.metadata.js"
 import { getDispatchExtensions } from "../_shared/dispatch-extensions.js"
 import {
   COORDINATOR_AGENT,
@@ -122,11 +121,6 @@ export const AppVerkCoordinatorPlugin: Plugin = async (input) => {
 
   // Factory-scoped, shared by the three background tools. In-memory, per process.
   const backgroundStore = new BackgroundTaskStore()
-
-  // fix-auto lives in packages/code-review (a separate build unit that cannot
-  // import this bridge); register its metadata here so Perun's specialist table
-  // keeps its row. Explicit src-side entry — see the renderer spec.
-  registerAgentMetadata(fixAutoSpecialistInfo)
 
   // Single source of truth for the "which mode:all agents are dispatchable"
   // sentence, derived from DISPATCHABLE_ALL_AGENTS. Reused verbatim in both
