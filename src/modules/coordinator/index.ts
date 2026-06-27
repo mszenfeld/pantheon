@@ -66,6 +66,12 @@ export const PERUN_TOOLS = [
   "dispatch_background",
   "poll_background",
   "wait_background",
+  "qa_loop_start",
+  "qa_loop_ingest",
+  "qa_loop_step",
+  "qa_loop_record_fix",
+  "qa_loop_finalize",
+  "qa_loop_undo",
 ] as const
 
 // Compile-time invariant: every canonical dispatch-tool name MUST be a member
