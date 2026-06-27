@@ -47,9 +47,9 @@ describe("agent metadata registry", () => {
 
   it("returns a name-sorted copy", () => {
     registerAgentMetadata(info("zmora"))
-    registerAgentMetadata(info("fix-auto"))
+    registerAgentMetadata(info("svarog"))
     expect(getAgentMetadataRegistry().map((a) => a.name)).toEqual([
-      "fix-auto",
+      "svarog",
       "zmora",
     ])
   })
@@ -66,9 +66,9 @@ describe("registry freeze (ordering invariant enforcement)", () => {
 
   it("snapshot returns the name-sorted registry contents", () => {
     registerAgentMetadata(info("zmora"))
-    registerAgentMetadata(info("fix-auto"))
+    registerAgentMetadata(info("svarog"))
     expect(snapshotAgentMetadataRegistry().map((a) => a.name)).toEqual([
-      "fix-auto",
+      "svarog",
       "zmora",
     ])
   })
