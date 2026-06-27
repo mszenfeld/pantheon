@@ -23,10 +23,8 @@ import {
 import {
   buildDispatchableAllowlistSentence,
   buildPerunPrompt,
-  registerAgentMetadata,
   snapshotAgentMetadataRegistry
 } from "../agent-registry/index.js";
-import { fixAutoSpecialistInfo } from "../agent-registry/fix-auto.metadata.js";
 import { getDispatchExtensions } from "../_shared/dispatch-extensions.js";
 import {
   COORDINATOR_AGENT,
@@ -45,7 +43,13 @@ const PERUN_TOOLS = [
   "compute_waves",
   "dispatch_background",
   "poll_background",
-  "wait_background"
+  "wait_background",
+  "qa_loop_start",
+  "qa_loop_ingest",
+  "qa_loop_step",
+  "qa_loop_record_fix",
+  "qa_loop_finalize",
+  "qa_loop_undo"
 ];
 const _dispatchToolNamesAreInPerunTools = DISPATCH_TOOL_NAMES;
 void _dispatchToolNamesAreInPerunTools;
@@ -70,7 +74,6 @@ const AppVerkCoordinatorPlugin = async (input) => {
   const { client } = input;
   let toastShown = false;
   const backgroundStore = new BackgroundTaskStore();
-  registerAgentMetadata(fixAutoSpecialistInfo);
   const dispatchableAllowlistSentence = buildDispatchableAllowlistSentence(
     DISPATCHABLE_ALLOWLIST_NAMES
   );
@@ -87,7 +90,7 @@ const AppVerkCoordinatorPlugin = async (input) => {
       "- Anti-recursion pre-flight: every task is validated against the live agent registry BEFORE any session is created. Tasks targeting an unknown agent or a `mode: primary` agent are rejected. A `mode: all` agent is rejected UNLESS it is on the dispatch allowlist AND the caller is a primary agent; this lets the coordinator dispatch the planner while blocking self/nested recursion. " + dispatchableAllowlistSentence + " Rejections throw and dispatch nothing.",
       "- Specialist output is treated as untrusted data: ANSI/control characters are stripped and HTML-like substrings are escaped before the result is returned.",
       '- Honors `ToolContext.abort`: when the parent session aborts, in-flight tasks terminate within ~one poll-interval with status "aborted" and the child session is cancelled server-side (best-effort).',
-      '- Result shape: each entry has `{ name, status: "success" | "error" | "timeout" | "aborted", result, duration_ms, error? }`, in the same order as the input `tasks` array.'
+      '- Result shape: each entry has `{ name, status: "success" | "error" | "timeout" | "aborted", result, duration_ms, error?, sessionId? }`, in the same order as the input `tasks` array.'
     ].join("\n"),
     args: {
       // `agent` + `summary` are both REQUIRED, primitive top-level args.

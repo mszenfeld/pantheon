@@ -20,6 +20,14 @@ You execute QA test plans by handing the plan to **@perun**, the Pantheon coordi
 |----------|---------------|
 | (empty) | Find the most recent test plan in `docs/testing/plans/` |
 | `<path>` | Use the specified test plan file |
+| `--mode <approve\|auto\|step>` | Gate policy (default `approve`; `auto` is headless) |
+| `--max-iterations <N>` | Loop iteration ceiling (default `3`) |
+| `--max-dispatches <N>` | Svarog dispatch ceiling — the true MAXD gate (default `50`) |
+| `--time-budget <seconds>` | Wall-clock budget checked at iteration boundaries (default `1800`) |
+| `--severity-floor <LOW\|MEDIUM\|HIGH\|CRITICAL>` | Minimum severity that enters the loop (default `LOW`) |
+| `--allow-mutations` | Keep mutating-expected-success scenarios in the dispatch set (default off — they are stripped by the mutation guard) |
+
+Flags may also be given in natural language ("run QA autonomously" → `--mode auto`; "only fix highs" → `--severity-floor HIGH`). Forward whatever you parse to Perun verbatim.
 
 **Finding the most recent plan:**
 
@@ -68,17 +76,13 @@ Use `todowrite` to create:
 
 **Task Update:** Mark task 2 as `in_progress` using `todowrite`.
 
-Compose a single message that hands the plan path to `@perun`. Use this exact format (substitute the resolved plan path):
+Compose a single message that hands the plan path and any parsed flags to `@perun`. Use this exact format (substitute the resolved plan path and flags):
 
 ```
-@perun uruchom QA dla <resolved-plan-path>
+@perun run the QA loop for <resolved-plan-path> <parsed flags, e.g. --mode auto --severity-floor HIGH>
 ```
 
-Or, in English:
-
-```
-@perun run QA for <resolved-plan-path>
-```
+Perun runs the closed test→fix→retest loop: baseline → (gated) Svarog fixes one issue at a time → re-test → authoritative final pass → report. The `qa_loop_*` tools own the budgets, idempotency, regression/progress guards, and the report (the single writer).
 
 Perun will then:
 
@@ -91,7 +95,7 @@ Perun will then:
 7. **Merge findings** across waves in scenario-source order (the original markdown order, NOT wave order).
 8. **Assign QA-XXX IDs** via `assign_issue_ids` and sort by severity (CRITICAL → HIGH → MEDIUM → LOW).
 9. **Write the report** to `docs/testing/reports/YYYY-MM-DD-<topic>-report.md` where `<topic>` is the plan filename minus the leading date prefix and the trailing `-test-plan` suffix.
-10. **Display a summary** with totals, top issues, and an offer to fix them via `fix-auto`.
+10. **Run the loop to completion** and display the final summary (Result, Loop History, Coverage, and the `qa_loop_undo` recovery hint). There is no separate fix follow-up — fixing IS the loop.
 
 **Task Update:** Mark task 2 as `completed` using `todowrite` once you have handed off to `@perun`. Do not wait for Perun's response — the handoff completes your part of the workflow.
 

@@ -12,6 +12,7 @@ interface DispatchResult {
     result: string;
     duration_ms: number;
     error?: string;
+    sessionId?: string;
 }
 interface DispatchSpecialist {
     /**
