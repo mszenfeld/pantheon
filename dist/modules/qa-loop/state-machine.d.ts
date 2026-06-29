@@ -27,7 +27,7 @@ declare function stepEvaluate(s: Sidecar): {
     stop_cause?: StopCause;
 };
 /**
- * §4 Result mapping, computed once (identical at the Phase-1 zero-failure exit and the Phase-3
+ * §4 Result mapping, computed once (identical at the Phase-1 all-green exit and the Phase-3
  * final). Order is load-bearing: Pass > NotVerified > BudgetExhausted > Stopped > Fail.
  * - Pass: no fail >= floor AND >=1 feature-kind scenario PASSED (the final run is authoritative,
  *   so this is checked BEFORE BudgetExhausted — a budget-stopped run with a green final is Pass).
@@ -35,7 +35,7 @@ declare function stepEvaluate(s: Sidecar): {
  *   unexercised), OR every feature-kind scenario is in the "skip" (not_verified) state even
  *   though non-feature scenarios may have passed.
  * - BudgetExhausted: stopped on a budget cause and the final is not green.
- * - Stopped: user-abort / plan-tamper / checkpoint-integrity, not green.
+ * - Stopped: plan-tamper / checkpoint-integrity, not green.
  * - Fail: everything else (regression / no-progress / all-deferred / sub-floor failures /
  *   nothing left to fix).
  */

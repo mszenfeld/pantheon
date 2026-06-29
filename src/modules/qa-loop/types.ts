@@ -8,9 +8,9 @@ export type IterationPhase =
   | "selecting" | "awaiting_fix_gate" | "fixing"
   | "awaiting_retest_gate" | "retested" | "evaluated"
 export type StopCause =
-  | "zero-failure" | "regression" | "no-progress" | "all-deferred"
+  | "regression" | "no-progress" | "all-deferred"
   | "max-iterations" | "max-dispatches" | "time-budget"
-  | "user-abort" | "plan-tamper" | "checkpoint-integrity"
+  | "plan-tamper" | "checkpoint-integrity"
 export type RunResult = "Pass" | "Fail" | "BudgetExhausted" | "Stopped" | "NotVerified"
 
 export interface ScenarioRecord {

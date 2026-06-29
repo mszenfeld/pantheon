@@ -33,7 +33,7 @@ The root plugin bundle (`av-opencode-plugins`) includes this package automatical
 5. Dispatch each wave sequentially via `dispatch_parallel` — one task per scenario, label rendered as `zmora ×N` (logical-name exception). The tool is hard-capped at 4 tasks per call (matching the 4-worker pool), so waves with >4 scenarios are chunked into multiple sequential `dispatch_parallel` calls of ≤4 tasks each.
 6. Parse specialist responses (JSON-first, markdown fallback). Normalise variant suffixes (`zmora-{fe,be}` → `zmora`) in every user-facing string before display.
 7. Assign deterministic `QA-NNN` IDs via `assign_issue_ids`.
-8. Sort findings by severity and `Write` the report to `docs/testing/reports/<date>-<topic>-report.md`.
+8. Sort findings by severity and `Write` the report to `docs/testing/reports/<date>-<topic>.md`.
 9. Display a summary and — if issues were found — propose continuing into the Fix workflow.
 
 If you do not pass a plan path, `@perun` will look for the most recent `.md` file in `docs/testing/plans/`.
@@ -47,7 +47,7 @@ After a QA run reports issues, `@perun` proposes:
 Accepting the proposal (or invoking `@perun` directly with a report path) triggers the Issue Fix workflow:
 
 ```text
-@perun napraw wszystkie HIGH z docs/testing/reports/2026-05-18-example-auth-report.md
+@perun napraw wszystkie HIGH z docs/testing/reports/2026-05-18-example-auth.md
 ```
 
 Scope modifiers `@perun` understands:
@@ -86,7 +86,7 @@ The coordinator implements two workflows, both encoded in `src/agents/perun.md`.
 10. **Concatenate findings** — in scenario-source order (the original markdown order, NOT the wave-dispatch order).
 11. **Assign IDs** — `assign_issue_ids({ findings, prefix: "QA" })` → `QA-001`, `QA-002`, …
 12. **Sort by severity** — `CRITICAL → HIGH → MEDIUM → LOW`.
-13. **Write the report** — `docs/testing/reports/<date>-<topic>-report.md`, where `<topic>` is the plan filename minus the `YYYY-MM-DD-` prefix and `-test-plan` suffix. Path is computed by `deriveReportPath`, which validates the topic against `^[a-z0-9-]+$` and refuses anything that could traverse paths.
+13. **Write the report** — `docs/testing/reports/<date>-<topic>.md`, where `<topic>` is the plan filename minus the `YYYY-MM-DD-` prefix and `-test-plan` suffix. Perun derives the path from a `^[a-z0-9-]+$` topic slug, and `qa_loop_start` enforces in code that the resolved `report_path` stays within the repo (a traversal path is rejected).
 14. **Display summary** — counts, top issues, full report path, and (only if issues were found) the fix proposal.
 
 ### Workflow 2 — Issue Fix (Continuation)
@@ -100,7 +100,7 @@ The coordinator implements two workflows, both encoded in `src/agents/perun.md`.
 
 ```bash
 opencode agent perun "uruchom QA dla docs/testing/plans/2026-05-18-example-auth-test-plan.md"
-opencode agent perun "napraw QA-001, QA-003 z docs/testing/reports/2026-05-18-example-auth-report.md"
+opencode agent perun "napraw QA-001, QA-003 z docs/testing/reports/2026-05-18-example-auth.md"
 ```
 
 > The agent is registered under the display name `"Perun - Coordinator"` (see `src/modules/coordinator/index.ts`). OpenCode's CLI typically accepts the kebab-case slug `perun-coordinator` or the lowercase first word `perun`. If invocation fails, run `opencode agent list` to confirm the exact slug for your OpenCode version.

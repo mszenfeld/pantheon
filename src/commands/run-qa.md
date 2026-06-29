@@ -94,7 +94,7 @@ Perun will then:
 6. **Dispatch each wave** through `dispatch_parallel({ agent, summary, tasks })` — one task per scenario, with a 4-wide worker pool. Each wave waits for completion before the next begins. `dispatch_parallel` accepts max 4 tasks per call; Perun chunks larger waves into multiple sequential calls of ≤4 tasks.
 7. **Merge findings** across waves in scenario-source order (the original markdown order, NOT wave order).
 8. **Assign QA-XXX IDs** via `assign_issue_ids` and sort by severity (CRITICAL → HIGH → MEDIUM → LOW).
-9. **Write the report** to `docs/testing/reports/YYYY-MM-DD-<topic>-report.md` where `<topic>` is the plan filename minus the leading date prefix and the trailing `-test-plan` suffix.
+9. **Write the report** to `docs/testing/reports/YYYY-MM-DD-<topic>.md` where `<topic>` is the plan filename minus the leading date prefix and the trailing `-test-plan` suffix.
 10. **Run the loop to completion** and display the final summary (Result, Loop History, Coverage, and the `qa_loop_undo` recovery hint). There is no separate fix follow-up — fixing IS the loop.
 
 **Task Update:** Mark task 2 as `completed` using `todowrite` once you have handed off to `@perun`. Do not wait for Perun's response — the handoff completes your part of the workflow.

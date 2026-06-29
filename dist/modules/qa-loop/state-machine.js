@@ -12,9 +12,7 @@ const STOP_PRECEDENCE = [
   "no-progress",
   "max-iterations",
   "max-dispatches",
-  "time-budget",
-  "zero-failure",
-  "user-abort"
+  "time-budget"
 ];
 function resolveStopCause(fired) {
   let best;
@@ -106,7 +104,7 @@ function lastStopCause(s) {
   return null;
 }
 const BUDGET_CAUSES = ["max-iterations", "max-dispatches", "time-budget"];
-const STOPPED_CAUSES = ["user-abort", "plan-tamper", "checkpoint-integrity"];
+const STOPPED_CAUSES = ["plan-tamper", "checkpoint-integrity"];
 function resultOf(s) {
   const records = Object.values(s.scenarios);
   const anyPass = records.some((sc) => sc.current === "pass");

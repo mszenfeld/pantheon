@@ -1,4 +1,5 @@
 import type { IssueRecord, Sidecar } from "./types.js"
+import { deriveCoverage } from "./coverage.js"
 
 /** §5 status→marker discipline: only `fixed`/`deferred` carry a marker; everything else is unmarked. */
 function markerFor(iss: IssueRecord): string {
@@ -78,14 +79,15 @@ export function renderReport(s: Sidecar): string {
   // ── Coverage ──────────────────────────────────────────────────────────────
   lines.push("## Coverage")
   lines.push("")
-  const ex = s.coverage.exercised
-  const nv = s.coverage.not_verified
+  const cov = deriveCoverage(s)
+  const ex = cov.exercised
+  const nv = cov.not_verified
   lines.push(`- **Exercised:** feature ${ex.feature} · sanity ${ex.sanity} · enforcement ${ex.enforcement}`)
   lines.push(
     `- **Not verified:** auth-unverified ${nv["auth-unverified"]} · mutation-guard ${nv["mutation-guard"]} · tool-unavailable ${nv["tool-unavailable"]}`,
   )
-  if (s.coverage.routing_warnings.length > 0) {
-    lines.push(`- **Routing warnings:** ${s.coverage.routing_warnings.join("; ")}`)
+  if (cov.routing_warnings.length > 0) {
+    lines.push(`- **Routing warnings:** ${cov.routing_warnings.join("; ")}`)
   }
   lines.push("")
 

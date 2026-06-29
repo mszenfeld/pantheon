@@ -403,7 +403,7 @@ describe("resultOf — the §4 Result mapping (order Pass > NotVerified > Budget
     expect(resultOf(s)).toBe("BudgetExhausted")
   })
 
-  it("Stopped: a user-abort / plan-tamper / checkpoint-integrity stop that is not green", () => {
+  it("Stopped: a plan-tamper / checkpoint-integrity stop that is not green", () => {
     const s = base({
       scenarios: { "FE-01": scenario({ kind: "feature", baseline: "fail", current: "fail" }) },
       iterations: [iter({ n: 1, stop_cause: "plan-tamper" })],

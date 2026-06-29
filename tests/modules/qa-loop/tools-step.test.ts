@@ -1,10 +1,11 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest"
-import { mkdtempSync, rmSync } from "node:fs"
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import type { ToolContext } from "@opencode-ai/plugin"
 import { makeQaLoopTools } from "../../../src/modules/qa-loop/tools.js"
 import { QaLoopState } from "../../../src/modules/qa-loop/sidecar.js"
+import { hashPlan } from "../../../src/modules/qa-loop/plan-hash.js"
 import type { Sidecar } from "../../../src/modules/qa-loop/types.js"
 
 function fakeGate(id: string) {
@@ -32,10 +33,12 @@ function resultJson(r: unknown): Record<string, unknown> {
   return JSON.parse(s) as Record<string, unknown>
 }
 
+const PLAN_TEXT = "# Plan\n\n## FE-01 — login\nNavigate.\n\n## BE-01 — health\nGET /health.\n"
+
 function baseSidecar(dir: string): Sidecar {
   const now = Date.now()
   return {
-    version: 1, run_id: "qa-loop-demo-1", plan_path: join(dir, "p.md"), plan_sha256: "x".repeat(64), report_path: join(dir, "2026-06-26-demo-report.md"),
+    version: 1, run_id: "qa-loop-demo-1", plan_path: join(dir, "p.md"), plan_sha256: hashPlan(PLAN_TEXT), report_path: join(dir, "2026-06-26-demo-report.md"),
     config: { mode: "approve", severity_floor: "LOW", max_iterations: 3, max_dispatches: 50, time_budget_s: 1800, allow_mutations: false },
     started_at: now, updated_at: now, finalized_at: null,
     budgets: { iteration: 0, dispatch_count_total: 0, elapsed_s: 0, final_pass_elapsed_s: null },
@@ -58,6 +61,7 @@ describe("qa_loop_step", () => {
   let state: QaLoopState
   beforeEach(() => {
     dir = mkdtempSync(join(tmpdir(), "qa-loop-step-"))
+    writeFileSync(join(dir, "p.md"), PLAN_TEXT)
     state = new QaLoopState()
     state.save("perun", baseSidecar(dir))
   })
@@ -108,5 +112,30 @@ describe("qa_loop_step", () => {
     expect(["continue", "stop", "final"]).toContain(res.action)
     const s = state.load("perun")!
     expect(s.iterations[0]!.phase).toBe("evaluated")
+  })
+
+  it("enter stops with plan-tamper when the plan file changed mid-run (ARCH-001 / GAP-2)", async () => {
+    const tools = makeQaLoopTools({ gate: fakeGate("perun"), state, cwd: "/tmp", resolveParentID: async (s) => s, assignIssueIds: noopAssign })
+    // Edit the plan on disk after start so its hash no longer matches the sidecar baseline.
+    writeFileSync(join(dir, "p.md"), PLAN_TEXT + "\n## FE-99 — injected\nextra\n")
+    const res = resultJson(await tools.qa_loop_step.execute({ phase: "enter" }, ctx("perun")))
+    expect(res.action).toBe("stop")
+    expect(res.stop_cause).toBe("plan-tamper")
+    const s = state.load("perun")!
+    expect(s.iterations[s.iterations.length - 1]!.stop_cause).toBe("plan-tamper")
+  })
+
+  it("evaluate populates now_passing / still_failing / regressions (MAINT-002)", async () => {
+    const tools = makeQaLoopTools({ gate: fakeGate("perun"), state, cwd: "/tmp", resolveParentID: async (s) => s, assignIssueIds: noopAssign })
+    await tools.qa_loop_step.execute({ phase: "enter" }, ctx("perun"))
+    const mid = state.load("perun")!
+    mid.scenarios["FE-01"]!.current = "pass" // baseline fail → now passing
+    mid.iterations[0]!.phase = "retested"
+    state.save("perun", mid)
+    await tools.qa_loop_step.execute({ phase: "evaluate" }, ctx("perun"))
+    const s = state.load("perun")!
+    expect(s.iterations[0]!.now_passing).toEqual(["FE-01"])
+    expect(s.iterations[0]!.still_failing).toEqual([])
+    expect(s.iterations[0]!.regressions).toEqual([])
   })
 })

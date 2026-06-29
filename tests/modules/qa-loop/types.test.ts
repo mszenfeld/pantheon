@@ -26,6 +26,6 @@ describe("qa-loop sidecar contract", () => {
     expectTypeOf<SeverityFloor>().toEqualTypeOf<"LOW" | "MEDIUM" | "HIGH" | "CRITICAL">()
     expectTypeOf<IssueStatus>().toEqualTypeOf<"open" | "fix-attempted" | "fix-failed" | "deferred" | "fixed">()
     expectTypeOf<IterationPhase>().toEqualTypeOf<"selecting" | "awaiting_fix_gate" | "fixing" | "awaiting_retest_gate" | "retested" | "evaluated">()
-    expectTypeOf<StopCause>().toEqualTypeOf<"zero-failure" | "regression" | "no-progress" | "all-deferred" | "max-iterations" | "max-dispatches" | "time-budget" | "user-abort" | "plan-tamper" | "checkpoint-integrity">()
+    expectTypeOf<StopCause>().toEqualTypeOf<"regression" | "no-progress" | "all-deferred" | "max-iterations" | "max-dispatches" | "time-budget" | "plan-tamper" | "checkpoint-integrity">()
   })
 })

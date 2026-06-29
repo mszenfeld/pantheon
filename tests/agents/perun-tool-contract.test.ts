@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { readFileSync } from "node:fs"
+import { readFileSync, readdirSync } from "node:fs"
 import { fileURLToPath } from "node:url"
 import { dirname, join } from "node:path"
 
@@ -146,6 +146,17 @@ describe("Perun ↔ qa_loop_* tool-call contract", () => {
     for (const a of args) {
       expect(a).not.toContain("run_id")
       expect(a).not.toMatch(/\bop:/)
+    }
+  })
+
+  // ── GAP-3: the eval scenario docs are documented consumers of the same return shapes,
+  // so they must not reference a field the tool never emits (integrity_abort was the drift). ──
+  it("no qa-loop eval scenario doc references the phantom integrity_abort field", () => {
+    const evalDir = join(__dirname, "../../docs/eval/scenarios/perun")
+    const files = readdirSync(evalDir).filter((f) => f.endsWith(".md"))
+    expect(files.length).toBeGreaterThan(0)
+    for (const f of files) {
+      expect(readFileSync(join(evalDir, f), "utf8"), `${f} must not reference integrity_abort`).not.toContain("integrity_abort")
     }
   })
 })

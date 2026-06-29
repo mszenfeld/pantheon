@@ -31,6 +31,12 @@ interface QaLoopToolDeps {
         location: string | null;
     }[]>;
 }
+/** Loop budget defaults — the single source the tool reads (docs quote these). */
+declare const QA_LOOP_DEFAULTS: {
+    readonly maxIterations: 3;
+    readonly maxDispatches: 50;
+    readonly timeBudgetS: 1800;
+};
 declare function makeQaLoopTools(deps: QaLoopToolDeps): {
     qa_loop_start: {
         description: string;
@@ -161,4 +167,4 @@ declare function makeQaLoopTools(deps: QaLoopToolDeps): {
     };
 };
 
-export { type QaLoopToolDeps, makeQaLoopTools };
+export { QA_LOOP_DEFAULTS, type QaLoopToolDeps, makeQaLoopTools };

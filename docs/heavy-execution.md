@@ -60,6 +60,8 @@ Restore is **manual** — Svarog does not restore its own checkpoint. On `FAIL`,
 3. Orphans (files present now but absent from the checkpoint) are removed with `fs.rmSync`.
 4. `git reset -q` — resets the index to `HEAD`. (Original staging is **not** preserved — restore is a recovery aid that yields a clean, recoverable tree, not a replay of mid-turn staging.)
 
+**Inside the QA loop, restore is automatic.** When Svarog runs as the in-loop fixer, `qa_loop_record_fix` resolves `refs/svarog/ckpt/<sessionID>` from the child session id surfaced on `DispatchResult.sessionId` and, on `FAIL`, auto-restores that checkpoint (carrying only `READY` fixes forward). The manual `git for-each-ref` path remains for standalone Workflow-3 Svarog runs. Note also that `createCheckpoint`'s `update-ref` is **create-only** (a freshness guard): a host-restart-resumed session that re-fires the hook keeps its ORIGINAL pre-edit checkpoint instead of overwriting it.
+
 ### Honest limits
 
 The checkpoint captures the tree as it was before the first edit. It has the following **documented limitations**:

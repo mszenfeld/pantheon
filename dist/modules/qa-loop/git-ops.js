@@ -47,6 +47,7 @@ function antiHardcodeDiff(cwd, ckptRef, changed, bePayloads) {
   const payloads = bePayloads.map((p) => p.trim()).filter(Boolean);
   if (payloads.length === 0 || changed.length === 0) return warnings;
   for (const file of changed) {
+    if (file.startsWith("-") || file.startsWith(":") || file.includes("..")) continue;
     let diff = "";
     try {
       diff = git(cwd, ["diff", "--no-color", ckptRef, "--", file]);

@@ -1,9 +1,10 @@
 import { tool } from "@opencode-ai/plugin";
 import { execFileSync } from "node:child_process";
 import { readFileSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { resolve, sep } from "node:path";
 import { hashPlan } from "./plan-hash.js";
 import { classifyScenario } from "./classify.js";
+import { routeSkip } from "./coverage.js";
 import { capturePreLoopRef, refExists, restoreFailRef, antiHardcodeDiff, undoToPreLoop } from "./git-ops.js";
 import { stepEnter, stepEvaluate, resultOf } from "./state-machine.js";
 import { renderReport } from "./report.js";
@@ -47,17 +48,28 @@ function detectDirty(cwd) {
   const dirty_files = lines.map((l) => l.slice(3).trim());
   return { dirty: true, dirty_files };
 }
-const COVERAGE_BUCKET = {
-  feature: "feature",
-  sanity: "sanity",
-  negative: "enforcement"
-};
-function routeSkip(reason) {
-  const r = (reason ?? "").toLowerCase();
-  if (/auth|login|token|credential|unauthor/.test(r)) return { bucket: "auth-unverified", warn: false };
-  if (/mutation-guard|mutating/.test(r)) return { bucket: "mutation-guard", warn: false };
-  if (/tool|playwright|psql|mysql|mongosh|redis|missing|unavailable|not installed/.test(r)) return { bucket: "tool-unavailable", warn: false };
-  return { bucket: "tool-unavailable", warn: true };
+const QA_LOOP_DEFAULTS = { maxIterations: 3, maxDispatches: 50, timeBudgetS: 1800 };
+function containedPath(cwd, p) {
+  const root = resolve(cwd);
+  const abs = resolve(root, p);
+  if (abs !== root && !abs.startsWith(root + sep)) return null;
+  return abs;
+}
+function newIterationRow(n, opts) {
+  return {
+    n,
+    phase: opts?.phase ?? "selecting",
+    pending: opts?.pending ?? [],
+    in_flight: null,
+    attempted_so_far: [],
+    now_passing: [],
+    still_failing: [],
+    stop_cause: opts?.stop_cause ?? null,
+    regressions: [],
+    warnings: [],
+    dispatches_this_iter: 0,
+    elapsed_s: 0
+  };
 }
 function makeQaLoopTools(deps) {
   const { gate, state, cwd, resolveParentID, assignIssueIds } = deps;
@@ -83,17 +95,20 @@ function makeQaLoopTools(deps) {
     async execute(args, ctx) {
       if (!gate.isCoordinatorCaller(ctx.sessionID)) return FORBIDDEN("qa_loop_start");
       const parentId = await resolveParentID(ctx.sessionID);
-      const absReportPath = join(cwd, args.report_path);
-      const absPlanPath = join(cwd, args.plan_path);
+      const absReportPath = containedPath(cwd, args.report_path);
+      const absPlanPath = containedPath(cwd, args.plan_path);
+      if (!absReportPath || !absPlanPath) {
+        return JSON.stringify({ status: "error", reason: "report_path and plan_path must resolve within the repository" });
+      }
       const planText = readFileSync(absPlanPath, "utf8");
       const sha = hashPlan(planText);
       const allowMutations = args.allow_mutations ?? false;
       const config = {
         mode: args.mode ?? "approve",
         severity_floor: args.severity_floor ?? "LOW",
-        max_iterations: args.max_iterations ?? 3,
-        max_dispatches: args.max_dispatches ?? 50,
-        time_budget_s: args.time_budget_s ?? 1800,
+        max_iterations: args.max_iterations ?? QA_LOOP_DEFAULTS.maxIterations,
+        max_dispatches: args.max_dispatches ?? QA_LOOP_DEFAULTS.maxDispatches,
+        time_budget_s: args.time_budget_s ?? QA_LOOP_DEFAULTS.timeBudgetS,
         allow_mutations: allowMutations
       };
       const onDisk = state.loadFromDisk(absReportPath);
@@ -123,7 +138,6 @@ function makeQaLoopTools(deps) {
       const disposition = reportExists ? "ADOPT" : "FRESH";
       const scenarios = {};
       const dispatchSet = [];
-      let mutationGuardCount = 0;
       for (const { id, block } of splitScenarios(planText)) {
         const { kind, mutating, expectsSuccess } = classifyScenario(block);
         const stripped = mutating && expectsSuccess && !allowMutations;
@@ -136,8 +150,7 @@ function makeQaLoopTools(deps) {
           current: stripped ? "skip" : "fail",
           reason: stripped ? "mutation-guard: mutating scenario expected to succeed" : null
         };
-        if (stripped) mutationGuardCount++;
-        else dispatchSet.push(id);
+        if (!stripped) dispatchSet.push(id);
       }
       const runId = `qa-loop-${args.topic}-${reportExists ? 2 : 1}`;
       const undoRef = capturePreLoopRef(cwd, runId);
@@ -164,11 +177,13 @@ function makeQaLoopTools(deps) {
         scenarios,
         issues: {},
         iterations: [],
+        // exercised/not_verified are a render-time projection (deriveCoverage); only
+        // routing_warnings accumulates on the sidecar, so the buckets initialize to zero.
         coverage: {
           exercised: { feature: 0, sanity: 0, enforcement: 0 },
           not_verified: {
             "auth-unverified": 0,
-            "mutation-guard": mutationGuardCount,
+            "mutation-guard": 0,
             "tool-unavailable": 0
           },
           routing_warnings: []
@@ -224,13 +239,9 @@ function makeQaLoopTools(deps) {
         sc.current = r.state;
         sc.reason = r.state === "skip" ? r.reason ?? null : null;
         if (r.state === "skip") {
-          const { bucket, warn } = routeSkip(r.reason);
-          s.coverage.not_verified[bucket]++;
+          const { warn } = routeSkip(r.reason);
           if (warn) s.coverage.routing_warnings.push(`${r.scenario}: unrecognized SKIP reason -> tool-unavailable (${r.reason ?? ""})`);
         } else {
-          if (r.state === "pass" || r.state === "fail") {
-            s.coverage.exercised[COVERAGE_BUCKET[sc.kind]]++;
-          }
           if (r.state === "fail" && sc.qa_ids.length === 0) {
             newFindings.push({
               scenario: r.scenario,
@@ -284,40 +295,33 @@ function makeQaLoopTools(deps) {
       const s = state.load(parentId);
       if (!s) return JSON.stringify({ status: "error", reason: "no active loop run" });
       if (args.phase === "enter") {
+        let tampered = false;
+        try {
+          tampered = hashPlan(readFileSync(s.plan_path, "utf8")) !== s.plan_sha256;
+        } catch {
+          tampered = true;
+        }
+        if (tampered) {
+          const open = s.iterations.find((it) => it.n === s.budgets.iteration && it.stop_cause === null && it.phase !== "evaluated");
+          if (open) {
+            open.stop_cause = "plan-tamper";
+            open.phase = "evaluated";
+          } else {
+            s.budgets.iteration += 1;
+            s.iterations.push(newIterationRow(s.budgets.iteration, { phase: "evaluated", stop_cause: "plan-tamper" }));
+          }
+          s.updated_at = Date.now();
+          state.save(parentId, s);
+          return JSON.stringify({ status: "ok", action: "stop", stop_cause: "plan-tamper" });
+        }
         const iterBefore = s.budgets.iteration;
         const decision2 = stepEnter(s);
         if (decision2.action === "fix") {
           if (s.budgets.iteration > iterBefore) {
-            s.iterations.push({
-              n: s.budgets.iteration,
-              phase: "selecting",
-              pending: decision2.issues ?? [],
-              in_flight: null,
-              attempted_so_far: [],
-              now_passing: [],
-              still_failing: [],
-              stop_cause: null,
-              regressions: [],
-              warnings: [],
-              dispatches_this_iter: 0,
-              elapsed_s: 0
-            });
+            s.iterations.push(newIterationRow(s.budgets.iteration, { phase: "selecting", pending: decision2.issues ?? [] }));
           }
         } else if (decision2.action === "stop") {
-          s.iterations.push({
-            n: s.budgets.iteration,
-            phase: "evaluated",
-            pending: [],
-            in_flight: null,
-            attempted_so_far: [],
-            now_passing: [],
-            still_failing: [],
-            stop_cause: decision2.stop_cause ?? null,
-            regressions: [],
-            warnings: [],
-            dispatches_this_iter: 0,
-            elapsed_s: 0
-          });
+          s.iterations.push(newIterationRow(s.budgets.iteration, { phase: "evaluated", stop_cause: decision2.stop_cause ?? null }));
         }
         s.updated_at = Date.now();
         state.save(parentId, s);
@@ -327,6 +331,10 @@ function makeQaLoopTools(deps) {
       const row = s.iterations[s.iterations.length - 1];
       if (row) {
         row.phase = "evaluated";
+        const recs = Object.entries(s.scenarios);
+        row.now_passing = recs.filter(([, sc]) => sc.baseline === "fail" && sc.current === "pass").map(([id]) => id);
+        row.still_failing = recs.filter(([, sc]) => sc.current === "fail").map(([id]) => id);
+        row.regressions = recs.filter(([, sc]) => sc.baseline === "pass" && sc.current === "fail").map(([id]) => id);
         if (decision.action === "stop" && decision.stop_cause) row.stop_cause = decision.stop_cause;
       }
       s.updated_at = Date.now();
@@ -359,6 +367,9 @@ function makeQaLoopTools(deps) {
       if (!s) return JSON.stringify({ status: "error", reason: "no active loop run" });
       const issue = s.issues[args.qa_id];
       if (!issue) return JSON.stringify({ status: "error", reason: `unknown issue ${args.qa_id}` });
+      if (!/^[A-Za-z0-9._-]{1,128}$/.test(args.child_session_id)) {
+        return JSON.stringify({ status: "error", reason: "invalid child_session_id" });
+      }
       const row = s.iterations[s.iterations.length - 1];
       issue.fix.svarog_status = args.svarog_status;
       issue.fix.child_session_id = args.child_session_id;
@@ -468,5 +479,6 @@ function makeQaLoopTools(deps) {
   };
 }
 export {
+  QA_LOOP_DEFAULTS,
   makeQaLoopTools
 };

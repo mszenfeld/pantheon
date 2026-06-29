@@ -5,7 +5,7 @@ type ScenarioState = "pass" | "fail" | "skip";
 type IssueStatus = "open" | "fix-attempted" | "fix-failed" | "deferred" | "fixed";
 type SvarogStatus = "READY" | "FAIL" | "ESCALATE";
 type IterationPhase = "selecting" | "awaiting_fix_gate" | "fixing" | "awaiting_retest_gate" | "retested" | "evaluated";
-type StopCause = "zero-failure" | "regression" | "no-progress" | "all-deferred" | "max-iterations" | "max-dispatches" | "time-budget" | "user-abort" | "plan-tamper" | "checkpoint-integrity";
+type StopCause = "regression" | "no-progress" | "all-deferred" | "max-iterations" | "max-dispatches" | "time-budget" | "plan-tamper" | "checkpoint-integrity";
 type RunResult = "Pass" | "Fail" | "BudgetExhausted" | "Stopped" | "NotVerified";
 interface ScenarioRecord {
     qa_ids: string[];

@@ -2,7 +2,7 @@
 
 **Agent:** Perun - Coordinator
 **Target codebase:** a fixture where a `READY` reports `changed[]` but its `refs/svarog/ckpt/<id>` is missing.
-The discriminator is *whether Perun honors the tool's `integrity_abort`* — stopping without auto-restoring the untrusted ref and surfacing it (AC14), rather than continuing blindly.
+The discriminator is *whether Perun honors the tool's `checkpoint-integrity` stop* — stopping without auto-restoring the untrusted ref and surfacing it (AC14), rather than continuing blindly.
 
 ## Query
 
@@ -11,7 +11,7 @@ The discriminator is *whether Perun honors the tool's `integrity_abort`* — sto
 ## Expected coverage
 
 **MUST:**
-- When `qa_loop_record_fix` returns `{ integrity_abort: true }`, Perun STOPS the loop and goes to Phase 3 FINAL — it does NOT auto-restore the missing/stale ref or keep dispatching.
+- When `qa_loop_record_fix` returns `{ stop_cause: "checkpoint-integrity" }`, Perun STOPS the loop and goes to Phase 3 FINAL — it does NOT auto-restore the missing/stale ref or keep dispatching.
 - Surfaces the checkpoint-integrity stop to the user.
 - `qa_loop_finalize` reports `Stopped`.
 

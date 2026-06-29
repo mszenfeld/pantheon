@@ -147,4 +147,16 @@ describe("qa_loop_record_fix", () => {
     const s = state.load("perun")!
     expect(s.issues["QA-001"]!.status).toBe("fix-attempted")
   })
+
+  it("rejects a malformed child_session_id before any git/MAXD effect (SEC-002)", async () => {
+    const res = resultJson(await tools().qa_loop_record_fix.execute(
+      { qa_id: "QA-001", child_session_id: "../evil", svarog_status: "READY", changed: ["src/x.ts"], reason: "" },
+      ctx("perun"),
+    ))
+    expect(res.status).toBe("error")
+    expect(String(res.reason)).toMatch(/child_session_id/)
+    const s = state.load("perun")!
+    expect(s.budgets.dispatch_count_total).toBe(0) // rejected before MAXD++
+    expect(s.issues["QA-001"]!.status).toBe("open") // untouched
+  })
 })

@@ -6,6 +6,7 @@ import type { ToolContext } from "@opencode-ai/plugin"
 import { makeQaLoopTools } from "../../../src/modules/qa-loop/tools.js"
 import { QaLoopState } from "../../../src/modules/qa-loop/sidecar.js"
 import type { Sidecar } from "../../../src/modules/qa-loop/types.js"
+import { deriveCoverage } from "../../../src/modules/qa-loop/coverage.js"
 
 function fakeGate(id: string) {
   return { isCoordinatorCaller: (s: string) => s === id, isSetupCaller: () => false }
@@ -104,11 +105,12 @@ describe("qa_loop_ingest", () => {
     expect(s.scenarios["BE-03"]!.current).toBe("pass")
     expect(s.scenarios["FE-09"]!.current).toBe("skip")
 
-    // coverage: exercised feature(FE-01 ran but failed → still feature-exercised), sanity(BE-01), enforcement(BE-03 passing negative)
-    expect(s.coverage.exercised.sanity).toBe(1)
-    expect(s.coverage.exercised.enforcement).toBe(1)
-    // FE-09 skipped with auth reason → auth-unverified
-    expect(s.coverage.not_verified["auth-unverified"]).toBe(1)
+    // coverage is a render-time projection of current scenario states (deriveCoverage):
+    // sanity(BE-01 pass), enforcement(BE-03 passing negative), FE-09 skip(auth) → auth-unverified.
+    const cov = deriveCoverage(s)
+    expect(cov.exercised.sanity).toBe(1)
+    expect(cov.exercised.enforcement).toBe(1)
+    expect(cov.not_verified["auth-unverified"]).toBe(1)
 
     // QA-ID minted for the new failure and attached to the scenario + issues map
     expect(s.scenarios["FE-01"]!.qa_ids).toEqual(["QA-001"])
@@ -125,7 +127,7 @@ describe("qa_loop_ingest", () => {
       ctx("perun"),
     )
     const s = state.load("perun")!
-    expect(s.coverage.not_verified["tool-unavailable"]).toBe(1)
+    expect(deriveCoverage(s).not_verified["tool-unavailable"]).toBe(1)
     expect(s.coverage.routing_warnings.length).toBe(1)
   })
 
@@ -140,5 +142,22 @@ describe("qa_loop_ingest", () => {
       ctx("perun"),
     ))
     expect(res.new_qa_ids).toEqual(["QA-042"])
+  })
+
+  it("coverage does NOT inflate across baseline → final re-ingests (MAINT-001 / GAP-1)", async () => {
+    const tools = makeQaLoopTools({ gate: fakeGate("perun"), state, cwd: "/tmp", resolveParentID: async (s) => s, assignIssueIds })
+    await tools.qa_loop_ingest.execute(
+      { phase: "baseline", results: [{ scenario: "FE-01", state: "pass" }, { scenario: "BE-01", state: "pass" }] },
+      ctx("perun"),
+    )
+    const afterBaseline = deriveCoverage(state.load("perun")!).exercised
+    // Re-ingest the SAME scenarios at final — the projection must not double-count.
+    await tools.qa_loop_ingest.execute(
+      { phase: "final", results: [{ scenario: "FE-01", state: "pass" }, { scenario: "BE-01", state: "pass" }] },
+      ctx("perun"),
+    )
+    const afterFinal = deriveCoverage(state.load("perun")!).exercised
+    expect(afterFinal).toEqual(afterBaseline)
+    expect(afterFinal).toEqual({ feature: 2, sanity: 1, enforcement: 1 })
   })
 })

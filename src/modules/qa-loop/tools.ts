@@ -1,12 +1,13 @@
 import { tool } from "@opencode-ai/plugin"
 import { execFileSync } from "node:child_process"
 import { readFileSync, writeFileSync } from "node:fs"
-import { join } from "node:path"
+import { resolve, sep } from "node:path"
 import type { CallerGate } from "../qa/caller-gate.js"
-import type { Sidecar, ScenarioRecord, ScenarioKind, Mode, SeverityFloor, IssueRecord, Coverage, ScenarioState } from "./types.js"
+import type { Sidecar, ScenarioRecord, ScenarioKind, Mode, SeverityFloor, IssueRecord, ScenarioState, IterationRecord, IterationPhase, StopCause } from "./types.js"
 import { QaLoopState } from "./sidecar.js"
 import { hashPlan } from "./plan-hash.js"
 import { classifyScenario } from "./classify.js"
+import { routeSkip } from "./coverage.js"
 import { capturePreLoopRef, refExists, restoreFailRef, antiHardcodeDiff, undoToPreLoop } from "./git-ops.js"
 import { stepEnter, stepEvaluate, resultOf } from "./state-machine.js"
 import { renderReport } from "./report.js"
@@ -71,19 +72,40 @@ function detectDirty(cwd: string): { dirty: boolean; dirty_files: string[] } {
   return { dirty: true, dirty_files }
 }
 
-const COVERAGE_BUCKET: Record<ScenarioKind, keyof Coverage["exercised"]> = {
-  feature: "feature",
-  sanity: "sanity",
-  negative: "enforcement",
+/** Loop budget defaults — the single source the tool reads (docs quote these). */
+export const QA_LOOP_DEFAULTS = { maxIterations: 3, maxDispatches: 50, timeBudgetS: 1800 } as const
+
+/**
+ * Resolve a repo-relative (or absolute-inside-repo) path and assert it stays within `cwd`.
+ * Returns null when the path escapes the repo — CWE-22/73 containment for the privileged
+ * report/sidecar write sink. The caller turns null into a tool-level error.
+ */
+function containedPath(cwd: string, p: string): string | null {
+  const root = resolve(cwd)
+  const abs = resolve(root, p)
+  if (abs !== root && !abs.startsWith(root + sep)) return null
+  return abs
 }
 
-// Route a SKIP/NEED_INFO reason to a not_verified bucket (§5).
-function routeSkip(reason: string | undefined): { bucket: keyof Coverage["not_verified"]; warn: boolean } {
-  const r = (reason ?? "").toLowerCase()
-  if (/auth|login|token|credential|unauthor/.test(r)) return { bucket: "auth-unverified", warn: false }
-  if (/mutation-guard|mutating/.test(r)) return { bucket: "mutation-guard", warn: false }
-  if (/tool|playwright|psql|mysql|mongosh|redis|missing|unavailable|not installed/.test(r)) return { bucket: "tool-unavailable", warn: false }
-  return { bucket: "tool-unavailable", warn: true }
+/** Build a fresh IterationRecord (one place, so every push stays field-complete). */
+function newIterationRow(
+  n: number,
+  opts?: { phase?: IterationPhase; pending?: string[]; stop_cause?: StopCause | null },
+): IterationRecord {
+  return {
+    n,
+    phase: opts?.phase ?? "selecting",
+    pending: opts?.pending ?? [],
+    in_flight: null,
+    attempted_so_far: [],
+    now_passing: [],
+    still_failing: [],
+    stop_cause: opts?.stop_cause ?? null,
+    regressions: [],
+    warnings: [],
+    dispatches_this_iter: 0,
+    elapsed_s: 0,
+  }
 }
 
 export function makeQaLoopTools(deps: QaLoopToolDeps) {
@@ -113,8 +135,13 @@ export function makeQaLoopTools(deps: QaLoopToolDeps) {
       const parentId = await resolveParentID(ctx.sessionID)
 
       // Absolute paths for sidecar (which uses the path as-is for disk writes).
-      const absReportPath = join(cwd, args.report_path)
-      const absPlanPath = join(cwd, args.plan_path)
+      // Containment: both must resolve INSIDE the repo — they feed privileged writeFileSync
+      // sinks (the report + the sidecar), so a traversal path is rejected here in code.
+      const absReportPath = containedPath(cwd, args.report_path)
+      const absPlanPath = containedPath(cwd, args.plan_path)
+      if (!absReportPath || !absPlanPath) {
+        return JSON.stringify({ status: "error", reason: "report_path and plan_path must resolve within the repository" })
+      }
 
       const planText = readFileSync(absPlanPath, "utf8")
       const sha = hashPlan(planText)
@@ -123,9 +150,9 @@ export function makeQaLoopTools(deps: QaLoopToolDeps) {
       const config: Sidecar["config"] = {
         mode: (args.mode as Mode) ?? "approve",
         severity_floor: (args.severity_floor as SeverityFloor) ?? "LOW",
-        max_iterations: args.max_iterations ?? 3,
-        max_dispatches: args.max_dispatches ?? 50,
-        time_budget_s: args.time_budget_s ?? 1800,
+        max_iterations: args.max_iterations ?? QA_LOOP_DEFAULTS.maxIterations,
+        max_dispatches: args.max_dispatches ?? QA_LOOP_DEFAULTS.maxDispatches,
+        time_budget_s: args.time_budget_s ?? QA_LOOP_DEFAULTS.timeBudgetS,
         allow_mutations: allowMutations,
       }
 
@@ -166,7 +193,6 @@ export function makeQaLoopTools(deps: QaLoopToolDeps) {
       // Classify every scenario; apply the mutation guard pre-dispatch.
       const scenarios: Record<string, ScenarioRecord> = {}
       const dispatchSet: string[] = []
-      let mutationGuardCount = 0
       for (const { id, block } of splitScenarios(planText)) {
         const { kind, mutating, expectsSuccess } = classifyScenario(block)
         // Strip ONLY mutating scenarios expected to succeed; a negative-blocked
@@ -181,8 +207,7 @@ export function makeQaLoopTools(deps: QaLoopToolDeps) {
           current: stripped ? "skip" : "fail",
           reason: stripped ? "mutation-guard: mutating scenario expected to succeed" : null,
         }
-        if (stripped) mutationGuardCount++
-        else dispatchSet.push(id)
+        if (!stripped) dispatchSet.push(id)
       }
 
       const runId = `qa-loop-${args.topic}-${reportExists ? 2 : 1}`
@@ -212,11 +237,13 @@ export function makeQaLoopTools(deps: QaLoopToolDeps) {
         scenarios,
         issues: {},
         iterations: [],
+        // exercised/not_verified are a render-time projection (deriveCoverage); only
+        // routing_warnings accumulates on the sidecar, so the buckets initialize to zero.
         coverage: {
           exercised: { feature: 0, sanity: 0, enforcement: 0 },
           not_verified: {
             "auth-unverified": 0,
-            "mutation-guard": mutationGuardCount,
+            "mutation-guard": 0,
             "tool-unavailable": 0,
           },
           routing_warnings: [],
@@ -277,16 +304,11 @@ export function makeQaLoopTools(deps: QaLoopToolDeps) {
         sc.reason = r.state === "skip" ? (r.reason ?? null) : null
 
         if (r.state === "skip") {
-          const { bucket, warn } = routeSkip(r.reason)
-          s.coverage.not_verified[bucket]++
+          // Coverage buckets are a render-time projection (deriveCoverage); ingest only
+          // records the unrecognized-reason routing warning (a genuine append-only log).
+          const { warn } = routeSkip(r.reason)
           if (warn) s.coverage.routing_warnings.push(`${r.scenario}: unrecognized SKIP reason -> tool-unavailable (${r.reason ?? ""})`)
         } else {
-          // A scenario that actually RAN counts as exercised in its kind bucket
-          // (a passing negative becomes enforcement). A failing run still
-          // exercised that kind's surface.
-          if (r.state === "pass" || r.state === "fail") {
-            s.coverage.exercised[COVERAGE_BUCKET[sc.kind]]++
-          }
           // New failure with no id yet → mint one.
           if (r.state === "fail" && sc.qa_ids.length === 0) {
             newFindings.push({
@@ -345,47 +367,45 @@ export function makeQaLoopTools(deps: QaLoopToolDeps) {
       if (!s) return JSON.stringify({ status: "error", reason: "no active loop run" })
 
       if (args.phase === "enter") {
+        // §4 tamper guard: re-hash the plan on every enter. A plan edited mid-run can no
+        // longer be trusted against the baseline, so the loop stops here with plan-tamper
+        // (perun.md Workflow-1 §2.0). An unreadable plan mid-run is also treated as tamper.
+        let tampered = false
+        try {
+          tampered = hashPlan(readFileSync(s.plan_path, "utf8")) !== s.plan_sha256
+        } catch {
+          tampered = true
+        }
+        if (tampered) {
+          // Record the stop on the open iteration row if one exists, else open one
+          // (mirroring stepEnter's fresh-vs-resume accounting) so the cause is visible.
+          const open = s.iterations.find((it) => it.n === s.budgets.iteration && it.stop_cause === null && it.phase !== "evaluated")
+          if (open) {
+            open.stop_cause = "plan-tamper"
+            open.phase = "evaluated"
+          } else {
+            s.budgets.iteration += 1
+            s.iterations.push(newIterationRow(s.budgets.iteration, { phase: "evaluated", stop_cause: "plan-tamper" }))
+          }
+          s.updated_at = Date.now()
+          state.save(parentId, s)
+          return JSON.stringify({ status: "ok", action: "stop", stop_cause: "plan-tamper" })
+        }
+
         // stepEnter handles idempotency and increments budgets.iteration on fresh entry.
         // Capture the iteration index before calling so we can detect a fresh entry.
         const iterBefore = s.budgets.iteration
         const decision = stepEnter(s)
 
         if (decision.action === "fix") {
-          // If budgets.iteration advanced (fresh entry), push a new IterationRecord.
+          // Fresh entry advanced the counter → open a new row. Idempotent re-entry leaves
+          // the existing (not-yet-evaluated) row untouched.
           if (s.budgets.iteration > iterBefore) {
-            s.iterations.push({
-              n: s.budgets.iteration,
-              phase: "selecting",
-              pending: decision.issues ?? [],
-              in_flight: null,
-              attempted_so_far: [],
-              now_passing: [],
-              still_failing: [],
-              stop_cause: null,
-              regressions: [],
-              warnings: [],
-              dispatches_this_iter: 0,
-              elapsed_s: 0,
-            })
+            s.iterations.push(newIterationRow(s.budgets.iteration, { phase: "selecting", pending: decision.issues ?? [] }))
           }
-          // On idempotent re-entry the existing row is unchanged (stepEnter already
-          // confirmed it is not yet evaluated and stop_cause is null).
         } else if (decision.action === "stop") {
           // Budget/MAXI fired — push the row so the stop_cause is visible.
-          s.iterations.push({
-            n: s.budgets.iteration,
-            phase: "evaluated",
-            pending: [],
-            in_flight: null,
-            attempted_so_far: [],
-            now_passing: [],
-            still_failing: [],
-            stop_cause: decision.stop_cause ?? null,
-            regressions: [],
-            warnings: [],
-            dispatches_this_iter: 0,
-            elapsed_s: 0,
-          })
+          s.iterations.push(newIterationRow(s.budgets.iteration, { phase: "evaluated", stop_cause: decision.stop_cause ?? null }))
         }
 
         s.updated_at = Date.now()
@@ -398,6 +418,12 @@ export function makeQaLoopTools(deps: QaLoopToolDeps) {
       const row = s.iterations[s.iterations.length - 1]
       if (row) {
         row.phase = "evaluated"
+        // Persist the per-iteration deltas the Loop-History report renders, from the same
+        // baseline-vs-current scan stepEvaluate uses (so the columns are never blank).
+        const recs = Object.entries(s.scenarios)
+        row.now_passing = recs.filter(([, sc]) => sc.baseline === "fail" && sc.current === "pass").map(([id]) => id)
+        row.still_failing = recs.filter(([, sc]) => sc.current === "fail").map(([id]) => id)
+        row.regressions = recs.filter(([, sc]) => sc.baseline === "pass" && sc.current === "fail").map(([id]) => id)
         if (decision.action === "stop" && decision.stop_cause) row.stop_cause = decision.stop_cause
       }
       s.updated_at = Date.now()
@@ -432,6 +458,11 @@ export function makeQaLoopTools(deps: QaLoopToolDeps) {
 
       const issue = s.issues[args.qa_id]
       if (!issue) return JSON.stringify({ status: "error", reason: `unknown issue ${args.qa_id}` })
+      // Defense-in-depth: child_session_id is spliced into a git ref name, so pin its shape
+      // at the boundary — the trust is then code-enforced, not incidental on the minted id.
+      if (!/^[A-Za-z0-9._-]{1,128}$/.test(args.child_session_id)) {
+        return JSON.stringify({ status: "error", reason: "invalid child_session_id" })
+      }
       const row = s.iterations[s.iterations.length - 1]
 
       // record_fix is the SOLE writer of child_session_id + the MAXD counter.

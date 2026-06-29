@@ -87,4 +87,16 @@ describe("antiHardcodeDiff (§6, best-effort, non-blocking)", () => {
     const warnings = antiHardcodeDiff(cwd, ckptRef, ["a.txt"], ['"EXPECTED-42"'])
     expect(warnings).toEqual([])
   })
+
+  it("skips changed[] entries that are not plain in-tree paths (SEC-003)", () => {
+    const ckptRef = capturePreLoopRef(cwd, "ckpt-sec")
+    writeFileSync(join(cwd, "a.txt"), 'return "EXPECTED-42"')
+    // flag-like, pathspec-magic, and traversal entries are all skipped → no warnings and no throw,
+    // even though a.txt on disk DOES contain the payload literal.
+    const skipped = antiHardcodeDiff(cwd, ckptRef, ["-x", ":(glob)**", "../escape.txt"], ['"EXPECTED-42"'])
+    expect(skipped).toEqual([])
+    // a plain in-tree path is still diffed normally — the guard is surgical.
+    const real = antiHardcodeDiff(cwd, ckptRef, ["a.txt"], ['"EXPECTED-42"'])
+    expect(real.length).toBe(1)
+  })
 })

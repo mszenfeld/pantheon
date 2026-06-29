@@ -1,3 +1,4 @@
+import { deriveCoverage } from "./coverage.js";
 function markerFor(iss) {
   if (iss.status === "fixed") return `\u2705 Fixed (${iss.fixed_at ?? ""})`;
   if (iss.status === "deferred")
@@ -60,14 +61,15 @@ function renderReport(s) {
   lines.push("");
   lines.push("## Coverage");
   lines.push("");
-  const ex = s.coverage.exercised;
-  const nv = s.coverage.not_verified;
+  const cov = deriveCoverage(s);
+  const ex = cov.exercised;
+  const nv = cov.not_verified;
   lines.push(`- **Exercised:** feature ${ex.feature} \xB7 sanity ${ex.sanity} \xB7 enforcement ${ex.enforcement}`);
   lines.push(
     `- **Not verified:** auth-unverified ${nv["auth-unverified"]} \xB7 mutation-guard ${nv["mutation-guard"]} \xB7 tool-unavailable ${nv["tool-unavailable"]}`
   );
-  if (s.coverage.routing_warnings.length > 0) {
-    lines.push(`- **Routing warnings:** ${s.coverage.routing_warnings.join("; ")}`);
+  if (cov.routing_warnings.length > 0) {
+    lines.push(`- **Routing warnings:** ${cov.routing_warnings.join("; ")}`);
   }
   lines.push("");
   lines.push("## Recovery");

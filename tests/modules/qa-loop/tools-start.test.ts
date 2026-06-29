@@ -6,6 +6,7 @@ import { join } from "node:path"
 import type { ToolContext } from "@opencode-ai/plugin"
 import { makeQaLoopTools } from "../../../src/modules/qa-loop/tools.js"
 import { QaLoopState } from "../../../src/modules/qa-loop/sidecar.js"
+import { deriveCoverage } from "../../../src/modules/qa-loop/coverage.js"
 
 function git(cwd: string, args: string[]): string {
   return execFileSync("git", args, { cwd, encoding: "utf8" }).trim()
@@ -107,7 +108,7 @@ describe("qa_loop_start", () => {
     expect(s.scenarios["BE-02"]!.mutating).toBe(true)
     expect(s.scenarios["BE-02"]!.current).toBe("skip")
     expect(s.scenarios["BE-02"]!.reason).toMatch(/mutation-guard/)
-    expect(s.coverage.not_verified["mutation-guard"]).toBe(1)
+    expect(deriveCoverage(s).not_verified["mutation-guard"]).toBe(1)
     expect(s.scenarios["BE-03"]!.current).not.toBe("skip")
     // dispatch_set excludes BE-02, includes BE-03
     expect(res.dispatch_set).toContain("BE-03")
@@ -191,5 +192,15 @@ describe("qa_loop_start", () => {
 
     // qa_id_start_at must be max(existing)+1 = 7+1 = 8.
     expect(res.qa_id_start_at).toBe(8)
+  })
+
+  it("rejects a report_path that escapes the repo (SEC-001 containment guard)", async () => {
+    const tools = makeQaLoopTools({ gate: fakeGate("perun"), state, cwd, resolveParentID: async (s) => s, assignIssueIds: noopAssignIssueIds })
+    const res = resultJson(await tools.qa_loop_start.execute(
+      { plan_path: "docs/testing/plans/2026-06-26-demo-test-plan.md", topic: "demo", report_path: "/tmp/qa-loop-escape.md" },
+      ctx("perun"),
+    ))
+    expect(res.status).toBe("error")
+    expect(String(res.reason)).toMatch(/within the repository/)
   })
 })

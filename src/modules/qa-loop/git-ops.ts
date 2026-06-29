@@ -80,6 +80,11 @@ export function antiHardcodeDiff(
   if (payloads.length === 0 || changed.length === 0) return warnings
 
   for (const file of changed) {
+    // Defense-in-depth over untrusted self-reported changed[]: skip anything that is not a
+    // plain in-tree path so an entry cannot be read as a git flag (`-x`) or a pathspec magic
+    // prefix (`:(glob)`). The diff is best-effort and read-only; the restore path ignores
+    // changed[] entirely and derives orphans from git ls-files.
+    if (file.startsWith("-") || file.startsWith(":") || file.includes("..")) continue
     let diff = ""
     try {
       diff = git(cwd, ["diff", "--no-color", ckptRef, "--", file])
