@@ -144,7 +144,7 @@ describe("qa_loop_ingest", () => {
     expect(res.new_qa_ids).toEqual(["QA-042"])
   })
 
-  it("coverage does NOT inflate across baseline → final re-ingests (MAINT-001 / GAP-1)", async () => {
+  it("coverage does NOT inflate across baseline → final re-ingests", async () => {
     const tools = makeQaLoopTools({ gate: fakeGate("perun"), state, cwd: "/tmp", resolveParentID: async (s) => s, assignIssueIds })
     await tools.qa_loop_ingest.execute(
       { phase: "baseline", results: [{ scenario: "FE-01", state: "pass" }, { scenario: "BE-01", state: "pass" }] },

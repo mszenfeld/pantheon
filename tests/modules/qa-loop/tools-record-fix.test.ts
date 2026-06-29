@@ -148,7 +148,7 @@ describe("qa_loop_record_fix", () => {
     expect(s.issues["QA-001"]!.status).toBe("fix-attempted")
   })
 
-  it("rejects a malformed child_session_id before any git/MAXD effect (SEC-002)", async () => {
+  it("rejects a malformed child_session_id before any git/MAXD effect", async () => {
     const res = resultJson(await tools().qa_loop_record_fix.execute(
       { qa_id: "QA-001", child_session_id: "../evil", svarog_status: "READY", changed: ["src/x.ts"], reason: "" },
       ctx("perun"),

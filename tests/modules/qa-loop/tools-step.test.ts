@@ -114,7 +114,7 @@ describe("qa_loop_step", () => {
     expect(s.iterations[0]!.phase).toBe("evaluated")
   })
 
-  it("enter stops with plan-tamper when the plan file changed mid-run (ARCH-001 / GAP-2)", async () => {
+  it("enter stops with plan-tamper when the plan file changed mid-run", async () => {
     const tools = makeQaLoopTools({ gate: fakeGate("perun"), state, cwd: "/tmp", resolveParentID: async (s) => s, assignIssueIds: noopAssign })
     // Edit the plan on disk after start so its hash no longer matches the sidecar baseline.
     writeFileSync(join(dir, "p.md"), PLAN_TEXT + "\n## FE-99 — injected\nextra\n")
@@ -125,7 +125,7 @@ describe("qa_loop_step", () => {
     expect(s.iterations[s.iterations.length - 1]!.stop_cause).toBe("plan-tamper")
   })
 
-  it("evaluate populates now_passing / still_failing / regressions (MAINT-002)", async () => {
+  it("evaluate populates now_passing / still_failing / regressions", async () => {
     const tools = makeQaLoopTools({ gate: fakeGate("perun"), state, cwd: "/tmp", resolveParentID: async (s) => s, assignIssueIds: noopAssign })
     await tools.qa_loop_step.execute({ phase: "enter" }, ctx("perun"))
     const mid = state.load("perun")!

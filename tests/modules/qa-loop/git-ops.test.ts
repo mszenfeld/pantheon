@@ -88,7 +88,7 @@ describe("antiHardcodeDiff (§6, best-effort, non-blocking)", () => {
     expect(warnings).toEqual([])
   })
 
-  it("skips changed[] entries that are not plain in-tree paths (SEC-003)", () => {
+  it("skips changed[] entries that are not plain in-tree paths", () => {
     const ckptRef = capturePreLoopRef(cwd, "ckpt-sec")
     writeFileSync(join(cwd, "a.txt"), 'return "EXPECTED-42"')
     // flag-like, pathspec-magic, and traversal entries are all skipped → no warnings and no throw,

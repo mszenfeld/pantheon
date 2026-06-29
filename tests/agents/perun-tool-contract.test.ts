@@ -149,7 +149,7 @@ describe("Perun ↔ qa_loop_* tool-call contract", () => {
     }
   })
 
-  // ── GAP-3: the eval scenario docs are documented consumers of the same return shapes,
+  // ── The eval scenario docs are documented consumers of the same return shapes,
   // so they must not reference a field the tool never emits (integrity_abort was the drift). ──
   it("no qa-loop eval scenario doc references the phantom integrity_abort field", () => {
     const evalDir = join(__dirname, "../../docs/eval/scenarios/perun")

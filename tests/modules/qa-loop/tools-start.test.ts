@@ -194,7 +194,7 @@ describe("qa_loop_start", () => {
     expect(res.qa_id_start_at).toBe(8)
   })
 
-  it("rejects a report_path that escapes the repo (SEC-001 containment guard)", async () => {
+  it("rejects a report_path that escapes the repo (containment guard)", async () => {
     const tools = makeQaLoopTools({ gate: fakeGate("perun"), state, cwd, resolveParentID: async (s) => s, assignIssueIds: noopAssignIssueIds })
     const res = resultJson(await tools.qa_loop_start.execute(
       { plan_path: "docs/testing/plans/2026-06-26-demo-test-plan.md", topic: "demo", report_path: "/tmp/qa-loop-escape.md" },
