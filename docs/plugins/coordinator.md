@@ -1,6 +1,6 @@
 # Coordinator Plugin Guide
 
-The coordinator plugin provides **`@perun`**, the Pantheon coordinator agent for the AppVerk OpenCode bundle. `@perun` does not execute work directly. Instead, it delegates to specialist subagents in parallel, synthesizes their results into structured reports, and proposes follow-up actions (typically a fix workflow). It is the orchestration layer that lets multi-step QA → Fix flows run inside a single conversation without manual hand-offs.
+The coordinator plugin provides **`@perun`**, the Pantheon coordinator agent for the AppVerk OpenCode bundle. `@perun` does not execute work directly. Instead, it delegates to specialist subagents in parallel, synthesizes their results into structured reports, and proposes follow-up actions (e.g. committing once work lands). It is the orchestration layer that runs the closed QA **test→fix→retest** loop — and other multi-step flows — inside a single conversation without manual hand-offs.
 
 The plugin ships:
 
@@ -16,7 +16,7 @@ The root plugin bundle (`av-opencode-plugins`) includes this package automatical
 
 ## Usage
 
-### Run a QA plan via `@perun`
+### Run the QA loop via `@perun`
 
 `@perun` accepts free-form prompts in Polish or English. The canonical entry point is a QA plan path:
 
@@ -24,41 +24,21 @@ The root plugin bundle (`av-opencode-plugins`) includes this package automatical
 @perun uruchom QA dla docs/testing/plans/2026-05-18-example-auth-test-plan.md
 ```
 
-`@perun` will:
+This runs the **closed QA engineering loop** (test → fix → retest) end to end: `@perun` orchestrates while the `qa_loop_*` tools own all state, math, git, and the report. The phases:
 
-1. Read and parse the plan (frontmatter, FE/BE scenarios, base URL).
-2. Extract every `### FE-XX:` / `### BE-XX:` block into a flat scenario list (preserving source order).
-3. Sanitize every scenario step against the security rules in its prompt; route by prefix (`FE-` → `zmora-fe`, `BE-` → `zmora-be`).
-4. Parse `**Depends-on:**` annotations, validate the dependency graph (no cycles, no self-refs, no dangling refs), and compute dispatch waves via topological sort.
-5. Dispatch each wave sequentially via `dispatch_parallel` — one task per scenario, label rendered as `zmora ×N` (logical-name exception). The tool is hard-capped at 4 tasks per call (matching the 4-worker pool), so waves with >4 scenarios are chunked into multiple sequential `dispatch_parallel` calls of ≤4 tasks each.
-6. Parse specialist responses (JSON-first, markdown fallback). Normalise variant suffixes (`zmora-{fe,be}` → `zmora`) in every user-facing string before display.
-7. Assign deterministic `QA-NNN` IDs via `assign_issue_ids`.
-8. Sort findings by severity and `Write` the report to `docs/testing/reports/<date>-<topic>.md`.
-9. Display a summary and — if issues were found — propose continuing into the Fix workflow.
+1. **Phase 0 — resolve & guard.** `qa_loop_start` hashes the plan, decides REUSE/ADOPT/FRESH, classifies every scenario, strips mutating-expected-success scenarios (the mutation guard), and captures a pre-loop undo ref.
+2. **Phase 1 — baseline.** Run the whole plan once via `zmora` (`FE-`/`BE-` routed to the `zmora-fe` / `zmora-be` variants, dependency-aware waves through the 4-worker pool); ingest results and mint deterministic `QA-NNN` IDs.
+3. **Phase 2 — loop.** For each still-failing issue at or above the severity floor, dispatch **Svarog** (one issue at a time, under a recovery checkpoint) to fix it, re-run the plan, and evaluate progress — bounded by the iteration / dispatch / time budgets and stopped on regression, no-progress, all-deferred, plan-tamper, or checkpoint-integrity.
+4. **Phase 3 — authoritative final.** An independent final run is the only oracle allowed to mark an issue `✅ Fixed`; `qa_loop_finalize` writes the report plus the run result (`Pass` / `Fail` / `BudgetExhausted` / `Stopped` / `NotVerified`).
+5. **Phase 4 — summary.** Counts, Loop History, Coverage, the `qa_loop_undo` recovery hint, and (per the Composability rules) a "Want me to commit?" proposal.
 
-If you do not pass a plan path, `@perun` will look for the most recent `.md` file in `docs/testing/plans/`.
+The report lands at `docs/testing/reports/<date>-<topic>.md` (with a gitignored `…-loop-state.json` sidecar for cross-session resume). If you do not pass a plan path, `@perun` looks for the most recent `.md` file in `docs/testing/plans/`; if none exists it dispatches the **Veles** planner to author one, then gates on consent before the baseline. Loop flags (`--mode`, `--max-iterations`, `--max-dispatches`, `--time-budget`, `--severity-floor`, `--allow-mutations`) are documented in [`qa.md`](./qa.md).
 
-### Continue into Issue Fix workflow
+### Fixing happens inside the loop
 
-After a QA run reports issues, `@perun` proposes:
+There is no separate "fix from a report" step in `@perun`. Svarog fixes are **Phase 2 of the QA loop** — dispatched one issue at a time, gated by `config.mode` (`approve` / `auto` / `step`) and the `--severity-floor`, each under a recovery checkpoint. `qa_loop_finalize` is the sole writer of `**Status:** ✅ Fixed`, and only after the authoritative final run confirms the fix — `@perun` never hand-stamps it.
 
-> Chcesz, żebym naprawił te problemy? Mogę uruchomić pętlę QA — Svarog naprawi każdy problem po kolei, a następnie Zmora zweryfikuje poprawki.
-
-Accepting the proposal (or invoking `@perun` directly with a report path) triggers the Issue Fix workflow:
-
-```text
-@perun napraw wszystkie HIGH z docs/testing/reports/2026-05-18-example-auth.md
-```
-
-Scope modifiers `@perun` understands:
-
-| User says | Scope |
-|---|---|
-| "fix all" (or no qualifier) | All HIGH+ severity issues |
-| "fix QA-001 and QA-003" | Only those IDs |
-| "fix all MEDIUMs" | All MEDIUM severity issues |
-
-Already-fixed issues (those carrying `**Status:** ✅ Fixed`) are skipped automatically.
+To fix issues from an existing review/QA report **without** re-running the plan, use the code-review plugin's `/fix` / `/fix-report` — see [`code-review.md`](./code-review.md). That is a different tool from the QA loop: `/fix-report` edits code to satisfy a report; the QA loop proves fixes by re-testing.
 
 ### Direct agent use
 
@@ -70,37 +50,23 @@ opencode agent perun "uruchom QA dla docs/testing/plans/2026-05-18-example-auth-
 
 ## What it does
 
-The coordinator implements two workflows, both encoded in `src/agents/perun.md`.
+`@perun` implements three workflows, all encoded in `src/agents/perun.md`:
 
-### Workflow 1 — QA Run
+| Workflow | Trigger | What it does |
+|---|---|---|
+| **0 — Triage / free-form router** | A request that names no plan/report and matches no W1/W3 trigger ("review this branch", "test this PR") | Dispatches `triglav` (read-only) to orient on the diff, then routes: review-only → synthesize & propose; "also test it" → Workflow 1; "change/implement" → Workflow 3. `@perun` has no git/bash of its own — orientation is always a dispatch, never a self-run command. |
+| **1 — QA Loop** | A test-plan path, or "run QA" | The closed test→fix→retest loop (Phase 0–4 above). The `qa_loop_*` tools own state / math / git / report; Svarog is the in-loop fixer, dispatched one issue per iteration; `qa_loop_finalize` is the sole report writer and sole `✅ Fixed` stamper. |
+| **3 — Feature build** | "Implement / refactor X" spanning multiple files | Optionally dispatches `Veles` to plan, then `svarog` to implement test-first under a recovery checkpoint. On `READY`, proposes commit. (A trivial 1–2 file change is `stribog`'s lane, not this workflow.) |
 
-1. **Read the test plan** (`Read`) or auto-discover the most recent plan.
-2. **Parse sections** — frontmatter, `## FE Test Scenarios`, `## BE Test Scenarios`, base URL.
-3. **Extract scenarios** — every `### FE-XX:` / `### BE-XX:` block becomes one entry in a flat list (preserving source order). Each entry carries its body, its edge cases, and any `**Depends-on:**` field.
-4. **Sanitize scenarios** — block sensitive file access (`.env`, `~/.ssh/*`, `~/.aws/*`, private keys), block unauthorized network exfil, block raw bash outside the allowed set (`playwright`, `curl`, `psql`, `sqlite3`), strip injected tool invocations. Scenarios that fail sanitization are marked `SKIP`. Route each surviving scenario by prefix: `FE-` → `zmora-fe`, `BE-` → `zmora-be`. Unrecognised prefix → SKIP with reason "no recognised prefix".
-5. **Build the dependency graph and validate.** Parse each scenario's `**Depends-on:**` field (default: empty). Hard-fail on self-references (`BE-02 **Depends-on:** BE-02`), cycles (Kahn's algorithm — any node unprocessed after the algorithm finishes is on a cycle), or references to non-existent / sanitisation-dropped scenarios. On any violation, abort the run with a clear error pointing at the offending scenario(s); do not call `dispatch_parallel`.
-6. **Compute dispatch waves via topological sort.** Wave 0 = scenarios with no dependencies. Wave N+1 = scenarios whose every dependency was in some earlier wave. When no scenario declares `**Depends-on:**` (the common case, including all existing plans), every scenario lands in Wave 0 — the single-wave fast path.
-7. **Ensure output dir** — `mkdir -p docs/testing/reports`.
-8. **Dispatch each wave sequentially, chunking waves of >4 scenarios.** For each wave in order: build `tasks[]` (one task per scenario, with `name: "zmora-fe"` or `name: "zmora-be"` per the routing in step 4). If `tasks.length > 4`, chunk into batches of ≤4 preserving source order. For each chunk in order, call `dispatch_parallel({ agent: "zmora ×N", summary, tasks: chunk })` where `N` is the chunk size, wait for the chunk to complete, accumulate results. Wait for all chunks of a wave to finish before starting the next wave. The 4-worker pool inside `dispatch_parallel` runs every task in a chunk in parallel — concurrency equals chunk size. Predecessor failure does not block dependents — failure-as-diagnostic-signal beats silent skip cascades.
-9. **Parse responses** — JSON-first, markdown fallback. `status === "error"` or `"timeout"` → mark that scenario `SKIP`. `status === "aborted"` (a never-started task in a Ctrl-C'd run) → mark `SKIP`. `[…truncated…]` → synthesize what is present, do not retry. Normalise `zmora-fe` / `zmora-be` → `zmora` in every user-facing string before display.
-10. **Concatenate findings** — in scenario-source order (the original markdown order, NOT the wave-dispatch order).
-11. **Assign IDs** — `assign_issue_ids({ findings, prefix: "QA" })` → `QA-001`, `QA-002`, …
-12. **Sort by severity** — `CRITICAL → HIGH → MEDIUM → LOW`.
-13. **Write the report** — `docs/testing/reports/<date>-<topic>.md`, where `<topic>` is the plan filename minus the `YYYY-MM-DD-` prefix and `-test-plan` suffix. Perun derives the path from a `^[a-z0-9-]+$` topic slug, and `qa_loop_start` enforces in code that the resolved `report_path` stays within the repo (a traversal path is rejected).
-14. **Display summary** — counts, top issues, full report path, and (only if issues were found) the fix proposal.
+There is no Workflow 2 — issue fixing is Phase 2 *inside* the QA loop, not a separate continuation. The standalone fix-from-report continuation was removed when the loop unified test-and-fix.
 
-### Workflow 2 — Issue Fix (Continuation)
-
-1. **Identify the report** — from the previous turn in this conversation, or from the user's message.
-2. **Determine scope** — using the modifiers in the Usage table above.
-3. **Fix each issue via the QA loop** — the QA loop (test→fix→retest) dispatches **Svarog** one issue at a time via `dispatch_parallel`, waits for completion, then re-tests the affected scenarios. The `qa_loop_finalize` tool writes `**Status:** ✅ Fixed (YYYY-MM-DD)` to the report — it is the single deterministic writer of that marker.
-4. **Summarize** — fixed N, skipped M, ask "Want me to commit?" (the user runs `/commit` separately; `@perun` does not run git itself).
+The QA loop's per-phase mechanics (sanitisation, dependency-aware waves, chunking, the authoritative final, stop-cause precedence) live in `src/agents/perun.md` Workflow 1 (Phase 0 → Phase 4), with the dispatch internals documented under [Architecture](#architecture) below and the doctrine in [`qa-loop-engineering.md`](./qa-loop-engineering.md).
 
 ## Direct agent use
 
 ```bash
 opencode agent perun "uruchom QA dla docs/testing/plans/2026-05-18-example-auth-test-plan.md"
-opencode agent perun "napraw QA-001, QA-003 z docs/testing/reports/2026-05-18-example-auth.md"
+opencode agent perun "zrób review zmian na tym branchu i przetestuj je"
 ```
 
 > The agent is registered under the display name `"Perun - Coordinator"` (see `src/modules/coordinator/index.ts`). OpenCode's CLI typically accepts the kebab-case slug `perun-coordinator` or the lowercase first word `perun`. If invocation fails, run `opencode agent list` to confirm the exact slug for your OpenCode version.
