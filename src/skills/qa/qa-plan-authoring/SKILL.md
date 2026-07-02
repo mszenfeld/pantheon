@@ -195,8 +195,135 @@ Feed detected values into the frontmatter (`base-url`, DSNs) and `**Bindings:**`
 - A binding's `Egress:` host must equal the host its recipe connects to; do not
   mix auth/DB ports in one binding.
 - Emit env-var **names only, never values**; never inline a secret into a recipe.
-- Credential-prefixed names (`SUPABASE_`/`DATABASE_`/`POSTGRES_`…) cannot be
-  chat-pasted — prefer binding inputs with neutral names.
+- Credential-prefixed names in the denylist (`AWS_`/`GCP_`/`AZURE_`/`DATABASE_`/
+  `POSTGRES_`/`REDIS_`/`MONGO_`/`SUPABASE_`… — `bindings-store.ts` `DENYLIST_PREFIXES`)
+  ARE chat-pasteable once DECLARED in the plan (as a binding `Inputs:` or a Required
+  env var): preflight registers plan-declared names and `record_input` then exempts
+  them. Declaring the name is the correct route — do NOT rename it to a neutral alias
+  to dodge the denylist. Process-control names (`PATH`/`LD_*`/`NODE_OPTIONS`/`HOME`…)
+  are never exemptable.
+- **Minimize the provisionable set.** Every `**Required environment variables:**` name
+  and every binding `Inputs:` `$VAR` MUST trace to at least one scenario or recipe that
+  references it — drop unreferenced prerequisites; they inflate the preflight wall for
+  nothing.
+
+### Auth-authority grounding (never guess the IdP)
+
+When a scenario needs an authenticated call, GROUND the token issuer/authority against
+the app's REAL auth config — never a well-known default. Read the auth settings in the
+tree (issuer / authority / tenant / token-url keys, a `.well-known/openid-configuration`
+reference, the auth dependency's configured base) and derive the binding recipe login
+URL + `Egress:` host FROM that. A hard-coded `login.microsoftonline.com` when the app's
+configured authority is a CIAM tenant (`<tenant>.ciamlogin.com`) is a grounding defect:
+the token fails with every secret present.
+
+- **VALUE vs NAME.** Grounding extracts only the non-secret ROUTING value (authority
+  host, tenant slug, token-URL) — the same class this step already inlines for
+  `base-url` and DSN hosts. A token, key, password, or credential-bearing connection
+  string is a SECRET: emit its NAME only (never the value) and use the carve-out below.
+  When in doubt, treat it as a secret.
+- **Runtime-only carve-out (preferred form).** Authority injected at deploy time, not
+  readable in the tree → declare `AUTHORITY`/`ISSUER` as a Required env var, ALSO list
+  it in the binding's `Inputs:` (a recipe `$VAR` absent from that binding's `Inputs:`
+  is rejected by `parse_plan`), and reference `$AUTHORITY` in the recipe. `$AUTHORITY`
+  must be the WHOLE authority (`Egress: $AUTHORITY`; recipe
+  `"$AUTHORITY/<tenant>/oauth2/v2.0/token"`); the pasted value is a bare `scheme://host`
+  with NO path — a paste-time contract. The `(unverified — confirm at run time)` tag +
+  the config key name is the last resort; never emit a guessed authority as grounded.
+- **Multi-principal.** The grounded authority is APP-level. A second-principal binding
+  (Step 6.5) declares the SAME `$AUTHORITY`/`$ISSUER` in its OWN `Inputs:` and reuses
+  the value/`Egress:`, substituting only per-user credential inputs — a re-guessed
+  endpoint for user B is the same grounding defect as the first.
+
+## Step 4.7: Classify the change & pick the cheapest proving seam (provability ladder)
+
+For each changed surface, FIRST run the provisionability litmus (Step 6.7's
+`provisioning-blocked` rules): *can the trigger/precondition artifact be produced by
+the runner's four tools (`curl` / `psql` / `sqlite3` / Playwright)?* Only if YES, pick
+the **cheapest live rung** that proves THIS change, climbing only when the change scope
+crosses a seam (data → API → UI) — do not default every change to a browser flow. R0 is
+NOT a rung: it fires only when NO live rung is executable, and choosing it over an
+available live rung is a coverage-honesty defect (Step 6.8 refutes it).
+
+- **R0 — escape (un-provisionable trigger):** emit NO live scenario for that surface.
+  Record a `provisioning-blocked` matrix row (Step 6.7) carrying its mandatory
+  evidence: a `hermetic: <path>::<test>` pointer when a repo test asserts the logic
+  (the preferred evidence for pure-logic/transform changes — a parser/mapper/scorer, a
+  multi-hop propagation), and/or a `**Setup prerequisite:**` naming the human
+  provisioning action (mandatory when the surface is also currently unobservable).
+- **R1 — data-layer read-back:** a `psql`/`sqlite3` seam-seed (INSERT) + read scenario.
+  See the R1 rules below.
+- **R2 — API / contract:** a `curl` scenario.
+- **R3 — UI / wiring / user-visible:** a Playwright scenario.
+
+**R1 seam-seed rules.**
+- **Schema-grounded, committed source only.** The INSERT's columns, every
+  NOT-NULL/FK/CHECK target, and enum/status literals are read from the migration / ORM
+  model / committed OpenAPI-schema artifact in the tree and cited `(file:line)` — never
+  guessed, and NEVER via a live `psql`/`curl` probe (you have `Read`/`Grep`/`Glob`
+  only). If no committed schema source exists, `provisioning-blocked` is INVALID (the
+  row stays psql-mintable — un-provisionability is a harness fact, not an
+  author-grounding limitation). Fall back inside the `covered` channel: (a) a plausible
+  column set from the read path's own queries/serializers/DTOs → author the seed with
+  each unconfirmed literal tagged `(unverified — confirm at run time)` + a
+  `**Coverage delta:**` naming the unconfirmed INSERT shape; (b) not even plausible →
+  drop the seed, author only the live read whose FIRST assertion is an existence check
+  on the manually-seeded row (fails loudly as *seed-missing*, not a code defect) + a
+  `**Coverage delta:**` stating the row must be seeded manually.
+- **Exactly one connection reference.** The `**Seed (psql/sqlite3):**` step carries the
+  fenced SQL plus ONE plan-declared connection reference — the `$VAR`/DSN declared
+  under `## Setup` `**Required databases:**`/Required env vars (the executor composes
+  `psql "$DATABASE_URL" -c '<SQL>'`). No other target: the dispatched runner receives
+  only the scenario block + base URL (never `## Setup`), so the reference must live in
+  the step, and the scenario path has NO machine-enforced DSN egress check — the
+  declared-token rule + the throwaway-target consent are the egress guards.
+- **Single scenario.** Author seed + read-back as ONE scenario (INSERT first step, then
+  the read assertion + DB Check). A split pair loses BOTH guarantees: the mutation
+  guard strips per-scenario and is `**Depends-on:**`-blind, and `**Depends-on:**` is
+  order-only (predecessor failure does NOT block dependents) — a read whose seed was
+  stripped or failed reports a false result against an empty table. If a split is
+  unavoidable: `**Depends-on:** <seed ID>` AND the read's first assertion is a
+  seed-existence check failing as *seed-missing*.
+
+**Seed write-safety (mutation-guard interaction).** The Phase-0 guard classifies over
+the ENTIRE scenario block (including `**Edge cases:**`) and strips only
+`mutating && expectsSuccess`. Two failure modes: (1) a clean-phrased seed IS stripped
+under the default `allow_mutations: false` — so any plan with a Seed step MUST emit the
+`## Setup` bullet `**Seeds fixtures:** BE-NN[, …] (requires allow_mutations)` (the
+marker Perun's consent gate keys on); (2) a seed whose block carries a BLOCKED-class
+token anywhere (*reject / block / deny / forbidden / unauthorized / must not / should
+not / no state change|row|change* or a `401`/`403`/`4xx` literal) classifies
+`expectsSuccess=false` and is NOT stripped — its INSERT lands even without
+`allow_mutations`. (Bare *invalid*/*negative* do NOT flip it.) Authoring rules:
+(a) a seed scenario keeps its ENTIRE block free of negative/blocked phrasing — every
+negative assertion or edge case goes in a SEPARATE non-mutating scenario (banning ALL
+negative-ish phrasing is deliberate safe over-coverage); (b) the dedicated throwaway
+target + throwaway DB is the ONLY reliable defense for seed writes — MANDATORY;
+(c) a READ-ONLY scenario (seedless read, `(unverified)` covered read,
+existence-check-only) keeps its ENTIRE block — assertions, edge cases,
+`**Coverage delta:**` prose — free of bare present-tense write verbs
+(*create/insert/update/write/save/delete/mutate/persist*): they classify the read as
+mutating and strip it, and a seedless plan has no consent-gate recovery. Phrase
+existence checks as *"assert a row with `<PK>=<v>` is present"* and deltas as *"the row
+must be seeded manually"* (past-tense and *seed/seeded* are safe).
+**Write-safety is marker-keyed, not disposition-keyed:** ANY plan-authored
+from-scratch DB write — an R1 seam-seed OR a `covered` stage-driving write (below) —
+MUST carry the `**Seed (psql/sqlite3):**` label and all rules above.
+
+**Propagation vs read-back (`**Coverage delta:**`).** A seam-seed INSERT proves the
+READ path, not any derivation the diff introduced UPSTREAM of the seed. When the
+changed code IS that upstream producer, first apply the litmus to the **originating
+producer — the earliest stage the diff actually changed** (mid-chain hop if that is
+what changed; a row-write is never the target): if a `curl`/`psql`/Playwright action
+can drive the changed stage FROM ITS OWN INPUT, prefer that scenario — it fires the
+real changed code and is `covered` (even mid-chain); an INSERT/POST reproducing the
+changed stage's OUTPUT (or any stage downstream of it) is a seam-seed, not coverage.
+Only when the originating trigger is un-provisionable (even if a later hop is
+independently mintable) keep the downstream seam-seed for the read path, emit a
+`**Coverage delta:**` naming what it skips, and disposition the propagation
+`provisioning-blocked` with a `hermetic:` pointer. Demoting a reachable producer to
+`provisioning-blocked` — suppressing real coverage behind a pointer — is itself a
+coverage-honesty defect.
 
 ## Step 5: Output format + Setup section
 
