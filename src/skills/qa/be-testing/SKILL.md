@@ -47,11 +47,12 @@ Note: OpenCode provides database access through CLI tools installed in the envir
 For each BE scenario from the test plan:
 
 1. **Read the scenario** — understand method, endpoint, payload, expected response, DB checks
-2. **Execute the request** — send HTTP request with proper method, headers, body
-3. **Verify response** — check status code, response body structure, specific values
-4. **Verify DB state** (if DB Check specified) — run query, compare against expected
-5. **Execute edge cases** — run each edge case as a sub-test
-6. **Record result** — pass/fail with response details
+2. **Execute the Seed FIRST** (only if the scenario carries `**Seed (psql/sqlite3):**`) — run the fenced SQL as a single statement via the step's ONE plan-declared connection reference, e.g. `psql "$DATABASE_URL" -c '<SQL>'` (the `$VAR`/DSN declared under the plan's `## Setup`). A Seed step with any other/undeclared connection target, or whose `$VAR` is unset in the environment, is `NEED_INFO` — never guess a connection. A failed seed reports as *seed-missing*, not as a code defect.
+3. **Execute the request** — send HTTP request with proper method, headers, body
+4. **Verify response** — check status code, response body structure, specific values
+5. **Verify DB state** (if DB Check specified) — run query, compare against expected
+6. **Execute edge cases** — run each edge case as a sub-test
+7. **Record result** — pass/fail with response details (include the seed outcome when present)
 
 ---
 
