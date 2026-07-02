@@ -95,6 +95,7 @@ qa_loop_start({
 
 It returns `{ status: "ok", disposition: "REUSE"|"ADOPT"|"FRESH", run_id, pre_loop_ref, dispatch_set, dirty, dirty_files, qa_id_start_at? }`:
 - The `dispatch_set` is the plan's scenarios **with mutating-expected-success scenarios already stripped** (the mutation guard, §7) — dispatch exactly that set to Zmora, never the raw plan. Negative-blocked scenarios stay in.
+- **If `status` is `"error"`, or `dispatch_set` is empty, STOP the run.** Surface the returned `reason` verbatim and do NOT proceed to preflight/bring-up or dispatch. An empty set means the plan parsed to zero runnable scenarios — usually a heading-format problem (scenarios must be `### FE-01:` / `### BE-01:`, per test-plan-format), or every scenario was mutation-guarded (re-run with `allow_mutations`).
 - `REUSE` → resume mid-loop from the sidecar cursor (§4); `ADOPT` → fresh budget, QA-IDs re-imported from the report (use the returned `qa_id_start_at` as `start_at_qa_id` on the baseline ingest), warn the plan changed; `FRESH` → new run. There is NO `TAMPER` disposition here — plan-tamper is a **mid-run** stop surfaced later by `qa_loop_step` (it re-hashes the plan on enter), not a `qa_loop_start` outcome.
 - `pre_loop_ref` is the undo ref (`refs/qa-loop/pre/<run>`) — surface it in the recovery hint; `qa_loop_undo` restores it.
 - `dirty: true` (with `dirty_files`) → surface a heads-up that uncommitted work is in the tree (the pre-loop ref captures it, so undo restores it).

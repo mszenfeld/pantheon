@@ -41,19 +41,26 @@ function resultJson(r: unknown): Record<string, unknown> {
   return JSON.parse(s) as Record<string, unknown>
 }
 
+// Uses the documented test-plan-format heading shape: `### FE-01:` / `### BE-01:`
+// (H3 + colon) under `## FE/BE Test Scenarios` sections. Classification is derived
+// from the scenario BODIES (verbs / block words), not from any `[kind]` tag.
 const PLAN = `# Test Plan
 
-## FE-01 — login page renders [feature]
+## FE Test Scenarios
+
+### FE-01: login page renders
 Navigate to /login and assert the form is visible.
 
-## BE-01 — GET /health returns 200 [sanity]
-Send GET /health, expect 200.
+## BE Test Scenarios
 
-## BE-02 — POST /orders creates an order [feature]
-Send POST /orders with a valid payload, expect 201.
+### BE-01: GET /health returns 200
+Send GET /health and assert a 200 smoke response.
 
-## BE-03 — POST /orders without auth is blocked [negative]
-Send POST /orders with no token, expect 401 and no state change.
+### BE-02: POST /orders creates an order
+Send POST /orders with a valid payload, expect 201 and a new row.
+
+### BE-03: POST /orders without auth is blocked
+Send POST /orders with no token; expect 401 and no state change.
 `
 
 // No-op assignIssueIds — qa_loop_start doesn't mint QA-IDs, but the dep is required.
@@ -202,5 +209,36 @@ describe("qa_loop_start", () => {
     ))
     expect(res.status).toBe("error")
     expect(String(res.reason)).toMatch(/within the repository/)
+  })
+
+  it("errors loudly when the plan parses to zero scenarios (heading-format guard)", async () => {
+    // A plan whose headings don't match the documented '### FE-01:' shape must NOT
+    // silently return ok + [] — the caller would sail past it (the real-world failure).
+    writeFileSync(
+      join(cwd, "docs/testing/plans/2026-06-26-demo-test-plan.md"),
+      "# Test Plan\n\n## Notes\n\nGET /health returns 200.\n",
+    )
+    const tools = makeQaLoopTools({ gate: fakeGate("perun"), state, cwd, resolveParentID: async (s) => s, assignIssueIds: noopAssignIssueIds })
+    const res = resultJson(await tools.qa_loop_start.execute(
+      { plan_path: "docs/testing/plans/2026-06-26-demo-test-plan.md", topic: "demo", report_path: "docs/testing/reports/2026-06-26-demo-report.md" },
+      ctx("perun"),
+    ))
+    expect(res.status).toBe("error")
+    expect(String(res.reason)).toMatch(/0 scenarios/)
+  })
+
+  it("errors loudly when every scenario is stripped by the mutation guard", async () => {
+    // All scenarios mutating-expected-success → empty dispatch set without allow_mutations.
+    writeFileSync(
+      join(cwd, "docs/testing/plans/2026-06-26-demo-test-plan.md"),
+      "# Test Plan\n\n## BE Test Scenarios\n\n### BE-01: POST /orders creates an order\nSend POST /orders with a valid payload, expect 201 and a new row.\n\n### BE-02: PUT /orders/1 updates an order\nSend PUT /orders/1 with a valid payload, expect 200.\n",
+    )
+    const tools = makeQaLoopTools({ gate: fakeGate("perun"), state, cwd, resolveParentID: async (s) => s, assignIssueIds: noopAssignIssueIds })
+    const res = resultJson(await tools.qa_loop_start.execute(
+      { plan_path: "docs/testing/plans/2026-06-26-demo-test-plan.md", topic: "demo", report_path: "docs/testing/reports/2026-06-26-demo-report.md" },
+      ctx("perun"),
+    ))
+    expect(res.status).toBe("error")
+    expect(String(res.reason)).toMatch(/mutation guard|allow_mutations/)
   })
 })

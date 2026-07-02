@@ -22,7 +22,7 @@ function splitScenarios(planText) {
   const blocks = [];
   let current = null;
   for (const line of lines) {
-    const m = /^##\s+((?:FE|BE|SETUP)-\d+)\b/i.exec(line);
+    const m = /^#{2,4}\s+((?:FE|BE|SETUP)-\d+)\b/i.exec(line);
     if (m) {
       if (current) blocks.push({ id: current.id, block: current.lines.join("\n") });
       current = { id: (m[1] ?? "").toUpperCase(), lines: [line] };
@@ -151,6 +151,18 @@ function makeQaLoopTools(deps) {
           reason: stripped ? "mutation-guard: mutating scenario expected to succeed" : null
         };
         if (!stripped) dispatchSet.push(id);
+      }
+      if (Object.keys(scenarios).length === 0) {
+        return JSON.stringify({
+          status: "error",
+          reason: "0 scenarios parsed from the plan \u2014 expected scenario headings like '### FE-01:' or '### BE-01:' (test-plan-format \xA7Plan Structure). Check the plan's scenario heading format."
+        });
+      }
+      if (dispatchSet.length === 0) {
+        return JSON.stringify({
+          status: "error",
+          reason: `all ${Object.keys(scenarios).length} scenario(s) were stripped by the mutation guard (mutating, expected to succeed). Re-run with allow_mutations to exercise them, or the plan needs negative/non-mutating coverage.`
+        });
       }
       const runId = `qa-loop-${args.topic}-${reportExists ? 2 : 1}`;
       const undoRef = capturePreLoopRef(cwd, runId);
