@@ -139,7 +139,133 @@ if across iterations the JSON gate flips, counts differ, or the binding set
   missing the cross-user 404 that is the whole point of the diff.
 - **Breaks the JSON contract / mis-counts / hallucinates / interviews** — the
   standard Veles failure modes (see `qa-plan-from-diff.md`).
+- **Auth-authority mismatch (variant below)** — derives login endpoints from a
+  guessed `login.microsoftonline.com` rather than the CIAM authority committed
+  to config; or omits `$AUTHORITY`/`$ISSUER` from user B's `Inputs:`.
 
 This scenario is self-contained and runs against the public repo straight from
 `git clone` — no external project, no secrets. It can FAIL meaningfully: a
 dangling `$QA_BIND_*` reference is a hard `degenerate` gate.
+
+---
+
+## Variant: CIAM-authority grounding
+
+**Purpose:** discriminates whether a model grounds login-URL derivation in the
+CIAM authority committed to config, or guesses a well-known endpoint like
+`login.microsoftonline.com`.
+
+This variant REPLACES the Supabase diff above with the fixture below. Run it
+SEPARATELY — it is a distinct discriminator with its own gate.
+
+### Fixture diff
+
+````diff
+--- /dev/null
++++ b/infra/auth.env
+@@
++# Azure AD External Identities (CIAM) tenant for this environment.
++# Login endpoint: https://${AZURE_CIAM_TENANT}.ciamlogin.com/${AZURE_CIAM_TENANT_ID}/oauth2/v2.0/authorize
++AZURE_CIAM_TENANT=contoso-qa
++AZURE_CIAM_TENANT_ID=a1b2c3d4-e5f6-7890-abcd-ef1234567890
++AZURE_CIAM_CLIENT_ID=11223344-aabb-ccdd-eeff-001122334455
+--- /dev/null
++++ b/api/documents/views.py
+@@
++import os
++from fastapi import APIRouter, Depends, HTTPException
++from .ciam_auth import get_current_user_id   # validates Azure CIAM JWT, returns oid claim
++from .db import get_document                  # SELECT id, owner_id, title, body FROM documents WHERE id = ?
++
++router = APIRouter()
++AUTHORITY = os.environ["AZURE_CIAM_AUTHORITY"]   # e.g. https://contoso-qa.ciamlogin.com/a1b2c3d4-e5f6-7890-abcd-ef1234567890
++CLIENT_ID = os.environ["AZURE_CIAM_CLIENT_ID"]
++
++@router.get("/api/documents/{doc_id}")
++def read_document(doc_id: str, user_id: str = Depends(get_current_user_id)):
++    doc = get_document(doc_id)
++    if doc is None or doc.owner_id != user_id:
++        raise HTTPException(status_code=404, detail="document not found")
++    return {"id": doc.id, "title": doc.title, "body": doc.body}
+````
+
+### Query (CIAM variant)
+
+Verbatim prompt to send to the agent:
+
+> Generate a QA test plan for the following self-contained changes. The diff
+> below is the complete and only change set — plan **only** from it: do not read
+> repository source, do not dispatch exploration sub-agents, and do not ask
+> clarifying questions. Save the plan and end your turn with the required JSON
+> result object.
+>
+> *(paste the fixture diff above)*
+
+### Expected coverage (CIAM variant)
+
+**MUST:**
+
+- `## Setup` lists `AZURE_CIAM_AUTHORITY`, `AZURE_CIAM_CLIENT_ID`, and the
+  service URL `http://localhost:8000`.
+- `## Setup → **Bindings:**` declares a JWT binding for the primary test user
+  (e.g. `QA_BIND_JWT`) whose:
+  - `Inputs:` include `$AUTHORITY` (or `AZURE_CIAM_AUTHORITY`) **and** the
+    user's credentials (`TEST_USER_A_EMAIL`, `TEST_USER_A_PASSWORD`);
+  - `Egress:` is derived from the configured CIAM authority —
+    e.g. `https://contoso-qa.ciamlogin.com/<tenant-id>/oauth2/v2.0/token` or
+    `$AUTHORITY` — **never** `login.microsoftonline.com` (FAIL: guessed endpoint).
+- **A SECOND binding for user B** (e.g. `QA_BIND_JWT_FOR_USER_B`) with its own
+  `Inputs:` that include **the same `$AUTHORITY`/`AZURE_CIAM_AUTHORITY`** (FAIL:
+  re-guessing the authority or omitting it from user B's inputs) and distinct
+  user credentials (`TEST_USER_B_EMAIL`, `TEST_USER_B_PASSWORD`).
+- When the plan uses `$AUTHORITY` as a declared input variable, the binding
+  must state or imply the **paste-time contract**: `$AUTHORITY` is the **whole**
+  authority URL (bare `scheme://host/tenant-id`), not a fragment — the pasted
+  value must be a bare `scheme://host` (e.g. `https://contoso-qa.ciamlogin.com/a1b2c3d4-...`).
+  A binding that appends a path suffix to `$AUTHORITY` (e.g. `$AUTHORITY/oauth2/v2.0/token`)
+  is valid; the egress URL must still originate from `$AUTHORITY`, not from a guessed base.
+- BE scenarios reference `GET /api/documents/{doc_id}`: 200 for the owner; 404
+  for the non-owner using user B's token; 401 unauthenticated; ≥2 edge cases.
+- Final message is the 6-field JSON; `fe_count` = 0; `be_count` equals the BE
+  scenario count; `plan_path` exists.
+
+**NICE-TO-HAVE:**
+
+- An explicit note that `AZURE_CIAM_AUTHORITY` is the whole authority URL; no
+  path component should be assumed before the `oauth2/v2.0` fragment.
+- A DB-state check confirming `documents.owner_id` differs between users.
+- No-existence-leak assertion (404 body identical for "not yours" vs "does not
+  exist").
+
+### Quality signals (CIAM variant)
+
+Gate-then-rank:
+
+1. **GATE — JSON contract.** Same 6-key requirement as the base scenario.
+2. **GATE — authority grounding.** Any `login.microsoftonline.com` literal in a
+   binding's `Egress:` or login URL → `degenerate` (guessed endpoint, not
+   grounded in the diff). Any binding whose `Inputs:` omit `$AUTHORITY`/
+   `AZURE_CIAM_AUTHORITY` for the CIAM authority → **primary-ranking demerit**
+   (the recipe is unrunnable without knowing the authority).
+3. **GATE — binding completeness (inherited).** Same dangling-reference rule as
+   the base scenario: any `$QA_BIND_*` referenced in a scenario but not declared
+   in `## Setup → **Bindings:**` → `degenerate`.
+4. **PRIMARY RANKING — authority correctness and completeness.** The CIAM-derived
+   login URL appears in both bindings; `$AUTHORITY` carries the paste-time
+   contract; user B's binding does not re-guess.
+
+### What this discriminates (CIAM variant)
+
+- **Guessed authority** — derives `Egress:` from `login.microsoftonline.com`
+  instead of the `AZURE_CIAM_AUTHORITY` committed in `infra/auth.env`. This is
+  the primary failure mode: the model "knows" Azure AD endpoints from training
+  and uses them rather than reading the diff.
+- **Missing authority input for user B** — declares the second binding without
+  `$AUTHORITY` in its own `Inputs:`, so the recipe cannot be minted
+  independently (implicit coupling to user A's binding, which may not exist at
+  run time).
+- **Partial authority value** — uses only the hostname (`contoso-qa.ciamlogin.com`)
+  rather than the whole `scheme://host/tenant-id` authority; or appends a
+  path suffix incorrectly, producing a malformed token endpoint.
+- **All base failure modes** (dangling reference, collapsed principals,
+  JSON-contract break) inherited from the base scenario.
