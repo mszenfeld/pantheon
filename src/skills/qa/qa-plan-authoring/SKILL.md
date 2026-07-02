@@ -98,7 +98,7 @@ call to 504, or a commented-out guard makes a 402 path return 200), that is a **
 Blocker (Step 3.5)** — never a reason to delete or rewrite the row. The contract is the spec; the
 runtime is the system under test; QA tests the system *against* the spec. (Scale to surface:
 a one-behavior change needs no matrix — UNLESS Step 4.7 later classifies a surface
-`provisioning-blocked`, which forces a one-row matrix. That verdict does not exist yet at
+`provisioning-blocked`, which forces a one-row matrix. That Step 4.7 verdict does not exist yet at
 this step: draft the skeleton now only if you already foresee an un-provisionable trigger;
 otherwise Step 6.7 forces the matrix retroactively.)
 
@@ -455,20 +455,23 @@ disposition:
    a `**Setup prerequisite:**` naming the exact human provisioning action and/or a
    `hermetic: <path>::<test>` pointer — Step-0-grounded: the file exists in the tree and the
    named test asserts the ORIGINATING producer the row skips (a hallucinated pointer is a
-   hard-stop defect; with no on-disk test, the Setup prerequisite is required). Rules:
+   hard-stop defect; with no on-disk test, the Setup prerequisite is required; when the
+   surface is already observable a resolving hermetic pointer satisfies, when un-observable
+   the Setup prerequisite is also required — see the tie-break below). Rules:
    - **Litmus + earn-the-punt.** *Un-provisionable* = the artifact needs an out-of-band issuer
      the four tools cannot reach. "Can it be minted?" is often a runtime fact — so EXHAUST the
      tree for a create-path (route table / OpenAPI / write-endpoint / factory / migration)
      first. A plausible create-path ⇒ emit the `covered` live scenario tagged
      `(unverified — confirm at run time)` — never punt. Affirmative out-of-band evidence ⇒
-     `provisioning-blocked`. Neither settled ⇒ DEFAULT into `(unverified)` `covered` (the R1
-     seedless-branch fallback, existence-check first assertion + `**Coverage delta:**`) —
-     never a stall, silent drop, or punt.
+     `provisioning-blocked`. Neither settled ⇒ DEFAULT into `(unverified)` `covered` (existence-check as the first
+     assertion + a `**Coverage delta:**` naming the unconfirmed precondition; this is
+     Step 4.7's R1 seedless fallback (b) when a DB surface is involved — apply the same
+     shape analogously on other rungs) — never a stall, silent drop, or punt.
    - **`(unverified)` backstop.** An `(unverified)` covered scenario riding an unconfirmed
      path MUST carry a `**Coverage delta:**` naming what goes unproven should the path be
      absent, plus a `hermetic:` pointer whenever Step 4.6 test-infra detection knows an
-     on-disk test asserting the changed logic (the runner's `(unverified)` handling only
-     downgrades a mismatch to LOW — no reclassification happens at run time).
+     on-disk test asserting the changed logic. (The runner's `(unverified)` handling only
+     downgrades a mismatch to LOW — no reclassification happens at run time.)
    - **Necessity for the change (conjunctions).** With several preconditions, the row is
      `provisioning-blocked` only if an un-mintable one sits ON THE CAUSAL PATH of the
      CHANGED behavior AND no live rung observes the change without it; if the mintable
@@ -476,7 +479,7 @@ disposition:
    - **Tie-break (un-provisionable AND un-observable):** decide by remediability — a single
      named Setup prerequisite would make it observable ⇒ `provisioning-blocked` (that
      prerequisite is then mandatory; a hermetic pointer alone is insufficient); no
-     provisioning action in the four-tool world could ever ⇒ `out-of-scope`.
+     provisioning action by the runner's four tools could ever ⇒ `out-of-scope`.
    - **Tie-break (defect AND un-provisionable):** the DEFECT wins ⇒ `blocked-by`, with BOTH
      gates stated in the BLK entry's `**Remediation (human Setup prerequisite):**` field
      (revert the defect AND provision the artifact). `provisioning-blocked` is reserved for
@@ -484,7 +487,8 @@ disposition:
    - **Row-anchoring.** A multi-hop propagation whose TERMINAL effect is a DB-observable
      write is anchored as that DB-observable schema surface and earns its own
      `provisioning-blocked` row; the intermediate hops are internal collaborators exercised
-     through it (the internal-collaborator exclusion above does not suppress this row).
+     through it (the internal-collaborator exclusion applies to those intermediate hops —
+     it does not suppress the terminal DB surface's own row).
 
 Also confirm: every behavioral assertion carries a visible `(file:line)` OR `(unverified — confirm
 at run time)` tag; no `**Expected response:**` equals a value produced only by a recorded Blocker
@@ -518,7 +522,7 @@ before saving. Confident-wrong claims cluster in these classes:
   defect or a reachable surface rationalized away. A defect is `blocked-by`; a reachable surface is
   `covered`. Only a true harness limit survives.
   Decidable test: if the changed surface has a curl/psql/Playwright interface or effect, `out-of-scope` is invalid — reclassify to `covered` (reachable now via an artifact the runner's four tools can create), `blocked-by` (a defect obstructs it), or `provisioning-blocked` (reachable only after a precondition artifact those tools cannot create — carries a Setup prerequisite and/or hermetic pointer).
-- **`provisioning-blocked` rows (Step 4.7/6.7)** — re-read with intent to refute all of:
+- **`provisioning-blocked` rows (Steps 4.7 + 6.7)** — re-read with intent to refute all of:
   (i) the named artifact is genuinely un-mintable by the four tools AND on the causal path of
   the CHANGED behavior (a mintable-or-plausible create-path, or an unrelated-to-the-diff
   artifact, reclassifies to `covered`); (ii) the `hermetic:` pointer RESOLVES — file on disk,
@@ -528,7 +532,7 @@ before saving. Confident-wrong claims cluster in these classes:
   column/enum cited from a committed source; an ungrounded seed is a coverage defect);
   (ii) whole-block phrasing — a seed block carrying a BLOCKED-class token anywhere bypasses
   the mutation guard (its INSERT lands unguarded); a READ-ONLY scenario whose block trips a
-  bare present-tense write verb strips with no consent-gate recovery (rule (c));
+  bare present-tense write verb strips with no consent-gate recovery (Step 4.7 rule (c));
   (iii) marker completeness — any from-scratch write scenario missing the
   `**Seed (psql/sqlite3):**` label + `**Seeds fixtures:**` Setup bullet either strips
   silently (voiding a row still marked `covered`) or lands unguarded; (iv) an
