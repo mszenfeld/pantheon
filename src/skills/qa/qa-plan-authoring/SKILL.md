@@ -160,7 +160,7 @@ It **cannot** run `docker`, `docker compose`, `make`, build / deploy / install c
 
 Consequences for the plan you write:
 
-- **Every scenario step must be a Playwright action, a `curl` request, or a `psql`/`sqlite3` query** against the running app. A step like `docker compose build`, `make up`, `docker image inspect`, `docker network inspect`, or `docker exec …` is NOT executable — never emit it as a scenario step.
+- **Every scenario step must be a Playwright action, a `curl` request, or a `psql`/`sqlite3` query (or a plan-declared `**Seed (psql/sqlite3):**` write — Step 4.7)** against the running app. A step like `docker compose build`, `make up`, `docker image inspect`, `docker network inspect`, or `docker exec …` is NOT executable — never emit it as a scenario step.
 - **Infrastructure changes are tested by their *effect* on the running stack, not by their build/up/inspect commands.** Examples:
   - reverse-proxy / TLS / headers → `curl -kI https://host/` and assert the security headers, the HTTP→HTTPS redirect, the status code.
   - SPA serving / client-side routing → `curl` the root and a deep route; assert `index.html` is returned and asset cache headers.
@@ -306,6 +306,7 @@ existence-check-only) keeps its ENTIRE block — assertions, edge cases,
 mutating and strip it, and a seedless plan has no consent-gate recovery. Phrase
 existence checks as *"assert a row with `<PK>=<v>` is present"* and deltas as *"the row
 must be seeded manually"* (past-tense and *seed/seeded* are safe).
+
 **Write-safety is marker-keyed, not disposition-keyed:** ANY plan-authored
 from-scratch DB write — an R1 seam-seed OR a `covered` stage-driving write (below) —
 MUST carry the `**Seed (psql/sqlite3):**` label and all rules above.
@@ -316,7 +317,9 @@ changed code IS that upstream producer, first apply the litmus to the **originat
 producer — the earliest stage the diff actually changed** (mid-chain hop if that is
 what changed; a row-write is never the target): if a `curl`/`psql`/Playwright action
 can drive the changed stage FROM ITS OWN INPUT, prefer that scenario — it fires the
-real changed code and is `covered` (even mid-chain); an INSERT/POST reproducing the
+real changed code and is `covered` (even mid-chain); such a scenario is the *covered
+stage-driving write* named by the marker-keyed rule above — when its driving action is
+a DB INSERT it carries the `**Seed (psql/sqlite3):**` label like any seam-seed; an INSERT/POST reproducing the
 changed stage's OUTPUT (or any stage downstream of it) is a seam-seed, not coverage.
 Only when the originating trigger is un-provisionable (even if a later hop is
 independently mintable) keep the downstream seam-seed for the read path, emit a
@@ -339,7 +342,7 @@ Rules: one backtick group per item; free text after it is for humans; ≤50 item
 
 ## Step 6: Generate scenarios
 
-Every scenario step MUST be executable by the runner (see Step 4.5): a Playwright action, a `curl` request, or a `psql`/`sqlite3` query against the **running** app. Do not emit `docker` / `make` / build / inspect steps — model "bring the stack up" as a Setup prerequisite instead.
+Every scenario step MUST be executable by the runner (see Step 4.5): a Playwright action, a `curl` request, or a `psql`/`sqlite3` query — or a plan-declared `**Seed (psql/sqlite3):**` write (Step 4.7) — against the **running** app. Do not emit `docker` / `make` / build / inspect steps — model "bring the stack up" as a Setup prerequisite instead.
 
 - **FE** (if FE changes): one scenario per changed component/page/feature, concrete UI element names from the code, ≥2 edge cases each.
 - **BE** (if BE changes): one scenario per changed endpoint, real paths/methods/payloads, DB checks with real table/column names, ≥2 edge cases each (error handling, auth, validation).
