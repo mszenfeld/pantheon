@@ -134,8 +134,10 @@ Score MUST items as the ranking backbone; NICE items break ties and reward depth
     (the AI workflow path) and explaining why it is not exercised here.
 - `## Coverage Matrix` includes a row for the AI-workflow propagation path
   dispositioned `provisioning-blocked` (NOT `covered`, NOT `out-of-scope`), with:
-  - A `hermetic:` pointer to `tests/unit/scoring/test_normalized_score.py` as
-    evidence that the derivation is tested in isolation.
+  - A `hermetic:` pointer in the doctrine's full `<path>::<test>` form —
+    `hermetic: tests/unit/scoring/test_normalized_score.py::test_normalized_score` —
+    as evidence that the derivation is tested in isolation (a bare file path
+    without `::<test>` is incomplete).
   - A one-clause reason explaining why the propagation cannot be minted (e.g.
     "requires a pre-published external AI workflow artifact not mintable by
     curl/psql/sqlite3/Playwright").
@@ -152,7 +154,8 @@ Score MUST items as the ranking backbone; NICE items break ties and reward depth
 - The seam-seed read scenario includes an existence-check first assertion: before
   asserting the `score` value, assert that the 200 response body includes an `id`
   field (handles the "undetermined middle" — we do not know if the seed ran until
-  the GET succeeds). Tag this as `(unverified)` if the source is off-disk.
+  the GET succeeds). Tag this `(unverified — confirm at run time)` if the source
+  is off-disk (the doctrine's canonical tag — never the bare `(unverified)`).
 - An explicit note in the `provisioning-blocked` row that the hermetic unit test
   covers the truncation boundary (`1/3 → 33`, not `34`).
 - A SETUP binding for the authenticated user (`QA_BIND_JWT`) with a declared
@@ -187,8 +190,10 @@ Score MUST items as the ranking backbone; NICE items break ties and reward depth
 - **No stall env var** — `AI_WORKFLOW_ID` (or equivalent) does NOT appear in
   `**Required environment variables:**` without a psql/curl fallback.
 - **Coverage delta note present** — the seam-seed scenario carries the note.
-- **Hermetic pointer precision** — the `hermetic:` value resolves to
-  `tests/unit/scoring/test_normalized_score.py` (or a path coherent with the diff).
+- **Hermetic pointer precision** — the `hermetic:` value is the full
+  `<path>::<test>` form, e.g.
+  `tests/unit/scoring/test_normalized_score.py::test_normalized_score`
+  (or a path::test coherent with the diff); a bare file path is a demerit.
 - **Grounding / no hallucination** — uses real identifiers from the diff
   (`evaluations`, `score`, `evaluation_id`, `/api/evaluations/{evaluation_id}`,
   `AI_WORKFLOW_WEBHOOK_SECRET`); does not invent endpoints or columns.
