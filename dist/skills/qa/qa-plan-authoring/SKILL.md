@@ -97,7 +97,10 @@ rows.** When observed code or runtime later *contradicts* a row (e.g. a debug de
 call to 504, or a commented-out guard makes a 402 path return 200), that is a **delta to log as a
 Blocker (Step 3.5)** — never a reason to delete or rewrite the row. The contract is the spec; the
 runtime is the system under test; QA tests the system *against* the spec. (Scale to surface:
-a one-behavior change needs no matrix.)
+a one-behavior change needs no matrix — UNLESS Step 4.7 later classifies a surface
+`provisioning-blocked`, which forces a one-row matrix. That Step 4.7 verdict does not exist yet at
+this step: draft the skeleton now only if you already foresee an un-provisionable trigger;
+otherwise Step 6.7 forces the matrix retroactively.)
 
 ## Step 2: Classify each changed file FE vs BE
 
@@ -160,7 +163,7 @@ It **cannot** run `docker`, `docker compose`, `make`, build / deploy / install c
 
 Consequences for the plan you write:
 
-- **Every scenario step must be a Playwright action, a `curl` request, or a `psql`/`sqlite3` query** against the running app. A step like `docker compose build`, `make up`, `docker image inspect`, `docker network inspect`, or `docker exec …` is NOT executable — never emit it as a scenario step.
+- **Every scenario step must be a Playwright action, a `curl` request, or a `psql`/`sqlite3` query (or a plan-declared `**Seed (psql/sqlite3):**` write — Step 4.7)** against the running app. A step like `docker compose build`, `make up`, `docker image inspect`, `docker network inspect`, or `docker exec …` is NOT executable — never emit it as a scenario step.
 - **Infrastructure changes are tested by their *effect* on the running stack, not by their build/up/inspect commands.** Examples:
   - reverse-proxy / TLS / headers → `curl -kI https://host/` and assert the security headers, the HTTP→HTTPS redirect, the status code.
   - SPA serving / client-side routing → `curl` the root and a deep route; assert `index.html` is returned and asset cache headers.
@@ -195,8 +198,138 @@ Feed detected values into the frontmatter (`base-url`, DSNs) and `**Bindings:**`
 - A binding's `Egress:` host must equal the host its recipe connects to; do not
   mix auth/DB ports in one binding.
 - Emit env-var **names only, never values**; never inline a secret into a recipe.
-- Credential-prefixed names (`SUPABASE_`/`DATABASE_`/`POSTGRES_`…) cannot be
-  chat-pasted — prefer binding inputs with neutral names.
+- Credential-prefixed names in the denylist (`AWS_`/`GCP_`/`AZURE_`/`DATABASE_`/
+  `POSTGRES_`/`REDIS_`/`MONGO_`/`SUPABASE_`… — `bindings-store.ts` `DENYLIST_PREFIXES`)
+  ARE chat-pasteable once DECLARED in the plan (as a binding `Inputs:` or a Required
+  env var): preflight registers plan-declared names and `record_input` then exempts
+  them. Declaring the name is the correct route — do NOT rename it to a neutral alias
+  to dodge the denylist. Process-control names (`PATH`/`LD_*`/`NODE_OPTIONS`/`HOME`…)
+  are never exemptable.
+- **Minimize the provisionable set.** Every `**Required environment variables:**` name
+  and every binding `Inputs:` `$VAR` MUST trace to at least one scenario or recipe that
+  references it — drop unreferenced prerequisites; they inflate the preflight wall for
+  nothing.
+
+### Auth-authority grounding (never guess the IdP)
+
+When a scenario needs an authenticated call, GROUND the token issuer/authority against
+the app's REAL auth config — never a well-known default. Read the auth settings in the
+tree (issuer / authority / tenant / token-url keys, a `.well-known/openid-configuration`
+reference, the auth dependency's configured base) and derive the binding recipe login
+URL + `Egress:` host FROM that. A hard-coded `login.microsoftonline.com` when the app's
+configured authority is a CIAM tenant (`<tenant>.ciamlogin.com`) is a grounding defect:
+the token fails with every secret present.
+
+- **VALUE vs NAME.** Grounding extracts only the non-secret ROUTING value (authority
+  host, tenant slug, token-URL) — the same class this step already inlines for
+  `base-url` and DSN hosts. A token, key, password, or credential-bearing connection
+  string is a SECRET: emit its NAME only (never the value) and use the carve-out below.
+  When in doubt, treat it as a secret.
+- **Runtime-only carve-out (preferred form).** Authority injected at deploy time, not
+  readable in the tree → declare `AUTHORITY`/`ISSUER` as a Required env var, ALSO list
+  it in the binding's `Inputs:` (a recipe `$VAR` absent from that binding's `Inputs:`
+  is rejected by `parse_plan`), and reference `$AUTHORITY` in the recipe. `$AUTHORITY`
+  must be the WHOLE authority (`Egress: $AUTHORITY`; recipe
+  `"$AUTHORITY/<tenant>/oauth2/v2.0/token"`); the pasted value is a bare `scheme://host`
+  with NO path — a paste-time contract. The `(unverified — confirm at run time)` tag +
+  the config key name is the last resort; never emit a guessed authority as grounded.
+- **Multi-principal.** The grounded authority is APP-level. A second-principal binding
+  (Step 6.5) declares the SAME `$AUTHORITY`/`$ISSUER` in its OWN `Inputs:` and reuses
+  the value/`Egress:`, substituting only per-user credential inputs — a re-guessed
+  endpoint for user B is the same grounding defect as the first.
+
+## Step 4.7: Classify the change & pick the cheapest proving seam (provability ladder)
+
+For each changed surface, FIRST run the provisionability litmus (Step 6.7's
+`provisioning-blocked` rules): *can the trigger/precondition artifact be produced by
+the runner's four tools (`curl` / `psql` / `sqlite3` / Playwright)?* Only if YES, pick
+the **cheapest live rung** that proves THIS change, climbing only when the change scope
+crosses a seam (data → API → UI) — do not default every change to a browser flow. R0 is
+NOT a rung: it fires only when NO live rung is executable, and choosing it over an
+available live rung is a coverage-honesty defect (Step 6.8 refutes it).
+
+- **R0 — escape (un-provisionable trigger):** emit NO live scenario for that surface.
+  Record a `provisioning-blocked` matrix row (Step 6.7) carrying its mandatory
+  evidence: a `hermetic: <path>::<test>` pointer when a repo test asserts the logic
+  (the preferred evidence for pure-logic/transform changes — a parser/mapper/scorer, a
+  multi-hop propagation), and/or a `**Setup prerequisite:**` naming the human
+  provisioning action (mandatory when the surface is also currently unobservable).
+- **R1 — data-layer read-back:** a `psql`/`sqlite3` seam-seed (INSERT) + read scenario.
+  See the R1 rules below.
+- **R2 — API / contract:** a `curl` scenario.
+- **R3 — UI / wiring / user-visible:** a Playwright scenario.
+
+**R1 seam-seed rules.**
+- **Schema-grounded, committed source only.** The INSERT's columns, every
+  NOT-NULL/FK/CHECK target, and enum/status literals are read from the migration / ORM
+  model / committed OpenAPI-schema artifact in the tree and cited `(file:line)` — never
+  guessed, and NEVER via a live `psql`/`curl` probe (you have `Read`/`Grep`/`Glob`
+  only). If no committed schema source exists, `provisioning-blocked` is INVALID (the
+  row stays psql-mintable — un-provisionability is a harness fact, not an
+  author-grounding limitation). Fall back inside the `covered` channel: (a) a plausible
+  column set from the read path's own queries/serializers/DTOs → author the seed with
+  each unconfirmed literal tagged `(unverified — confirm at run time)` + a
+  `**Coverage delta:**` naming the unconfirmed INSERT shape; (b) not even plausible →
+  drop the seed, author only the live read whose FIRST assertion is an existence check
+  on the manually-seeded row (fails loudly as *seed-missing*, not a code defect) + a
+  `**Coverage delta:**` stating the row must be seeded manually.
+- **Exactly one connection reference.** The `**Seed (psql/sqlite3):**` step carries the
+  fenced SQL plus ONE plan-declared connection reference — the `$VAR`/DSN declared
+  under `## Setup` `**Required databases:**`/Required env vars (the executor composes
+  `psql "$DATABASE_URL" -c '<SQL>'`). No other target: the dispatched runner receives
+  only the scenario block + base URL (never `## Setup`), so the reference must live in
+  the step, and the scenario path has NO machine-enforced DSN egress check — the
+  declared-token rule + the throwaway-target consent are the egress guards.
+- **Single scenario.** Author seed + read-back as ONE scenario (INSERT first step, then
+  the read assertion + DB Check). A split pair loses BOTH guarantees: the mutation
+  guard strips per-scenario and is `**Depends-on:**`-blind, and `**Depends-on:**` is
+  order-only (predecessor failure does NOT block dependents) — a read whose seed was
+  stripped or failed reports a false result against an empty table. If a split is
+  unavoidable: `**Depends-on:** <seed ID>` AND the read's first assertion is a
+  seed-existence check failing as *seed-missing*.
+
+**Seed write-safety (mutation-guard interaction).** The Phase-0 guard classifies over
+the ENTIRE scenario block (including `**Edge cases:**`) and strips only
+`mutating && expectsSuccess`. Two failure modes: (1) a clean-phrased seed IS stripped
+under the default `allow_mutations: false` — so any plan with a Seed step MUST emit the
+`## Setup` bullet `**Seeds fixtures:** BE-NN[, …] (requires allow_mutations)` (the
+marker Perun's consent gate keys on); (2) a seed whose block carries a BLOCKED-class
+token anywhere (*reject / block / deny / forbidden / unauthorized / must not / should
+not / no state change|row|change* or a `401`/`403`/`4xx` literal) classifies
+`expectsSuccess=false` and is NOT stripped — its INSERT lands even without
+`allow_mutations`. (Bare *invalid*/*negative* do NOT flip it.) Authoring rules:
+(a) a seed scenario keeps its ENTIRE block free of negative/blocked phrasing — every
+negative assertion or edge case goes in a SEPARATE non-mutating scenario (banning ALL
+negative-ish phrasing is deliberate safe over-coverage); (b) the dedicated throwaway
+target + throwaway DB is the ONLY reliable defense for seed writes — MANDATORY;
+(c) a READ-ONLY scenario (seedless read, `(unverified)` covered read,
+existence-check-only) keeps its ENTIRE block — assertions, edge cases,
+`**Coverage delta:**` prose — free of bare present-tense write verbs
+(*create/insert/update/write/save/delete/mutate/persist*): they classify the read as
+mutating and strip it, and a seedless plan has no consent-gate recovery. Phrase
+existence checks as *"assert a row with `<PK>=<v>` is present"* and deltas as *"the row
+must be seeded manually"* (past-tense and *seed/seeded* are safe).
+
+**Write-safety is marker-keyed, not disposition-keyed:** ANY plan-authored
+from-scratch DB write — an R1 seam-seed OR a `covered` stage-driving write (below) —
+MUST carry the `**Seed (psql/sqlite3):**` label and all rules above.
+
+**Propagation vs read-back (`**Coverage delta:**`).** A seam-seed INSERT proves the
+READ path, not any derivation the diff introduced UPSTREAM of the seed. When the
+changed code IS that upstream producer, first apply the litmus to the **originating
+producer — the earliest stage the diff actually changed** (mid-chain hop if that is
+what changed; a row-write is never the target): if a `curl`/`psql`/Playwright action
+can drive the changed stage FROM ITS OWN INPUT, prefer that scenario — it fires the
+real changed code and is `covered` (even mid-chain); such a scenario is the *covered
+stage-driving write* named by the marker-keyed rule above — when its driving action is
+a DB INSERT it carries the `**Seed (psql/sqlite3):**` label like any seam-seed; an INSERT/POST reproducing the
+changed stage's OUTPUT (or any stage downstream of it) is a seam-seed, not coverage.
+Only when the originating trigger is un-provisionable (even if a later hop is
+independently mintable) keep the downstream seam-seed for the read path, emit a
+`**Coverage delta:**` naming what it skips, and disposition the propagation
+`provisioning-blocked` with a `hermetic:` pointer. Demoting a reachable producer to
+`provisioning-blocked` — suppressing real coverage behind a pointer — is itself a
+coverage-honesty defect.
 
 ## Step 5: Output format + Setup section
 
@@ -212,7 +345,7 @@ Rules: one backtick group per item; free text after it is for humans; ≤50 item
 
 ## Step 6: Generate scenarios
 
-Every scenario step MUST be executable by the runner (see Step 4.5): a Playwright action, a `curl` request, or a `psql`/`sqlite3` query against the **running** app. Do not emit `docker` / `make` / build / inspect steps — model "bring the stack up" as a Setup prerequisite instead.
+Every scenario step MUST be executable by the runner (see Step 4.5): a Playwright action, a `curl` request, or a `psql`/`sqlite3` query — or a plan-declared `**Seed (psql/sqlite3):**` write (Step 4.7) — against the **running** app. Do not emit `docker` / `make` / build / inspect steps — model "bring the stack up" as a Setup prerequisite instead.
 
 - **FE** (if FE changes): one scenario per changed component/page/feature, concrete UI element names from the code, ≥2 edge cases each.
 - **BE** (if BE changes): one scenario per changed endpoint, real paths/methods/payloads, DB checks with real table/column names, ≥2 edge cases each (error handling, auth, validation).
@@ -230,8 +363,8 @@ Every `$QA_BIND_*` token you reference in ANY scenario (auth headers, payloads, 
 This bites hardest with **multi-principal** scenarios. When a scenario exercises a SECOND authenticated user (e.g. "user B exports user A's resource → 404", or RLS-isolation tests that reference `$QA_BIND_JWT_FOR_USER_B`), you MUST declare a SEPARATE binding for that principal — it cannot share the first user's token:
 
 - Give it a distinct name (e.g. `QA_BIND_JWT_FOR_USER_B`).
-- Give it its own `Inputs:` for the second principal (e.g. `TEST_USER_B_EMAIL`, `TEST_USER_B_PASSWORD`) — and add those names to `**Required environment variables:**` so preflight verifies them.
-- Reuse the same `Egress:` and `Recipe:` shape as the first binding, substituting the second principal's input names.
+- Give it its own `Inputs:` for the second principal (e.g. `TEST_USER_B_EMAIL`, `TEST_USER_B_PASSWORD`) — and add those names to `**Required environment variables:**` so preflight verifies them. When the authority is the declared `$AUTHORITY`/`$ISSUER` var (Step 4.6), list that SAME var in this binding's `Inputs:` too — `Inputs:` are per-binding (no ambient recipe env), and `parse_plan` rejects an undeclared recipe `$VAR`.
+- Reuse the same `Egress:` and `Recipe:` shape as the first binding — including the SAME grounded authority, never a re-guessed endpoint for user B (Step 4.6 multi-principal rule) — substituting only the second principal's credential input names.
 
 Before saving, scan every scenario for `$QA_BIND_*` tokens and confirm each one is declared. If you cannot construct a recipe for a referenced principal, drop or rewrite the scenario rather than emit a dangling binding reference.
 
@@ -298,8 +431,9 @@ those, each with its reason; everything unreachable only *because of a defect* g
 ## Step 6.7: Self-check before finishing — complete the coverage matrix
 
 The Coverage Matrix is the *emitted form* of the Step 6.6 reachability sweep — do the litmus once,
-record its verdict per row. When the surface has ≥2 status/behavior classes, complete the
-`## Coverage Matrix` drafted in Step 1.5: **every status named in your own `## Changes Summary` is a
+record its verdict per row. When the surface has ≥2 status/behavior classes OR any changed
+surface is `provisioning-blocked`, complete the
+`## Coverage Matrix` drafted in Step 1.5 (drafting the one-row matrix now if Step 1.5 emitted none): **every status named in your own `## Changes Summary` is a
 row** (this is the decidable anchor — row set == the statuses you declared).
 **And every external surface named in your own `## Changes Summary` is also a row** —
 same self-referential closure: row set == the surfaces you declared. The Step 6.6 behavior-class sweep
@@ -314,7 +448,47 @@ disposition:
    contract-correct scenario (tagged `**Blocked-by:**`).
 3. `out-of-scope: <reason>` → a **harness-property** reason (Step 6.6). An `out-of-scope` whose
    reason is a code defect is INVALID — it must be `blocked-by`.
-   A changed surface with a harness-observable interface (a curl-able route, a `psql`-observable DB effect, or a Playwright surface) cannot be `out-of-scope` — only `covered` or `blocked-by`; `out-of-scope` survives only for a changed surface with no such interface at all.
+   A changed surface with a harness-observable interface (a curl-able route, a `psql`-observable DB effect, or a Playwright surface) cannot be `out-of-scope`; it is `covered`, `blocked-by`, or (real read interface but an un-mintable precondition artifact) `provisioning-blocked` — `out-of-scope` survives only for a changed surface with no such interface at all.
+4. `provisioning-blocked: <artifact>` → CORRECT code + a real `curl`/`psql`/Playwright read
+   interface, but a precondition artifact the runner's four tools cannot mint (a pre-published
+   external workflow, a third-party-issued token/cert). MANDATORY evidence in the Pointer cell:
+   a `**Setup prerequisite:**` naming the exact human provisioning action and/or a
+   `hermetic: <path>::<test>` pointer — Step-0-grounded: the file exists in the tree and the
+   named test asserts the ORIGINATING producer the row skips (a hallucinated pointer is a
+   hard-stop defect; with no on-disk test, the Setup prerequisite is required; when the
+   surface is already observable a resolving hermetic pointer satisfies, when un-observable
+   the Setup prerequisite is also required — see the tie-break below). Rules:
+   - **Litmus + earn-the-punt.** *Un-provisionable* = the artifact needs an out-of-band issuer
+     the four tools cannot reach. "Can it be minted?" is often a runtime fact — so EXHAUST the
+     tree for a create-path (route table / OpenAPI / write-endpoint / factory / migration)
+     first. A plausible create-path ⇒ emit the `covered` live scenario tagged
+     `(unverified — confirm at run time)` — never punt. Affirmative out-of-band evidence ⇒
+     `provisioning-blocked`. Neither settled ⇒ DEFAULT into `(unverified)` `covered` (existence-check as the first
+     assertion + a `**Coverage delta:**` naming the unconfirmed precondition; this is
+     Step 4.7's R1 seedless fallback (b) when a DB surface is involved — apply the same
+     shape analogously on other rungs) — never a stall, silent drop, or punt.
+   - **`(unverified)` backstop.** An `(unverified)` covered scenario riding an unconfirmed
+     path MUST carry a `**Coverage delta:**` naming what goes unproven should the path be
+     absent, plus a `hermetic:` pointer whenever Step 4.6 test-infra detection knows an
+     on-disk test asserting the changed logic. (The runner's `(unverified)` handling only
+     downgrades a mismatch to LOW — no reclassification happens at run time.)
+   - **Necessity for the change (conjunctions).** With several preconditions, the row is
+     `provisioning-blocked` only if an un-mintable one sits ON THE CAUSAL PATH of the
+     CHANGED behavior AND no live rung observes the change without it; if the mintable
+     subset already reaches the diff's behavior, the surface is `covered`.
+   - **Tie-break (un-provisionable AND un-observable):** decide by remediability — a single
+     named Setup prerequisite would make it observable ⇒ `provisioning-blocked` (that
+     prerequisite is then mandatory; a hermetic pointer alone is insufficient); no
+     provisioning action by the runner's four tools could ever ⇒ `out-of-scope`.
+   - **Tie-break (defect AND un-provisionable):** the DEFECT wins ⇒ `blocked-by`, with BOTH
+     gates stated in the BLK entry's `**Remediation (human Setup prerequisite):**` field
+     (revert the defect AND provision the artifact). `provisioning-blocked` is reserved for
+     correct code.
+   - **Row-anchoring.** A multi-hop propagation whose TERMINAL effect is a DB-observable
+     write is anchored as that DB-observable schema surface and earns its own
+     `provisioning-blocked` row; the intermediate hops are internal collaborators exercised
+     through it (the internal-collaborator exclusion applies to those intermediate hops —
+     it does not suppress the terminal DB surface's own row).
 
 Also confirm: every behavioral assertion carries a visible `(file:line)` OR `(unverified — confirm
 at run time)` tag; no `**Expected response:**` equals a value produced only by a recorded Blocker
@@ -347,7 +521,28 @@ before saving. Confident-wrong claims cluster in these classes:
   HTTP/DB/Playwright surface can observe it; the runner cannot run the required tool), not a code
   defect or a reachable surface rationalized away. A defect is `blocked-by`; a reachable surface is
   `covered`. Only a true harness limit survives.
-  Decidable test: if the changed surface has a curl/psql/Playwright interface or effect, `out-of-scope` is invalid — reclassify to `covered` (reachable) or `blocked-by` (a defect obstructs it).
+  Decidable test: if the changed surface has a curl/psql/Playwright interface or effect, `out-of-scope` is invalid — reclassify to `covered` (reachable now via an artifact the runner's four tools can create), `blocked-by` (a defect obstructs it), or `provisioning-blocked` (reachable only after a precondition artifact those tools cannot create — carries a Setup prerequisite and/or hermetic pointer).
+- **`provisioning-blocked` rows (Steps 4.7 + 6.7)** — re-read with intent to refute all of:
+  (i) the named artifact is genuinely un-mintable by the four tools AND on the causal path of
+  the CHANGED behavior (a mintable-or-plausible create-path, or an unrelated-to-the-diff
+  artifact, reclassifies to `covered`); (ii) the `hermetic:` pointer RESOLVES — file on disk,
+  named test asserts the originating producer (not an adjacent behavior); (iii) the row was
+  not chosen over an executable live rung (R0-as-lazy-shortcut is a defect).
+- **Seam-seed scenarios (Step 4.7)** — refute: (i) INSERT schema-grounding (every
+  column/enum cited from a committed source; an ungrounded seed is a coverage defect);
+  (ii) whole-block phrasing — a seed block carrying a BLOCKED-class token anywhere bypasses
+  the mutation guard (its INSERT lands unguarded); a READ-ONLY scenario whose block trips a
+  bare present-tense write verb strips with no consent-gate recovery (Step 4.7 rule (c));
+  (iii) marker completeness — any from-scratch write scenario missing the
+  `**Seed (psql/sqlite3):**` label + `**Seeds fixtures:**` Setup bullet either strips
+  silently (voiding a row still marked `covered`) or lands unguarded; (iv) an
+  `(unverified)` covered row with neither `**Coverage delta:**` nor an available hermetic
+  pointer is the same defect class as an un-pointed `provisioning-blocked` row.
+- **Auth authority / token endpoint (Step 4.6)** — re-read the app's auth config with
+  intent to refute the recipe's login URL and `Egress:` host: a well-known IdP host
+  reproduced from memory (e.g. `login.microsoftonline.com` against a configured CIAM
+  authority) is a refute failure; verify the second-principal binding reuses the SAME
+  grounded authority and declares `$AUTHORITY`/`$ISSUER` in its own `Inputs:`.
 - **claim-specific, branch-governing citation** — a `(file:line)` must support the
   *specific* claim (status AND body/envelope) and point at the branch that fires for
   *this* scenario's input, not merely a real line near the topic. A status-only test
