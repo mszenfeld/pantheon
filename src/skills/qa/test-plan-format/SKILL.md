@@ -59,18 +59,20 @@ result can't be observed. This section is MANDATORY — if you found none, write
 - **Blocks:** <scenario IDs carrying `**Blocked-by:** BLK-01`>
 - **Hermetic observation (optional):** `<path>::<test>` — an existing repo test that observes the blocked-unobservable contract when the live path cannot (see `qa-plan-authoring` Step 0)
 
-## Coverage Matrix   (required only when the Changes Summary names ≥2 status/behavior classes)
+## Coverage Matrix   (required when the Changes Summary names ≥2 status/behavior classes OR any changed surface is `provisioning-blocked`)
 
 <One row per intended behavior / status from the spec, and per changed external surface named in the Changes Summary (drafted in authoring Step 1.5,
-dispositioned in Step 6.7). Omit on single-behavior diffs. Exactly one disposition per row;
+dispositioned in Step 6.7). Omit on single-behavior diffs UNLESS a changed surface is `provisioning-blocked` (then a one-row matrix is required). Exactly one disposition per row;
 `blocked-by` (lowercase) is the disposition keyword — distinct from the `**Blocked-by:**`
 scenario tag.
-A changed surface with a harness-observable interface (route / DB-effect / Playwright) takes `covered` or `blocked-by`, never `out-of-scope`.
-A `blocked-by` row whose contract is unobservable live may add a `hermetic: <path>::<test>` pointer in its Pointer cell.>
+A changed surface with a harness-observable interface (route / DB-effect / Playwright) takes `covered`, `blocked-by`, or `provisioning-blocked` (reachable read interface, but a precondition artifact the runner cannot mint) — never `out-of-scope`.
+A `blocked-by` row whose contract is unobservable live may add a `hermetic: <path>::<test>` pointer in its Pointer cell.
+A `provisioning-blocked` row MUST carry, in its Pointer cell, a `**Setup prerequisite:**` naming the exact human provisioning action and/or a `hermetic: <path>::<test>` pointer (a REAL on-disk test asserting the skipped producer — a pointer to an absent file or an unrelated test is a hard-stop defect), plus a one-clause reason the artifact is un-mintable by `curl`/`psql`/`sqlite3`/Playwright.>
 
 | Behavior / status | Expected (per contract) | Disposition | Pointer |
 |---|---|---|---|
-| 200 happy path | 200 + `%PDF` | covered  /  blocked-by  /  out-of-scope | scenario ID, BLK ID, or harness-property reason |
+| 200 happy path | 200 + `%PDF` | covered  /  blocked-by  /  out-of-scope  /  provisioning-blocked | scenario ID, BLK ID, harness-property reason, or Setup-prerequisite / `hermetic:` pointer |
+| confidence.score propagation | score persisted to `user_tasks` | provisioning-blocked | hermetic: `tests/unit/…/test_user_task_executor.py::test_extract_confidence_score` — live trigger needs a pre-published external workflow the runner cannot create |
 
 ## FE Test Scenarios
 
@@ -91,6 +93,12 @@ A `blocked-by` row whose contract is unobservable live may add a `hermetic: <pat
 
 ### BE-01: <scenario name>
 
+**Seed (psql/sqlite3):** *(optional — only for a plan-authored from-scratch write, Step 4.7)*
+```sql
+<single INSERT statement, schema-grounded (file:line)>
+```
+*(Executed FIRST via exactly ONE plan-declared connection reference — e.g. `psql "$DATABASE_URL" -c '<SQL>'`, the `$VAR`/DSN declared under `## Setup` — no other target. Requires the `## Setup` `**Seeds fixtures:**` bullet.)*
+
 **Method:** <HTTP method> <full URL or path>
 **Headers:** <required headers, e.g. Content-Type: application/json>
 **Payload:**
@@ -109,6 +117,23 @@ A `blocked-by` row whose contract is unobservable live may add a `hermetic: <pat
 **Edge cases:**
 - <edge case with expected response>
 ~~~
+
+### Coverage Ladder (authoring note)
+
+Scenario shapes climb a provability ladder (authoring skill Step 4.7). **First run the
+provisionability litmus** (can the trigger/precondition be minted by `curl`/`psql`/
+`sqlite3`/Playwright?); if yes pick the cheapest live rung that proves THIS change —
+**R1** a schema-grounded `psql`/`sqlite3` seam-seed + read, **R2** a `curl` scenario,
+**R3** a Playwright scenario — climbing only when the change crosses a seam
+(data → API → UI). **R0** is the orthogonal escape when the trigger is un-provisionable:
+no live scenario; a `provisioning-blocked` matrix row instead (which forces the matrix
+even on a single-behavior diff). An R1 seed's INSERT is schema-grounded from a
+COMMITTED source, cited `(file:line)`, never guessed or live-probed; no committed
+schema ⇒ best-effort seed or a seedless read (first assertion = a seed-existence check
+failing as *seed-missing*) tagged `(unverified — confirm at run time)` +
+`**Coverage delta:**` — never `provisioning-blocked` (the row stays mintable). Seed +
+read ship as a SINGLE scenario (a split pair loses strip- and failure-coupling
+guarantees — Step 4.7).
 
 ### Frontmatter fields
 
@@ -135,6 +160,8 @@ A `blocked-by` row whose contract is unobservable live may add a `hermetic: <pat
 - **sqlite DSNs must be project-relative (3 slashes); 4-slash absolute paths are rejected for safety.** SQLAlchemy's 4-slash form (`sqlite:////tmp/foo.db`) addresses an absolute filesystem path, which would let the preflight probe act as a file-existence oracle for arbitrary host paths (CWE-200). Use the 3-slash project-relative form (`sqlite:///var/test.db`) instead. Paths containing `..` are also rejected.
 - **IPv6 hosts are not yet supported in DSNs; use an IPv4 address or hostname.**
 - **Env var names.** Must match `^[A-Z_][A-Z0-9_]*$`. Bullets that fail the regex are ignored with a warning.
+- **Minimize prerequisites.** Every `**Required environment variables:**` name and every binding `Inputs:` `$VAR` MUST be referenced by at least one scenario or recipe — drop unreferenced prerequisites; they inflate the preflight wall for nothing.
+- **Seeds fixtures marker.** `**Seeds fixtures:** BE-NN[, BE-NN…] (requires allow_mutations)` is a `## Setup` bullet that is MANDATORY whenever any scenario carries a `**Seed (psql/sqlite3):**` step (an R1 seam-seed OR a covered stage-driving write — authoring Step 4.7). It is the defined marker Perun's seed-consent gate keys on; omitting it means the seed strips silently under the mutation guard or the run stalls.
 - **Omit when unused.** A plan with no prerequisites can omit the entire `## Setup` section.
 
 ---
@@ -171,6 +198,7 @@ Each binding block has exactly four members and they MUST appear in this order: 
 - **Inputs.** Comma-separated `$VAR` references. Every `$VAR` that appears in the recipe MUST be declared here; the parser rejects the binding otherwise. Inputs may reference other bindings (`$QA_BIND_OTHER`) — this creates a Wave-0 dependency edge.
 - **Egress.** A single host URL the recipe is allowed to talk to. Applies to `curl` (URL host), `psql`, and `sqlite3` (DSN host). The parser rejects any recipe command whose connection target host does not match this value.
 - **Recipe.** A single shell statement inside a fenced ```bash``` block. See sandbox rules below.
+- **Auth authority grounding.** A token-minting recipe derives its login URL + `Egress:` host from the app's CONFIGURED authority (authoring Step 4.6) — never a guessed well-known endpoint (a hard-coded `login.microsoftonline.com` against a CIAM tenant fails with every secret present). Only a bare routing endpoint (scheme://host / tenant slug, no secret component) may be inlined; anything secret-bearing is declared by NAME. Runtime-only authority → declare `$AUTHORITY`/`$ISSUER` as a Required env var AND list it in the binding's `Inputs:` (a recipe `$VAR` absent from `Inputs:` is rejected by `parse_plan`); `$AUTHORITY` must be the WHOLE authority (`Egress: $AUTHORITY`; recipe `"$AUTHORITY/<tenant>/oauth2/v2.0/token"`) and the pasted value a bare `scheme://host` with NO path (a paste-time contract — the egress lock checks only the template). The grounded authority is app-level: a second-principal binding declares the SAME `$AUTHORITY`/`$ISSUER` in its own `Inputs:` and reuses it — never a re-guessed endpoint for user B.
 
 ### Recipe sandbox rules (summary)
 
@@ -235,6 +263,13 @@ evidence**:
   exact literal is unverifiable by reading — assert the rule + `(file:line)` (full confidence) and tag the
   literal `(unverified — confirm at run time)`. A function output is
   grounded by its *rule*, distinct from the human-message `(exact text — brittle)` rule below.
+
+- **`**Coverage delta:**`** — an inert scenario annotation (the parser ignores
+  expected-result prose) naming exactly what this scenario does NOT prove — e.g. a
+  downstream seam-seeded read that skips the upstream derivation, or an `(unverified)`
+  path that may be absent at run time. Required on every downstream seam-seed and every
+  `(unverified)` covered scenario riding an unconfirmed path (authoring Step 4.7). Keep
+  its prose free of bare present-tense write verbs (Step 4.7 rule (c)).
 
 Assertion style:
 
@@ -348,7 +383,10 @@ This field is **opt-in**. Plans without `**Depends-on:**` dispatch fully in para
   `## Setup`, never scenario steps — see `qa-plan-authoring` Step 3.5.
 - **Spelling:** `**Blocked-by:** BLK-NN` is the scenario tag (capital B, inert prose — like
   `**Depends-on:**` in placement, but NOT parsed). `blocked-by` (lowercase) is the Coverage-Matrix
-  disposition keyword. Both reference a `BLK-NN` id.
+  disposition keyword. Both reference a `BLK-NN` id. `provisioning-blocked` (lowercase) is the
+  fourth disposition keyword — CORRECT code + a reachable read interface, but a precondition
+  artifact the runner cannot mint; its Pointer cell carries a `**Setup prerequisite:**` and/or
+  `hermetic:` pointer, never a BLK id (a genuine defect always routes to `blocked-by`).
 
 ---
 
@@ -365,5 +403,7 @@ Before saving the plan, verify:
 - [ ] `**Depends-on:**` fields, if present, reference existing scenario IDs without cycles
 - [ ] Binding format: every `**Bindings:**` entry uses a `QA_BIND_*` name with `(secret|plain)` type, declares `Inputs:` for every `$VAR` referenced by the recipe, sets an `Egress:` host, and the fenced ```bash``` recipe is a single statement using only allowlisted commands
 - [ ] `## Blockers / Findings` is present (`None found.` if none); any test-obstructing defect is recorded there (not buried in `## Out of harness scope`), and each blocked scenario keeps its contract-correct expectation + a `**Blocked-by:**` tag
-- [ ] If the Changes Summary names ≥2 statuses, `## Coverage Matrix` has one row per status and per changed external surface, each with exactly one disposition (`covered` / `blocked-by` / `out-of-scope` + harness-property reason)
-- [ ] No changed surface with a curl/psql/Playwright interface or effect is dispositioned `out-of-scope` (reachable ⇒ `covered`/`blocked-by`)
+- [ ] If the Changes Summary names ≥2 statuses OR any changed surface is `provisioning-blocked`, `## Coverage Matrix` has one row per status and per changed external surface, each with exactly one disposition (`covered` / `blocked-by` / `out-of-scope` + harness-property reason / `provisioning-blocked` + Setup-prerequisite and/or `hermetic:` pointer)
+- [ ] No changed surface with a curl/psql/Playwright interface or effect is dispositioned `out-of-scope` (reachable ⇒ `covered`/`blocked-by`/`provisioning-blocked`)
+- [ ] Every scenario carrying `**Seed (psql/sqlite3):**`: `## Setup` carries `**Seeds fixtures:**`, the seed has exactly ONE plan-declared connection reference, and the block is free of BLOCKED-class negative phrasing (Step 4.7 rule (a))
+- [ ] Every read-only scenario (no Seed step) keeps its entire block free of bare present-tense write verbs (create/insert/update/write/save/delete/mutate/persist — Step 4.7 rule (c))
