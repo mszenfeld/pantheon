@@ -52,8 +52,15 @@ describe("buildVelesPrompt", () => {
       "per changed external surface named in the Changes Summary",
     )
     expect(prompt).toContain(
-      "names ≥2 statuses, the `## Coverage Matrix` has one row per such",
+      "names ≥2 statuses OR any changed surface is `provisioning-blocked`",
     )
+    expect(prompt).toContain("the `## Coverage Matrix` has one row per such")
+    // Provisionable-QA-plans doctrine: the 4th disposition + its evidence guard
+    // (keyed on precondition mintability, never on a read interface existing).
+    expect(prompt).toContain(
+      "un-mintable by curl/psql/sqlite3/Playwright",
+    )
+    expect(prompt).toContain("never key this on a read interface existing")
   })
 
   it("hard-stop requires order/branch evidence for envelope + rate-limit (L1)", () => {
