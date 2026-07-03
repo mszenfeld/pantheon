@@ -129,8 +129,12 @@ Score MUST items as the ranking backbone; NICE items break ties and reward depth
 
 **MUST:**
 
-- `## Setup` lists `AI_WORKFLOW_WEBHOOK_SECRET` and the service URL
-  `http://localhost:8000`.
+- `## Setup` lists the service URL `http://localhost:8000` (the read path under test).
+  It does NOT list `AI_WORKFLOW_WEBHOOK_SECRET` as a `**Required environment variables:**`
+  prerequisite: that secret is read only by the un-exercised AI-workflow worker, so per
+  "minimize the provisionable set" it is not a live prerequisite — listing it is the same
+  over-provisioning pattern the `AI_WORKFLOW_ID` demerit below guards. It may appear (if at
+  all) only in the `provisioning-blocked` row's prose.
 - `## Setup` carries a `**Seeds fixtures:** BE-NN (requires allow_mutations)`
   marker that identifies the seam-seed read scenario by its plan ID.
 - The seam-seed read scenario (BE-NN) meets ALL of the following requirements:

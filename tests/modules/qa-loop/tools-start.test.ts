@@ -328,6 +328,58 @@ describe("qa_loop_start", () => {
     }
   })
 
+  it("a Seed write the CLASSIFIER misses (CALL/COPY/GRANT/setval) still strips on the marker alone", async () => {
+    // The gate's security value OVER the ordinary `mutating && expectsSuccess` guard is exactly
+    // the seed writes classifyScenario() does NOT flag as mutating. With NO other write token
+    // and NO blocked phrasing, classify returns mutating:false/expectsSuccess:true, so ONLY the
+    // marker-alone SEED_MARKER gate can strip these — a `SEED_MARKER.test(block) && mutating`
+    // regression would dispatch them unguarded. Each must strip without consent, dispatch with it.
+    const classifierMissed: Record<string, string> = {
+      "stored-proc CALL": "CALL populate_fixtures();",
+      "COPY load": "COPY orders FROM '/tmp/seed.csv';",
+      GRANT: "GRANT admin TO app_user;",
+      "sequence setval": "SELECT setval('orders_id_seq', 100);",
+    }
+    for (const [label, sql] of Object.entries(classifierMissed)) {
+      writeFileSync(
+        join(cwd, "docs/testing/plans/2026-06-26-demo-test-plan.md"),
+        [
+          "# Test Plan",
+          "",
+          "## BE Test Scenarios",
+          "",
+          `### BE-01: seed fixtures via ${label}`,
+          "**Seed (psql/sqlite3):**",
+          "```sql",
+          sql,
+          "```",
+          "Then GET /orders/1 and assert a 200 response with the seeded row present.",
+          "",
+        ].join("\n"),
+      )
+      // Without consent → stripped → empty dispatch → all-stripped error. A verb/mutating-coupled
+      // gate would instead return ok with BE-01 dispatchable (the bypass this pins shut).
+      const stNo = new QaLoopState()
+      const toolsNo = makeQaLoopTools({ gate: fakeGate("perun"), state: stNo, cwd, resolveParentID: async (s) => s, assignIssueIds: noopAssignIssueIds })
+      const resNo = resultJson(await toolsNo.qa_loop_start.execute(
+        { plan_path: "docs/testing/plans/2026-06-26-demo-test-plan.md", topic: "demo", report_path: "docs/testing/reports/2026-06-26-demo-report.md" },
+        ctx("perun"),
+      ))
+      expect(resNo.status, `${label} seed must strip without consent`).toBe("error")
+      expect(String(resNo.reason)).toMatch(/mutation guard|allow_mutations/)
+
+      // With consent → dispatched.
+      const stYes = new QaLoopState()
+      const toolsYes = makeQaLoopTools({ gate: fakeGate("perun"), state: stYes, cwd, resolveParentID: async (s) => s, assignIssueIds: noopAssignIssueIds })
+      const resYes = resultJson(await toolsYes.qa_loop_start.execute(
+        { plan_path: "docs/testing/plans/2026-06-26-demo-test-plan.md", topic: "demo", report_path: "docs/testing/reports/2026-06-26-demo-report.md", allow_mutations: true },
+        ctx("perun"),
+      ))
+      expect(resYes.status, `${label} seed must dispatch with consent`).toBe("ok")
+      expect(resYes.dispatch_set).toContain("BE-01")
+    }
+  })
+
   it("a Seed marker VARIANT (list-dash prefix / incidental whitespace) is still consent-gated, even with blocked-phrasing", async () => {
     // The consent gate must be a SUPERSET of be-testing's semantic marker recognition: a
     // list-dash-prefixed or whitespace-variant `**Seed (psql/sqlite3):**` marker that the LLM
