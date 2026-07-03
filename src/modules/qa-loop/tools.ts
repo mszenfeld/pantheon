@@ -245,6 +245,20 @@ export function makeQaLoopTools(deps: QaLoopToolDeps) {
           }
           continue
         }
+        // Duplicate (well-formed) scenario id → reject loudly. The keyed scenarios map is
+        // last-write-wins and the strip decision is per-block, so a later same-id block
+        // silently overwrites the first. If the first block was a consent-stripped Seed
+        // write, a later clean duplicate-id block would resurrect the id into dispatch_set
+        // and the seed would execute under allow_mutations:false — a consent-gate BYPASS.
+        // (Malformed ids carry a suffix and collide only among themselves, all skipped, so
+        // this check is scoped to the well-formed path.) Ids must be unique regardless —
+        // ingest/report/coverage all key on the id.
+        if (scenarios[id]) {
+          return JSON.stringify({
+            status: "error",
+            reason: `duplicate scenario id ${id} — scenario ids must be unique (test-plan-format §Plan Structure). A repeated id silently overwrites the first block and can mask a consent-stripped Seed write; give each scenario a distinct FE-/BE-/SETUP-NN id.`,
+          })
+        }
         const { kind, mutating, expectsSuccess } = classifyScenario(block)
         // A plan-declared Seed block (`**Seed (psql/sqlite3):**`) is a fixture WRITE by
         // definition — be-testing executes its fenced SQL before the request, for ANY

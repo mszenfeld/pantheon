@@ -158,6 +158,12 @@ function makeQaLoopTools(deps) {
           };
           continue;
         }
+        if (scenarios[id]) {
+          return JSON.stringify({
+            status: "error",
+            reason: `duplicate scenario id ${id} \u2014 scenario ids must be unique (test-plan-format \xA7Plan Structure). A repeated id silently overwrites the first block and can mask a consent-stripped Seed write; give each scenario a distinct FE-/BE-/SETUP-NN id.`
+          });
+        }
         const { kind, mutating, expectsSuccess } = classifyScenario(block);
         const isSeedWrite = SEED_MARKER.test(block);
         const stripped = isSeedWrite ? !allowMutations : mutating && expectsSuccess && !allowMutations;

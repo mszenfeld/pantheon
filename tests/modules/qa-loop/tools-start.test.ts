@@ -519,4 +519,43 @@ describe("qa_loop_start", () => {
     // Still must NOT misdirect to allow_mutations despite the block-vs-key count mismatch.
     expect(String(res.reason)).not.toMatch(/allow_mutations/)
   })
+
+  it("rejects a duplicate scenario id (either order) instead of dispatching a seed unguarded", async () => {
+    // A duplicate well-formed id is last-write-wins in the keyed scenarios map. Whichever
+    // order the seed and the clean block appear, the tool must REJECT — never let the clean
+    // block resurrect the seed's id into dispatch_set and execute the write under
+    // allow_mutations:false (a consent-gate bypass). Without the guard, a seed-first duplicate
+    // returns ok with the id dispatchable.
+    const seedBlock = [
+      "### BE-01: seed then verify",
+      "**Seed (psql/sqlite3):**",
+      "```sql",
+      "DELETE FROM users WHERE id = 1;",
+      "```",
+      "Then GET /users/1 and assert 200.",
+    ]
+    const cleanBlock = [
+      "### BE-01: duplicate id, clean read",
+      "Send GET /health and assert a 200 response.",
+    ]
+    const cases: { label: string; first: string[]; second: string[] }[] = [
+      { label: "seed first", first: seedBlock, second: cleanBlock },
+      { label: "clean first", first: cleanBlock, second: seedBlock },
+    ]
+    for (const { label, first, second } of cases) {
+      writeFileSync(
+        join(cwd, "docs/testing/plans/2026-06-26-demo-test-plan.md"),
+        ["# Test Plan", "", "## BE Test Scenarios", "", ...first, "", ...second, ""].join("\n"),
+      )
+      const st = new QaLoopState()
+      const tools = makeQaLoopTools({ gate: fakeGate("perun"), state: st, cwd, resolveParentID: async (s) => s, assignIssueIds: noopAssignIssueIds })
+      const res = resultJson(await tools.qa_loop_start.execute(
+        { plan_path: "docs/testing/plans/2026-06-26-demo-test-plan.md", topic: "demo", report_path: "docs/testing/reports/2026-06-26-demo-report.md" },
+        ctx("perun"),
+      ))
+      expect(res.status, `${label}: must reject duplicate id`).toBe("error")
+      expect(String(res.reason)).toMatch(/duplicate scenario id/)
+      expect(res.dispatch_set, `${label}: nothing dispatched`).toBeUndefined()
+    }
+  })
 })
