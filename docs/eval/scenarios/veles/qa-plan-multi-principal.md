@@ -221,7 +221,7 @@ Verbatim prompt to send to the agent:
 - When the plan uses `$AUTHORITY` as a declared input variable, the binding
   must state or imply the **paste-time contract**: `$AUTHORITY` is the **whole**
   authority URL (bare `scheme://host/tenant-id`), not a fragment — the pasted
-  value must be a bare `scheme://host` (e.g. `https://contoso-qa.ciamlogin.com/a1b2c3d4-...`).
+  value is a bare authority `scheme://host/<tenant-id>`, tenant-id INCLUDED (e.g. `https://contoso-qa.ciamlogin.com/a1b2c3d4-...`).
   A binding that appends a path suffix to `$AUTHORITY` (e.g. `$AUTHORITY/oauth2/v2.0/token`)
   is valid; the egress URL must still originate from `$AUTHORITY`, not from a guessed base.
 - BE scenarios reference `GET /api/documents/{doc_id}`: 200 for the owner; 404

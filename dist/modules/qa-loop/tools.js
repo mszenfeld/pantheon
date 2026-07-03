@@ -29,7 +29,7 @@ function splitScenarios(planText) {
       current = { id: (m[1] ?? "").toUpperCase(), lines: [line] };
     } else if (MALFORMED_HEADING.test(line)) {
       if (current) blocks.push({ id: current.id, block: current.lines.join("\n") });
-      const id = (/^#{2,4}\s+((?:FE|BE|SETUP)-\d+[A-Za-z0-9]*)/i.exec(line)?.[1] ?? "").toUpperCase();
+      const id = (/^#{2,4}\s+((?:FE|BE|SETUP)-\d+[^\s:]*)/i.exec(line)?.[1] ?? "").toUpperCase();
       blocks.push({ id, block: line, malformed: true });
       current = null;
     } else if (current) {
@@ -54,7 +54,7 @@ function detectDirty(cwd) {
   const dirty_files = lines.map((l) => l.slice(3).trim());
   return { dirty: true, dirty_files };
 }
-const SEED_MARKER = /^\s*(?:[-*+]\s+|>\s*)?\*\*Seed\s*\(\s*psql\s*\/\s*sqlite3\s*\)\s*:\*\*/im;
+const SEED_MARKER = /^\s*(?:[-*+]\s+|\d+[.)]\s+|>\s*)?\*\*Seed\s*\(\s*psql\s*\/\s*sqlite3\s*\)\s*:\*\*/im;
 const QA_LOOP_DEFAULTS = { maxIterations: 3, maxDispatches: 50, timeBudgetS: 1800 };
 function containedPath(cwd, p) {
   const root = resolve(cwd);

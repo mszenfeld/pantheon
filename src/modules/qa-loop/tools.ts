@@ -61,8 +61,13 @@ function splitScenarios(planText: string): { id: string; block: string; malforme
     } else if (MALFORMED_HEADING.test(line)) {
       // Close the current scenario (do not absorb this heading's body) and emit the
       // malformed heading as a standalone, id-carrying, zero-body block flagged malformed.
+      // Capture the WHOLE suffix (`[^\s:]*`, not `[A-Za-z0-9]*`) so a non-alphanumeric
+      // suffix (e.g. `### FE-01_extra`) does NOT truncate the id to a bare `FE-01` that
+      // collides with a well-formed scenario. A malformed heading always has a word char
+      // after the digits (that is why it failed the well-formed `\b`), so its id keeps a
+      // non-empty suffix and stays disjoint from every well-formed id.
       if (current) blocks.push({ id: current.id, block: current.lines.join("\n") })
-      const id = (/^#{2,4}\s+((?:FE|BE|SETUP)-\d+[A-Za-z0-9]*)/i.exec(line)?.[1] ?? "").toUpperCase()
+      const id = (/^#{2,4}\s+((?:FE|BE|SETUP)-\d+[^\s:]*)/i.exec(line)?.[1] ?? "").toUpperCase()
       blocks.push({ id, block: line, malformed: true })
       current = null
     } else if (current) {
@@ -93,16 +98,17 @@ function detectDirty(cwd: string): { dirty: boolean; dirty_files: string[] } {
 /**
  * The plan-declared seed marker (`**Seed (psql/sqlite3):**`). Kept intentionally
  * PERMISSIVE — a SUPERSET of what be-testing's LLM executor recognizes: a leading
- * list-marker (`- ` / `* ` / `+ `) or blockquote (`> `) and incidental whitespace around
- * the marker all still match. The consent gate must never be weaker than the executor: if
- * be-testing would run the fenced SQL (it recognizes the marker semantically), this MUST
- * catch it so the write stays consent-gated. Still rejects prose that only mentions "seed"
- * (`**Seeded rows are visible**`, `**Seed the database manually**`) because the
- * `(psql/sqlite3)` clause is required. Authors must write the byte-exact canonical marker;
- * the leniency here is defense-in-depth, not license to vary it.
+ * list-marker — unordered (`- ` / `* ` / `+ `) OR ordered (`1. ` / `2) `, the plan format's
+ * numbered-step form, test-plan-format §Plan Structure) — or blockquote (`> `), and
+ * incidental whitespace around the marker, all still match. The consent gate must never be
+ * weaker than the executor: if be-testing would run the fenced SQL (it recognizes the marker
+ * semantically), this MUST catch it so the write stays consent-gated. Still rejects prose
+ * that only mentions "seed" (`**Seeded rows are visible**`, `**Seed the database manually**`)
+ * because the `(psql/sqlite3)` clause is required. Authors must write the byte-exact
+ * canonical marker; the leniency here is defense-in-depth, not license to vary it.
  */
 export const SEED_MARKER =
-  /^\s*(?:[-*+]\s+|>\s*)?\*\*Seed\s*\(\s*psql\s*\/\s*sqlite3\s*\)\s*:\*\*/im
+  /^\s*(?:[-*+]\s+|\d+[.)]\s+|>\s*)?\*\*Seed\s*\(\s*psql\s*\/\s*sqlite3\s*\)\s*:\*\*/im
 
 /** Loop budget defaults — the single source the tool reads (docs quote these). */
 export const QA_LOOP_DEFAULTS = { maxIterations: 3, maxDispatches: 50, timeBudgetS: 1800 } as const

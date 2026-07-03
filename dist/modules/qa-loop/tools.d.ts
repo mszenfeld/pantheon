@@ -34,13 +34,14 @@ interface QaLoopToolDeps {
 /**
  * The plan-declared seed marker (`**Seed (psql/sqlite3):**`). Kept intentionally
  * PERMISSIVE — a SUPERSET of what be-testing's LLM executor recognizes: a leading
- * list-marker (`- ` / `* ` / `+ `) or blockquote (`> `) and incidental whitespace around
- * the marker all still match. The consent gate must never be weaker than the executor: if
- * be-testing would run the fenced SQL (it recognizes the marker semantically), this MUST
- * catch it so the write stays consent-gated. Still rejects prose that only mentions "seed"
- * (`**Seeded rows are visible**`, `**Seed the database manually**`) because the
- * `(psql/sqlite3)` clause is required. Authors must write the byte-exact canonical marker;
- * the leniency here is defense-in-depth, not license to vary it.
+ * list-marker — unordered (`- ` / `* ` / `+ `) OR ordered (`1. ` / `2) `, the plan format's
+ * numbered-step form, test-plan-format §Plan Structure) — or blockquote (`> `), and
+ * incidental whitespace around the marker, all still match. The consent gate must never be
+ * weaker than the executor: if be-testing would run the fenced SQL (it recognizes the marker
+ * semantically), this MUST catch it so the write stays consent-gated. Still rejects prose
+ * that only mentions "seed" (`**Seeded rows are visible**`, `**Seed the database manually**`)
+ * because the `(psql/sqlite3)` clause is required. Authors must write the byte-exact
+ * canonical marker; the leniency here is defense-in-depth, not license to vary it.
  */
 declare const SEED_MARKER: RegExp;
 /** Loop budget defaults — the single source the tool reads (docs quote these). */

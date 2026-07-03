@@ -392,6 +392,11 @@ describe("qa_loop_start", () => {
       "double space": "**Seed  (psql/sqlite3):**",
       "no space": "**Seed(psql/sqlite3):**",
       "spaces around slash": "**Seed (psql / sqlite3):**",
+      // Ordered-list steps — the plan format's numbered-step form (test-plan-format §Plan
+      // Structure). The consent gate must catch these too; be-testing recognizes them.
+      "ordered dot": "1. **Seed (psql/sqlite3):**",
+      "ordered paren": "2) **Seed (psql/sqlite3):**",
+      "ordered indented": "  1. **Seed (psql/sqlite3):**",
     }
     for (const [label, marker] of Object.entries(variants)) {
       writeFileSync(
@@ -609,5 +614,43 @@ describe("qa_loop_start", () => {
       expect(String(res.reason)).toMatch(/duplicate scenario id/)
       expect(res.dispatch_set, `${label}: nothing dispatched`).toBeUndefined()
     }
+  })
+
+  it("a malformed heading with a non-alphanumeric suffix keeps a distinct id (no truncation collision with a well-formed scenario)", async () => {
+    // `### FE-01_extra:` is malformed, but its id must NOT truncate at the `_` to a bare
+    // `FE-01` that collides with the well-formed `### FE-01:` — the malformed SKIP would
+    // silently overwrite the dispatchable scenario's record while its id stayed in
+    // dispatch_set (state/dispatch inconsistency), bypassing the well-formed duplicate guard.
+    writeFileSync(
+      join(cwd, "docs/testing/plans/2026-06-26-demo-test-plan.md"),
+      [
+        "# Test Plan",
+        "",
+        "## BE Test Scenarios",
+        "",
+        "### BE-01: GET /health returns 200",
+        "Send GET /health and assert a 200 smoke response.",
+        "",
+        "### BE-01_extra: typo heading with an underscore suffix",
+        "Send GET /status and assert 200.",
+        "",
+      ].join("\n"),
+    )
+    const tools = makeQaLoopTools({ gate: fakeGate("perun"), state, cwd, resolveParentID: async (s) => s, assignIssueIds: noopAssignIssueIds })
+    const res = resultJson(await tools.qa_loop_start.execute(
+      { plan_path: "docs/testing/plans/2026-06-26-demo-test-plan.md", topic: "demo", report_path: "docs/testing/reports/2026-06-26-demo-report.md" },
+      ctx("perun"),
+    ))
+    expect(res.status).toBe("ok")
+    const s = state.load("perun")!
+    // The malformed heading keeps its full suffix → a DISTINCT id, not a collision with BE-01.
+    expect(Object.keys(s.scenarios)).toContain("BE-01_EXTRA")
+    // The well-formed BE-01 record is intact (NOT overwritten by the malformed SKIP) and dispatched.
+    expect(s.scenarios["BE-01"]!.current).not.toBe("skip")
+    expect(res.dispatch_set).toContain("BE-01")
+    // The malformed one is a visible SKIP, never dispatched.
+    expect(s.scenarios["BE-01_EXTRA"]!.current).toBe("skip")
+    expect(s.scenarios["BE-01_EXTRA"]!.reason).toMatch(/no recognised prefix/)
+    expect(res.dispatch_set).not.toContain("BE-01_EXTRA")
   })
 })
