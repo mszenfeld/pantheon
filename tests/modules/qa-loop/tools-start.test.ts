@@ -328,6 +328,107 @@ describe("qa_loop_start", () => {
     }
   })
 
+  it("a Seed marker VARIANT (list-dash prefix / incidental whitespace) is still consent-gated, even with blocked-phrasing", async () => {
+    // The consent gate must be a SUPERSET of be-testing's semantic marker recognition: a
+    // list-dash-prefixed or whitespace-variant `**Seed (psql/sqlite3):**` marker that the LLM
+    // executor would run must ALSO strip under the default allow_mutations:false. A byte-exact
+    // gate would miss these variants and dispatch a destructive write unguarded.
+    const variants: Record<string, string> = {
+      "list-dash prefix": "- **Seed (psql/sqlite3):**",
+      "asterisk bullet": "* **Seed (psql/sqlite3):**",
+      "blockquote prefix": "> **Seed (psql/sqlite3):**",
+      "double space": "**Seed  (psql/sqlite3):**",
+      "no space": "**Seed(psql/sqlite3):**",
+      "spaces around slash": "**Seed (psql / sqlite3):**",
+    }
+    for (const [label, marker] of Object.entries(variants)) {
+      writeFileSync(
+        join(cwd, "docs/testing/plans/2026-06-26-demo-test-plan.md"),
+        [
+          "# Test Plan",
+          "",
+          "## BE Test Scenarios",
+          "",
+          `### BE-01: seeded state via ${label}`,
+          marker,
+          "```sql",
+          "DELETE FROM users WHERE id = 1;",
+          "```",
+          "Then GET /users/1 and assert 401 with no state change.",
+          "",
+        ].join("\n"),
+      )
+      // Variant marker + blocked phrasing must strip (only scenario → empty dispatch →
+      // all-stripped guard fires). A byte-exact gate would return ok with BE-01 dispatchable.
+      const st = new QaLoopState()
+      const tools = makeQaLoopTools({ gate: fakeGate("perun"), state: st, cwd, resolveParentID: async (s) => s, assignIssueIds: noopAssignIssueIds })
+      const resNo = resultJson(await tools.qa_loop_start.execute(
+        { plan_path: "docs/testing/plans/2026-06-26-demo-test-plan.md", topic: "demo", report_path: "docs/testing/reports/2026-06-26-demo-report.md" },
+        ctx("perun"),
+      ))
+      expect(resNo.status, `${label} seed must strip without consent`).toBe("error")
+      expect(String(resNo.reason)).toMatch(/mutation guard|allow_mutations/)
+    }
+  })
+
+  it("a bold 'Seed…' PROSE assertion (no psql/sqlite3 clause) is NOT treated as a seed write", async () => {
+    // The permissive marker must not over-match prose that merely mentions seeding. A
+    // read-only scenario asserting `**Seeded rows are visible**` carries no fixture write, so
+    // it must dispatch normally — never be silently stripped as a phantom seed.
+    writeFileSync(
+      join(cwd, "docs/testing/plans/2026-06-26-demo-test-plan.md"),
+      [
+        "# Test Plan",
+        "",
+        "## BE Test Scenarios",
+        "",
+        "### BE-01: seeded rows are readable",
+        "**Seeded rows are visible**",
+        "Send GET /orders/1 and assert a 200 response with the row present.",
+        "",
+      ].join("\n"),
+    )
+    const tools = makeQaLoopTools({ gate: fakeGate("perun"), state, cwd, resolveParentID: async (s) => s, assignIssueIds: noopAssignIssueIds })
+    const res = resultJson(await tools.qa_loop_start.execute(
+      { plan_path: "docs/testing/plans/2026-06-26-demo-test-plan.md", topic: "demo", report_path: "docs/testing/reports/2026-06-26-demo-report.md" },
+      ctx("perun"),
+    ))
+    expect(res.status).toBe("ok")
+    expect(res.dispatch_set).toContain("BE-01")
+    expect(state.load("perun")!.scenarios["BE-01"]!.current).not.toBe("skip")
+  })
+
+  it("errors with a HEADING diagnosis (not allow_mutations) when every heading is malformed", async () => {
+    // An all-malformed plan yields a non-empty scenarios map but an empty dispatch set. The
+    // general all-stripped guard would misattribute this to the mutation guard and advise
+    // `allow_mutations` — which cannot help (malformed blocks never dispatch). The dedicated
+    // guard must instead name the heading-format problem.
+    writeFileSync(
+      join(cwd, "docs/testing/plans/2026-06-26-demo-test-plan.md"),
+      [
+        "# Test Plan",
+        "",
+        "## BE Test Scenarios",
+        "",
+        "### BE-01a: typo suffix heading",
+        "Send GET /health and assert 200.",
+        "",
+        "### FE-02x: another typo heading",
+        "Open /dashboard and assert it renders.",
+        "",
+      ].join("\n"),
+    )
+    const tools = makeQaLoopTools({ gate: fakeGate("perun"), state, cwd, resolveParentID: async (s) => s, assignIssueIds: noopAssignIssueIds })
+    const res = resultJson(await tools.qa_loop_start.execute(
+      { plan_path: "docs/testing/plans/2026-06-26-demo-test-plan.md", topic: "demo", report_path: "docs/testing/reports/2026-06-26-demo-report.md" },
+      ctx("perun"),
+    ))
+    expect(res.status).toBe("error")
+    expect(String(res.reason)).toMatch(/heading|recognised prefix/)
+    // Must NOT misdirect the operator to a flag that cannot fix a heading typo.
+    expect(String(res.reason)).not.toMatch(/allow_mutations/)
+  })
+
   it("a suffixed heading (### FE-01a) is surfaced standalone, not merged into the previous scenario", async () => {
     // The malformed heading must NOT absorb the prior scenario's tail. It becomes its own
     // id-carrying block; the trailing content ('blocked' phrasing) stays out of the seed block.

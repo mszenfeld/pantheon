@@ -54,6 +54,7 @@ function detectDirty(cwd) {
   const dirty_files = lines.map((l) => l.slice(3).trim());
   return { dirty: true, dirty_files };
 }
+const SEED_MARKER = /^\s*(?:[-*+]\s+|>\s*)?\*\*Seed\s*\(\s*psql\s*\/\s*sqlite3\s*\)\s*:\*\*/im;
 const QA_LOOP_DEFAULTS = { maxIterations: 3, maxDispatches: 50, timeBudgetS: 1800 };
 function containedPath(cwd, p) {
   const root = resolve(cwd);
@@ -144,8 +145,10 @@ function makeQaLoopTools(deps) {
       const disposition = reportExists ? "ADOPT" : "FRESH";
       const scenarios = {};
       const dispatchSet = [];
+      let malformedCount = 0;
       for (const { id, block, malformed } of splitScenarios(planText)) {
         if (malformed) {
+          malformedCount++;
           scenarios[id] = {
             qa_ids: [],
             kind: "feature",
@@ -158,7 +161,7 @@ function makeQaLoopTools(deps) {
           continue;
         }
         const { kind, mutating, expectsSuccess } = classifyScenario(block);
-        const isSeedWrite = /^\s*\*\*Seed \(psql\/sqlite3\):\*\*/im.test(block);
+        const isSeedWrite = SEED_MARKER.test(block);
         const stripped = isSeedWrite ? !allowMutations : mutating && expectsSuccess && !allowMutations;
         scenarios[id] = {
           qa_ids: [],
@@ -175,6 +178,12 @@ function makeQaLoopTools(deps) {
         return JSON.stringify({
           status: "error",
           reason: "0 scenarios parsed from the plan \u2014 expected scenario headings like '### FE-01:' or '### BE-01:' (test-plan-format \xA7Plan Structure). Check the plan's scenario heading format."
+        });
+      }
+      if (dispatchSet.length === 0 && malformedCount === Object.keys(scenarios).length) {
+        return JSON.stringify({
+          status: "error",
+          reason: `all ${Object.keys(scenarios).length} scenario heading(s) are malformed \u2014 no recognised prefix (expected '### FE-01:' / '### BE-01:' / '### SETUP-01:', per test-plan-format \xA7Plan Structure). Fix the scenario headings.`
         });
       }
       if (dispatchSet.length === 0) {
@@ -511,5 +520,6 @@ function makeQaLoopTools(deps) {
 }
 export {
   QA_LOOP_DEFAULTS,
+  SEED_MARKER,
   makeQaLoopTools
 };

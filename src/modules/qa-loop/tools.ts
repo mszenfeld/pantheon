@@ -90,6 +90,20 @@ function detectDirty(cwd: string): { dirty: boolean; dirty_files: string[] } {
   return { dirty: true, dirty_files }
 }
 
+/**
+ * The plan-declared seed marker (`**Seed (psql/sqlite3):**`). Kept intentionally
+ * PERMISSIVE — a SUPERSET of what be-testing's LLM executor recognizes: a leading
+ * list-marker (`- ` / `* ` / `+ `) or blockquote (`> `) and incidental whitespace around
+ * the marker all still match. The consent gate must never be weaker than the executor: if
+ * be-testing would run the fenced SQL (it recognizes the marker semantically), this MUST
+ * catch it so the write stays consent-gated. Still rejects prose that only mentions "seed"
+ * (`**Seeded rows are visible**`, `**Seed the database manually**`) because the
+ * `(psql/sqlite3)` clause is required. Authors must write the byte-exact canonical marker;
+ * the leniency here is defense-in-depth, not license to vary it.
+ */
+export const SEED_MARKER =
+  /^\s*(?:[-*+]\s+|>\s*)?\*\*Seed\s*\(\s*psql\s*\/\s*sqlite3\s*\)\s*:\*\*/im
+
 /** Loop budget defaults — the single source the tool reads (docs quote these). */
 export const QA_LOOP_DEFAULTS = { maxIterations: 3, maxDispatches: 50, timeBudgetS: 1800 } as const
 
@@ -211,8 +225,10 @@ export function makeQaLoopTools(deps: QaLoopToolDeps) {
       // Classify every scenario; apply the mutation guard pre-dispatch.
       const scenarios: Record<string, ScenarioRecord> = {}
       const dispatchSet: string[] = []
+      let malformedCount = 0
       for (const { id, block, malformed } of splitScenarios(planText)) {
         if (malformed) {
+          malformedCount++
           // A suffixed/typo'd heading (e.g. `### BE-02a`) has no recognised scenario
           // prefix. Record it as a visible SKIP — never dispatched — so the report shows
           // it AND the state machine can still reach `final`. Recording it as `fail`
@@ -241,7 +257,7 @@ export function makeQaLoopTools(deps: QaLoopToolDeps) {
         // not verb-keyed (qa-plan-authoring §"Write-safety is marker-keyed"). Every
         // non-seed scenario keeps the §7 rule: strip only mutating-expected-success (a
         // negative-blocked mutation is kept, the write never lands — AC19/AC20).
-        const isSeedWrite = /^\s*\*\*Seed \(psql\/sqlite3\):\*\*/im.test(block)
+        const isSeedWrite = SEED_MARKER.test(block)
         const stripped = isSeedWrite
           ? !allowMutations
           : mutating && expectsSuccess && !allowMutations
@@ -268,6 +284,16 @@ export function makeQaLoopTools(deps: QaLoopToolDeps) {
           status: "error",
           reason:
             "0 scenarios parsed from the plan — expected scenario headings like '### FE-01:' or '### BE-01:' (test-plan-format §Plan Structure). Check the plan's scenario heading format.",
+        })
+      }
+      // All headings malformed → the empty dispatch set is a heading-format problem, NOT a
+      // mutation-guard strip. allow_mutations cannot help (malformed blocks never dispatch
+      // regardless of the flag), so give the heading diagnosis rather than the misleading
+      // "re-run with allow_mutations" message the general all-stripped guard below emits.
+      if (dispatchSet.length === 0 && malformedCount === Object.keys(scenarios).length) {
+        return JSON.stringify({
+          status: "error",
+          reason: `all ${Object.keys(scenarios).length} scenario heading(s) are malformed — no recognised prefix (expected '### FE-01:' / '### BE-01:' / '### SETUP-01:', per test-plan-format §Plan Structure). Fix the scenario headings.`,
         })
       }
       if (dispatchSet.length === 0) {
