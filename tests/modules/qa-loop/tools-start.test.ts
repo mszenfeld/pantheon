@@ -488,4 +488,35 @@ describe("qa_loop_start", () => {
     expect(res.run_id).toBeUndefined()
     expect(git(cwd, ["for-each-ref", "--format=%(refname)", "refs/qa-loop/pre/"])).toBe("")
   })
+
+  it("collapses case/duplicate malformed headings to ONE id and still gives the heading diagnosis", async () => {
+    // Two malformed headings that normalize to the SAME id (### BE-01a / ### BE-01A → BE-01A)
+    // dedupe in the keyed scenarios map. The heading diagnosis must key on the recorded
+    // reasons (no mutation strips), not a block counter, so a block-vs-key count mismatch
+    // can't drop it back to the misleading allow_mutations message.
+    writeFileSync(
+      join(cwd, "docs/testing/plans/2026-06-26-demo-test-plan.md"),
+      [
+        "# Test Plan",
+        "",
+        "## BE Test Scenarios",
+        "",
+        "### BE-01a: typo suffix heading",
+        "Send GET /health and assert 200.",
+        "",
+        "### BE-01A: same id different case",
+        "Send GET /status and assert 200.",
+        "",
+      ].join("\n"),
+    )
+    const tools = makeQaLoopTools({ gate: fakeGate("perun"), state, cwd, resolveParentID: async (s) => s, assignIssueIds: noopAssignIssueIds })
+    const res = resultJson(await tools.qa_loop_start.execute(
+      { plan_path: "docs/testing/plans/2026-06-26-demo-test-plan.md", topic: "demo", report_path: "docs/testing/reports/2026-06-26-demo-report.md" },
+      ctx("perun"),
+    ))
+    expect(res.status).toBe("error")
+    expect(String(res.reason)).toMatch(/heading|recognised prefix/)
+    // Still must NOT misdirect to allow_mutations despite the block-vs-key count mismatch.
+    expect(String(res.reason)).not.toMatch(/allow_mutations/)
+  })
 })

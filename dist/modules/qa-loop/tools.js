@@ -145,10 +145,8 @@ function makeQaLoopTools(deps) {
       const disposition = reportExists ? "ADOPT" : "FRESH";
       const scenarios = {};
       const dispatchSet = [];
-      let malformedCount = 0;
       for (const { id, block, malformed } of splitScenarios(planText)) {
         if (malformed) {
-          malformedCount++;
           scenarios[id] = {
             qa_ids: [],
             kind: "feature",
@@ -180,7 +178,10 @@ function makeQaLoopTools(deps) {
           reason: "0 scenarios parsed from the plan \u2014 expected scenario headings like '### FE-01:' or '### BE-01:' (test-plan-format \xA7Plan Structure). Check the plan's scenario heading format."
         });
       }
-      if (dispatchSet.length === 0 && malformedCount === Object.keys(scenarios).length) {
+      const mutationStripCount = Object.values(scenarios).filter(
+        (sc) => sc.reason?.startsWith("mutation-guard")
+      ).length;
+      if (dispatchSet.length === 0 && mutationStripCount === 0) {
         return JSON.stringify({
           status: "error",
           reason: `all ${Object.keys(scenarios).length} scenario heading(s) are malformed \u2014 no recognised prefix (expected '### FE-01:' / '### BE-01:' / '### SETUP-01:', per test-plan-format \xA7Plan Structure). Fix the scenario headings.`
@@ -189,7 +190,7 @@ function makeQaLoopTools(deps) {
       if (dispatchSet.length === 0) {
         return JSON.stringify({
           status: "error",
-          reason: `all ${Object.keys(scenarios).length} scenario(s) were stripped by the mutation guard (mutating-expected-success, or a plan-declared Seed write without consent). Re-run with allow_mutations to exercise them, or the plan needs negative/non-mutating coverage.`
+          reason: `all ${mutationStripCount} scenario(s) were stripped by the mutation guard (mutating-expected-success, or a plan-declared Seed write without consent). Re-run with allow_mutations to exercise them, or the plan needs negative/non-mutating coverage.`
         });
       }
       const runId = `qa-loop-${args.topic}-${reportExists ? 2 : 1}`;

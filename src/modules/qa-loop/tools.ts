@@ -225,10 +225,8 @@ export function makeQaLoopTools(deps: QaLoopToolDeps) {
       // Classify every scenario; apply the mutation guard pre-dispatch.
       const scenarios: Record<string, ScenarioRecord> = {}
       const dispatchSet: string[] = []
-      let malformedCount = 0
       for (const { id, block, malformed } of splitScenarios(planText)) {
         if (malformed) {
-          malformedCount++
           // A suffixed/typo'd heading (e.g. `### BE-02a`) has no recognised scenario
           // prefix. Record it as a visible SKIP — never dispatched — so the report shows
           // it AND the state machine can still reach `final`. Recording it as `fail`
@@ -286,11 +284,19 @@ export function makeQaLoopTools(deps: QaLoopToolDeps) {
             "0 scenarios parsed from the plan — expected scenario headings like '### FE-01:' or '### BE-01:' (test-plan-format §Plan Structure). Check the plan's scenario heading format.",
         })
       }
-      // All headings malformed → the empty dispatch set is a heading-format problem, NOT a
-      // mutation-guard strip. allow_mutations cannot help (malformed blocks never dispatch
-      // regardless of the flag), so give the heading diagnosis rather than the misleading
-      // "re-run with allow_mutations" message the general all-stripped guard below emits.
-      if (dispatchSet.length === 0 && malformedCount === Object.keys(scenarios).length) {
+      // Diagnose an empty dispatch set by CAUSE, derived from the recorded scenario reasons
+      // rather than a block counter — so duplicate/case-colliding malformed ids (which dedupe
+      // in the keyed map) can't skew the classification. Every non-dispatched scenario carries
+      // a reason: a "malformed heading …" skip or a "mutation-guard: …" strip.
+      const mutationStripCount = Object.values(scenarios).filter((sc) =>
+        sc.reason?.startsWith("mutation-guard"),
+      ).length
+
+      // No mutation strips AND nothing to dispatch ⇒ every scenario is a malformed-heading
+      // skip. That is a heading-format problem, NOT a mutation-guard strip: allow_mutations
+      // cannot help (malformed blocks never dispatch regardless of the flag), so give the
+      // heading diagnosis rather than the misleading "re-run with allow_mutations" message.
+      if (dispatchSet.length === 0 && mutationStripCount === 0) {
         return JSON.stringify({
           status: "error",
           reason: `all ${Object.keys(scenarios).length} scenario heading(s) are malformed — no recognised prefix (expected '### FE-01:' / '### BE-01:' / '### SETUP-01:', per test-plan-format §Plan Structure). Fix the scenario headings.`,
@@ -299,7 +305,7 @@ export function makeQaLoopTools(deps: QaLoopToolDeps) {
       if (dispatchSet.length === 0) {
         return JSON.stringify({
           status: "error",
-          reason: `all ${Object.keys(scenarios).length} scenario(s) were stripped by the mutation guard (mutating-expected-success, or a plan-declared Seed write without consent). Re-run with allow_mutations to exercise them, or the plan needs negative/non-mutating coverage.`,
+          reason: `all ${mutationStripCount} scenario(s) were stripped by the mutation guard (mutating-expected-success, or a plan-declared Seed write without consent). Re-run with allow_mutations to exercise them, or the plan needs negative/non-mutating coverage.`,
         })
       }
 
