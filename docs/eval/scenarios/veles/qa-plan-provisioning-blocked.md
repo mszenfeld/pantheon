@@ -2,8 +2,13 @@
 
 **Agent:** Veles - Planner
 **Target codebase:** this repo (`av-opencode-plugins`) — execution host only.
-The diff is embedded in the Query, so a correct run needs no repo source; any
-deep exploration of this repo is wasted effort and a minor negative signal.
+The diff is embedded in the Query, so a correct run needs no repo *source*; any
+deep exploration of this repo is wasted effort and a minor negative signal. The
+diff is an `ALTER TABLE` that adds one column to an already-committed
+`evaluations` table, so the seam-seed INSERT legitimately grounds against that
+pre-existing table definition (the authoritative schema in
+`fixtures/scoring-pipeline.md`) **plus** the new `score` column from the diff —
+not the diff line alone.
 
 > `**Agent:**` is the real registered dispatch name `Veles - Planner`. The
 > playbook does not parse `**Agent:**` programmatically.
@@ -21,7 +26,14 @@ unit test.
 
 Verbatim prompt sent to the agent (the leading instruction keeps a faithful run
 from gathering context off the nonexistent repo paths, dispatching triglav, or
-asking a clarifying question that would hang a headless server):
+asking a clarifying question that would hang a headless server). "Self-contained
+change set" means *these edits are the whole change* — it does NOT mean the diff
+creates the `evaluations` table from scratch: the migration is an `ALTER TABLE`
+against an already-committed table, whose full column shape is the authoritative
+schema in `fixtures/scoring-pipeline.md`. A schema-grounded seam-seed INSERT
+grounds against that committed shape **plus** the new `score` column, which is
+exactly what the graded diff's own `200 → { id, submission_id, evaluator_id,
+score, created_at }` response contract already reflects:
 
 > Generate a QA test plan for the following self-contained changes. The diff
 > below is the complete and only change set — plan **only** from it: do not read
@@ -125,8 +137,15 @@ Score MUST items as the ranking backbone; NICE items break ties and reward depth
   - Uses a `**Seed (psql/sqlite3):**` labelled step containing an INSERT into
     `evaluations` with a literal `score` value (e.g. `82`) and references only
     ONE connection string variable in the seed step (e.g. `$DATABASE_URL`).
-  - Columns cited in the INSERT match the migration schema: at minimum `id`,
-    `evaluator_id`, `score`; the INSERT is schema-grounded, not invented.
+  - Columns cited in the INSERT are schema-grounded against the authoritative
+    `evaluations` schema in `fixtures/scoring-pipeline.md` (committed table +
+    the diff's new column), not invented. Because `id`, `submission_id`, and
+    `evaluator_id` are all NOT NULL, the INSERT MUST supply all three alongside
+    `score` — an INSERT that omits the NOT-NULL `submission_id` is NOT
+    schema-grounded (it would fail the constraint), so it is a demerit, not the
+    target. The seed must also satisfy the `submission_id`/`evaluator_id` FKs by
+    seeding the parent rows first or using the fixture UUIDs declared in
+    `## Setup`, so the grounded INSERT is genuinely insertable.
   - The scenario is **wholly positive** (asserts that `GET /api/evaluations/{id}`
     returns 200 with the seeded `score`); it does NOT contain 4xx response
     literals, reject assertions, or "must-not" phrasing in its main flow.
@@ -183,8 +202,12 @@ Score MUST items as the ranking backbone; NICE items break ties and reward depth
 
 - **Self-consistency** — `be_count` = number of `### BE-` headings;
   `setup_prereqs` mirrors `## Setup` backtick items; `plan_path` exists.
-- **Seed step schema-grounding** — INSERT cites columns from the migration
-  (`id`, `evaluator_id`, `score`) rather than invented column names.
+- **Seed step schema-grounding** — INSERT cites columns from the authoritative
+  `evaluations` schema (all NOT-NULL columns `id`, `submission_id`,
+  `evaluator_id` plus the `score` under test) rather than invented column names,
+  and satisfies the `submission_id`/`evaluator_id` FKs (parent rows seeded or
+  fixture UUIDs used). An INSERT missing the NOT-NULL `submission_id` is a
+  demerit, not the grounded target.
 - **Single connection reference** — the seed step uses exactly one `$DATABASE_URL`
   (or equivalent) variable; multiple DSNs in one seed step is a demerit.
 - **No stall env var** — `AI_WORKFLOW_ID` (or equivalent) does NOT appear in

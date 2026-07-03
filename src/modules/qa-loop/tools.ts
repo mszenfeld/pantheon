@@ -38,10 +38,18 @@ function sectionOf(id: string): "FE" | "BE" | "SETUP" {
 }
 
 /** Split the plan into per-scenario blocks keyed by scenario id. */
-function splitScenarios(planText: string): { id: string; block: string }[] {
+function splitScenarios(planText: string): { id: string; block: string; malformed?: boolean }[] {
   const lines = planText.split("\n")
-  const blocks: { id: string; block: string }[] = []
+  const blocks: { id: string; block: string; malformed?: boolean }[] = []
   let current: { id: string; lines: string[] } | null = null
+  // A heading that starts like a scenario prefix but has a trailing alphanumeric
+  // suffix after the number (e.g. `### FE-01a`) must NOT be silently folded into the
+  // previous scenario's body — a merge can smuggle a foreign body (e.g. a "blocked"
+  // assertion) into a seed-bearing block. Detect that malformed heading and surface it
+  // as its own zero-body block, tagged `malformed`, so qa_loop_start records it as a
+  // visible SKIP (never dispatched, never a phantom `fail`) rather than attaching it to
+  // the preceding scenario.
+  const MALFORMED_HEADING = /^#{2,4}\s+(?:FE|BE|SETUP)-\d+[A-Za-z0-9]/i
   for (const line of lines) {
     // Match the documented scenario heading (`### FE-01:` / `### BE-01:`,
     // test-plan-format §Plan Structure). Lenient on heading depth (##..####)
@@ -50,6 +58,13 @@ function splitScenarios(planText: string): { id: string; block: string }[] {
     if (m) {
       if (current) blocks.push({ id: current.id, block: current.lines.join("\n") })
       current = { id: (m[1] ?? "").toUpperCase(), lines: [line] }
+    } else if (MALFORMED_HEADING.test(line)) {
+      // Close the current scenario (do not absorb this heading's body) and emit the
+      // malformed heading as a standalone, id-carrying, zero-body block flagged malformed.
+      if (current) blocks.push({ id: current.id, block: current.lines.join("\n") })
+      const id = (/^#{2,4}\s+((?:FE|BE|SETUP)-\d+[A-Za-z0-9]*)/i.exec(line)?.[1] ?? "").toUpperCase()
+      blocks.push({ id, block: line, malformed: true })
+      current = null
     } else if (current) {
       current.lines.push(line)
     }
@@ -196,11 +211,40 @@ export function makeQaLoopTools(deps: QaLoopToolDeps) {
       // Classify every scenario; apply the mutation guard pre-dispatch.
       const scenarios: Record<string, ScenarioRecord> = {}
       const dispatchSet: string[] = []
-      for (const { id, block } of splitScenarios(planText)) {
+      for (const { id, block, malformed } of splitScenarios(planText)) {
+        if (malformed) {
+          // A suffixed/typo'd heading (e.g. `### BE-02a`) has no recognised scenario
+          // prefix. Record it as a visible SKIP — never dispatched — so the report shows
+          // it AND the state machine can still reach `final`. Recording it as `fail`
+          // (its heading text classifies non-mutating) would keep stillFailing() non-empty
+          // forever: no Zmora wave ever ingests it, so the loop would burn every iteration
+          // and corrupt the verdict/coverage. Mirrors Perun's sanitizer promise (perun.md
+          // Step 3: SKIP, reason "no recognised prefix", never dispatched).
+          scenarios[id] = {
+            qa_ids: [],
+            kind: "feature",
+            section: sectionOf(id),
+            mutating: false,
+            baseline: "skip",
+            current: "skip",
+            reason: "malformed heading — no recognised prefix (expected FE-/BE-/SETUP-NN)",
+          }
+          continue
+        }
         const { kind, mutating, expectsSuccess } = classifyScenario(block)
-        // Strip ONLY mutating scenarios expected to succeed; a negative-blocked
-        // mutation is kept (§7 expected-outcome rule, AC19/AC20).
-        const stripped = mutating && expectsSuccess && !allowMutations
+        // A plan-declared Seed block (`**Seed (psql/sqlite3):**`) is a fixture WRITE by
+        // definition — be-testing executes its fenced SQL before the request, for ANY
+        // write verb (INSERT / UPDATE / DELETE / TRUNCATE / UPSERT / …). Gate it on
+        // operator consent ALONE: never key on the specific verb, and never let a
+        // "blocked/reject/403/no-row" phrase elsewhere in the same block flip its
+        // expected-outcome and exempt the write. Marker-keyed, not disposition-keyed and
+        // not verb-keyed (qa-plan-authoring §"Write-safety is marker-keyed"). Every
+        // non-seed scenario keeps the §7 rule: strip only mutating-expected-success (a
+        // negative-blocked mutation is kept, the write never lands — AC19/AC20).
+        const isSeedWrite = /^\s*\*\*Seed \(psql\/sqlite3\):\*\*/im.test(block)
+        const stripped = isSeedWrite
+          ? !allowMutations
+          : mutating && expectsSuccess && !allowMutations
         scenarios[id] = {
           qa_ids: [],
           kind: kind as ScenarioKind,
@@ -208,7 +252,11 @@ export function makeQaLoopTools(deps: QaLoopToolDeps) {
           mutating,
           baseline: stripped ? "skip" : "fail",
           current: stripped ? "skip" : "fail",
-          reason: stripped ? "mutation-guard: mutating scenario expected to succeed" : null,
+          reason: stripped
+            ? isSeedWrite
+              ? "mutation-guard: plan-declared Seed write requires allow_mutations (seed-consent gate)"
+              : "mutation-guard: mutating scenario expected to succeed"
+            : null,
         }
         if (!stripped) dispatchSet.push(id)
       }
@@ -225,7 +273,7 @@ export function makeQaLoopTools(deps: QaLoopToolDeps) {
       if (dispatchSet.length === 0) {
         return JSON.stringify({
           status: "error",
-          reason: `all ${Object.keys(scenarios).length} scenario(s) were stripped by the mutation guard (mutating, expected to succeed). Re-run with allow_mutations to exercise them, or the plan needs negative/non-mutating coverage.`,
+          reason: `all ${Object.keys(scenarios).length} scenario(s) were stripped by the mutation guard (mutating-expected-success, or a plan-declared Seed write without consent). Re-run with allow_mutations to exercise them, or the plan needs negative/non-mutating coverage.`,
         })
       }
 

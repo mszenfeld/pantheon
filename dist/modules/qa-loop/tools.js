@@ -21,11 +21,17 @@ function splitScenarios(planText) {
   const lines = planText.split("\n");
   const blocks = [];
   let current = null;
+  const MALFORMED_HEADING = /^#{2,4}\s+(?:FE|BE|SETUP)-\d+[A-Za-z0-9]/i;
   for (const line of lines) {
     const m = /^#{2,4}\s+((?:FE|BE|SETUP)-\d+)\b/i.exec(line);
     if (m) {
       if (current) blocks.push({ id: current.id, block: current.lines.join("\n") });
       current = { id: (m[1] ?? "").toUpperCase(), lines: [line] };
+    } else if (MALFORMED_HEADING.test(line)) {
+      if (current) blocks.push({ id: current.id, block: current.lines.join("\n") });
+      const id = (/^#{2,4}\s+((?:FE|BE|SETUP)-\d+[A-Za-z0-9]*)/i.exec(line)?.[1] ?? "").toUpperCase();
+      blocks.push({ id, block: line, malformed: true });
+      current = null;
     } else if (current) {
       current.lines.push(line);
     }
@@ -138,9 +144,22 @@ function makeQaLoopTools(deps) {
       const disposition = reportExists ? "ADOPT" : "FRESH";
       const scenarios = {};
       const dispatchSet = [];
-      for (const { id, block } of splitScenarios(planText)) {
+      for (const { id, block, malformed } of splitScenarios(planText)) {
+        if (malformed) {
+          scenarios[id] = {
+            qa_ids: [],
+            kind: "feature",
+            section: sectionOf(id),
+            mutating: false,
+            baseline: "skip",
+            current: "skip",
+            reason: "malformed heading \u2014 no recognised prefix (expected FE-/BE-/SETUP-NN)"
+          };
+          continue;
+        }
         const { kind, mutating, expectsSuccess } = classifyScenario(block);
-        const stripped = mutating && expectsSuccess && !allowMutations;
+        const isSeedWrite = /^\s*\*\*Seed \(psql\/sqlite3\):\*\*/im.test(block);
+        const stripped = isSeedWrite ? !allowMutations : mutating && expectsSuccess && !allowMutations;
         scenarios[id] = {
           qa_ids: [],
           kind,
@@ -148,7 +167,7 @@ function makeQaLoopTools(deps) {
           mutating,
           baseline: stripped ? "skip" : "fail",
           current: stripped ? "skip" : "fail",
-          reason: stripped ? "mutation-guard: mutating scenario expected to succeed" : null
+          reason: stripped ? isSeedWrite ? "mutation-guard: plan-declared Seed write requires allow_mutations (seed-consent gate)" : "mutation-guard: mutating scenario expected to succeed" : null
         };
         if (!stripped) dispatchSet.push(id);
       }
@@ -161,7 +180,7 @@ function makeQaLoopTools(deps) {
       if (dispatchSet.length === 0) {
         return JSON.stringify({
           status: "error",
-          reason: `all ${Object.keys(scenarios).length} scenario(s) were stripped by the mutation guard (mutating, expected to succeed). Re-run with allow_mutations to exercise them, or the plan needs negative/non-mutating coverage.`
+          reason: `all ${Object.keys(scenarios).length} scenario(s) were stripped by the mutation guard (mutating-expected-success, or a plan-declared Seed write without consent). Re-run with allow_mutations to exercise them, or the plan needs negative/non-mutating coverage.`
         });
       }
       const runId = `qa-loop-${args.topic}-${reportExists ? 2 : 1}`;

@@ -67,3 +67,28 @@ describe("Perun Workflow 0 routing points at the QA loop", () => {
     expect(wf0).not.toMatch(/per Workflow 1\b(?!.*Loop)/)
   })
 })
+
+describe("Perun seed-consent gate doctrine (pinned against silent regression)", () => {
+  it("keeps allow_mutations false unless the Seeds fixtures marker is present, and never self-consents", () => {
+    // The ONLY human-consent leg of the seed-write path lives in perun.md — tools.ts merely
+    // enforces the allow_mutations flag (already tested). Deleting/rewording these bullets
+    // would let Perun run plan-declared DB writes without operator confirmation, with the rest
+    // of the suite green.
+    expect(perun).toContain("Keep `allow_mutations: false` UNLESS")
+    expect(perun).toContain("**Seeds fixtures:**")
+    expect(perun).toContain("only after the user confirms")
+    expect(perun).toContain("Never flip it silently")
+  })
+
+  it("stops the run on an error status or an empty dispatch_set", () => {
+    expect(perun).toContain('If `status` is `"error"`, or `dispatch_set` is empty, STOP the run.')
+  })
+
+  it("a plan-declared Seed block strips under the seed-consent gate regardless of blocked phrasing", () => {
+    // DOC-drift guard: the qa_loop_start contract note must describe the shipped marker-alone
+    // gate (a Seed block is a fixture write that strips on allow_mutations), not the old
+    // "negative-blocked scenarios always stay in" behavior the code no longer implements.
+    expect(perun).toContain("EXCEPT a plan-declared `**Seed (psql/sqlite3):**` block")
+    expect(perun).toContain("regardless of any blocked phrasing")
+  })
+})

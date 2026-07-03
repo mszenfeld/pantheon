@@ -288,31 +288,35 @@ available live rung is a coverage-honesty defect (Step 6.8 refutes it).
   unavoidable: `**Depends-on:** <seed ID>` AND the read's first assertion is a
   seed-existence check failing as *seed-missing*.
 
-**Seed write-safety (mutation-guard interaction).** The Phase-0 guard classifies over
-the ENTIRE scenario block (including `**Edge cases:**`) and strips only
-`mutating && expectsSuccess`. Two failure modes: (1) a clean-phrased seed IS stripped
-under the default `allow_mutations: false` — so any plan with a Seed step MUST emit the
-`## Setup` bullet `**Seeds fixtures:** BE-NN[, …] (requires allow_mutations)` (the
-marker Perun's consent gate keys on); (2) a seed whose block carries a BLOCKED-class
-token anywhere (*reject / block / deny / forbidden / unauthorized / must not / should
-not / no state change|row|change* or a `401`/`403`/`4xx` literal) classifies
-`expectsSuccess=false` and is NOT stripped — its INSERT lands even without
-`allow_mutations`. (Bare *invalid*/*negative* do NOT flip it.) Authoring rules:
-(a) a seed scenario keeps its ENTIRE block free of negative/blocked phrasing — every
-negative assertion or edge case goes in a SEPARATE non-mutating scenario (banning ALL
-negative-ish phrasing is deliberate safe over-coverage); (b) the dedicated throwaway
-target + throwaway DB is the ONLY reliable defense for seed writes — MANDATORY;
-(c) a READ-ONLY scenario (seedless read, `(unverified)` covered read,
-existence-check-only) keeps its ENTIRE block — assertions, edge cases,
-`**Coverage delta:**` prose — free of bare present-tense write verbs
-(*create/insert/update/write/save/delete/mutate/persist*): they classify the read as
-mutating and strip it, and a seedless plan has no consent-gate recovery. Phrase
-existence checks as *"assert a row with `<PK>=<v>` is present"* and deltas as *"the row
-must be seeded manually"* (past-tense and *seed/seeded* are safe).
+**Seed write-safety (mutation-guard interaction).** The Phase-0 guard treats a
+`**Seed (psql/sqlite3):**` block as a fixture WRITE by definition and strips it whenever
+`allow_mutations` is false — keyed on the marker ALONE, independent of the SQL verb
+(INSERT / UPDATE / DELETE / TRUNCATE / UPSERT / …) and independent of any blocked/negative
+phrasing in the block. So any plan with a Seed step MUST emit the `## Setup` bullet
+`**Seeds fixtures:** BE-NN[, …] (requires allow_mutations)` — the marker Perun's consent
+gate keys on; without it the seed strips under the default `allow_mutations: false` and its
+read-back then reports against an empty table (a false result), with no consent-gate
+recovery. Authoring rules: (a) a seed scenario keeps its ENTIRE block free of
+negative/blocked phrasing (*reject / block / deny / forbidden / unauthorized / must not /
+should not / no state change|row|change* or a `401`/`403`/`4xx` literal) — NOT for
+write-safety (the marker gate already covers the write regardless of phrasing) but for
+CLASSIFICATION HYGIENE: a blocked token flips the scenario's kind to `negative` and
+mis-routes its coverage bucket. Every negative assertion or edge case goes in a SEPARATE
+non-mutating scenario. (b) the dedicated throwaway target + throwaway DB is the ONLY reliable
+defense for seed writes — MANDATORY; (c) a READ-ONLY scenario (seedless read, `(unverified)`
+covered read, existence-check-only) carries NO Seed marker, so it is NOT covered by the
+marker gate — keep its ENTIRE block (assertions, edge cases, `**Coverage delta:**` prose)
+free of bare present-tense write verbs (*create/insert/update/write/save/delete/mutate/
+persist*): they classify the read as mutating and strip it via the `mutating && expectsSuccess`
+path, and a seedless plan has no consent-gate recovery. Phrase existence checks as *"assert a
+row with `<PK>=<v>` is present"* and deltas as *"the row must be seeded manually"* (past-tense
+and *seed/seeded* are safe).
 
 **Write-safety is marker-keyed, not disposition-keyed:** ANY plan-authored
 from-scratch DB write — an R1 seam-seed OR a `covered` stage-driving write (below) —
-MUST carry the `**Seed (psql/sqlite3):**` label and all rules above.
+MUST carry the `**Seed (psql/sqlite3):**` label and all rules above. The Phase-0 guard
+enforces exactly this: it strips a marked block on `!allow_mutations` alone, so the write's
+safety never depends on its SQL verb or its expected-outcome (blocked) disposition.
 
 **Propagation vs read-back (`**Coverage delta:**`).** A seam-seed INSERT proves the
 READ path, not any derivation the diff introduced UPSTREAM of the seed. When the
@@ -530,12 +534,15 @@ before saving. Confident-wrong claims cluster in these classes:
   not chosen over an executable live rung (R0-as-lazy-shortcut is a defect).
 - **Seam-seed scenarios (Step 4.7)** — refute: (i) INSERT schema-grounding (every
   column/enum cited from a committed source; an ungrounded seed is a coverage defect);
-  (ii) whole-block phrasing — a seed block carrying a BLOCKED-class token anywhere bypasses
-  the mutation guard (its INSERT lands unguarded); a READ-ONLY scenario whose block trips a
+  (ii) whole-block phrasing — a BLOCKED-class token in a seed block no longer lets the write
+  escape the guard (the marker gate strips a `**Seed (psql/sqlite3):**` block on
+  `!allow_mutations` regardless of phrasing OR verb), but it mis-classifies the scenario's
+  kind and mis-routes its coverage bucket; a READ-ONLY scenario whose block trips a
   bare present-tense write verb strips with no consent-gate recovery (Step 4.7 rule (c));
   (iii) marker completeness — any from-scratch write scenario missing the
-  `**Seed (psql/sqlite3):**` label + `**Seeds fixtures:**` Setup bullet either strips
-  silently (voiding a row still marked `covered`) or lands unguarded; (iv) an
+  `**Seed (psql/sqlite3):**` label + `**Seeds fixtures:**` Setup bullet strips silently under
+  the default `allow_mutations: false` (voiding a row still marked `covered`): the label is
+  what makes the write consent-gated and dispatchable at all; (iv) an
   `(unverified)` covered row with neither `**Coverage delta:**` nor an available hermetic
   pointer is the same defect class as an un-pointed `provisioning-blocked` row.
 - **Auth authority / token endpoint (Step 4.6)** — re-read the app's auth config with

@@ -199,4 +199,16 @@ describe("qa-plan-authoring skill", () => {
       "**A failed or inconclusive probe is not a license to guess:**",
     )
   })
+
+  it("Seed write-safety is marker-keyed, not verb- or disposition-keyed (SEC seed-gate)", () => {
+    // Pins the shipped tools.ts behavior: a `**Seed (psql/sqlite3):**` block strips on the
+    // marker ALONE. If this doctrine silently drifts back to "INSERT lands unguarded", the
+    // authoring skill would once again teach the opposite of the code.
+    expect(md).toContain("**Write-safety is marker-keyed, not disposition-keyed:**")
+    expect(md).toContain("strips a marked block on `!allow_mutations` alone")
+  })
+
+  it("Seed write-safety pins the Seeds fixtures consent marker (SEC seed-gate)", () => {
+    expect(md).toContain("**Seeds fixtures:** BE-NN[, …] (requires allow_mutations)")
+  })
 })

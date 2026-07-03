@@ -61,4 +61,13 @@ describe("test-plan-format skill", () => {
   it("Coverage Matrix Pointer cell allows a hermetic pointer on blocked rows (L4)", () => {
     expect(md).toContain("whose contract is unobservable live may add a")
   })
+
+  it("defines the Seeds fixtures consent marker as MANDATORY for any Seed step (TEST seed-gate)", () => {
+    // The marker Perun's seed-consent gate keys on. Pinned so the definition can't silently
+    // vanish and quietly disable the only consent surface for plan-declared DB writes.
+    expect(md).toContain("**Seeds fixtures marker.**")
+    expect(md).toContain(
+      "MANDATORY whenever any scenario carries a `**Seed (psql/sqlite3):**` step",
+    )
+  })
 })

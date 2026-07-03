@@ -17,6 +17,14 @@ Scenarios for picking the best model for the **Veles** planning agent, run via
   `$QA_BIND_*` it never declares (the dangling-reference regression) or that
   reuses one token across two principals. A dangling `$QA_BIND_*` is a hard
   `degenerate` gate here.
+- `qa-plan-provisioning-blocked.md` — **Layer 1**, public, self-contained. An embedded
+  diff whose derived `score` column is only written by an external AI workflow that
+  curl/psql/Playwright cannot mint. Discriminates the **`provisioning-blocked`
+  disposition + seam-seed (DB-seeded fixture) ladder**: grades whether the planner
+  dispositions the reachable-but-un-mintable propagation as `provisioning-blocked`
+  with a hermetic `path::test` pointer — instead of stalling on an un-provisionable
+  Required env var or hallucinating coverage. Companion fixture:
+  `fixtures/scoring-pipeline.md` (the authoritative `evaluations` schema).
 - `qa-plan-defect-grounding.md` — **Layer 1**, public. An embedded diff carrying a leftover
   `# TEMPORARY … asyncio.sleep(65)` artifact alongside the full intended status surface.
   Discriminates **deviance-normalization (marker shape)**: a plan encoding the bug as the

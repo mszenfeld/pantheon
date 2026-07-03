@@ -225,6 +225,148 @@ describe("qa_loop_start", () => {
     ))
     expect(res.status).toBe("error")
     expect(String(res.reason)).toMatch(/0 scenarios/)
+    // The guard must return BEFORE any side effects: no run_id minted and no
+    // pre-loop git ref created (capturePreLoopRef is never reached on this path).
+    expect(res.run_id).toBeUndefined()
+    expect(git(cwd, ["for-each-ref", "--format=%(refname)", "refs/qa-loop/pre/"])).toBe("")
+  })
+
+  it("seed INSERT is gated on allow_mutations alone, even with blocked-phrasing in the block", async () => {
+    // A plan-declared Seed INSERT is a fixture WRITE. A "blocked/403/no state change"
+    // phrase elsewhere in the same block must NOT flip its expected-outcome and exempt
+    // the write from the consent gate — without allow_mutations it must be stripped.
+    writeFileSync(
+      join(cwd, "docs/testing/plans/2026-06-26-demo-test-plan.md"),
+      [
+        "# Test Plan",
+        "",
+        "## BE Test Scenarios",
+        "",
+        "### BE-01: seeded order is visible",
+        "**Seed (psql/sqlite3):**",
+        "```sql",
+        "INSERT INTO orders (id, status) VALUES (1, 'new');",
+        "```",
+        "Then GET /orders/1 and assert 200. A missing row would be a 403 with no state change.",
+        "",
+      ].join("\n"),
+    )
+    const tools = makeQaLoopTools({ gate: fakeGate("perun"), state, cwd, resolveParentID: async (s) => s, assignIssueIds: noopAssignIssueIds })
+
+    // Without consent: the seed write is stripped despite the "403 / no state change"
+    // phrasing. It is the only scenario, so stripping it empties the dispatch set and the
+    // loud all-stripped guard fires — proving the seed was NOT exempted by the negative
+    // wording (the pre-fix bug would have kept it and returned ok with BE-01 dispatchable).
+    const resNo = resultJson(await tools.qa_loop_start.execute(
+      { plan_path: "docs/testing/plans/2026-06-26-demo-test-plan.md", topic: "demo", report_path: "docs/testing/reports/2026-06-26-demo-report.md" },
+      ctx("perun"),
+    ))
+    expect(resNo.status).toBe("error")
+    expect(String(resNo.reason)).toMatch(/mutation guard|allow_mutations/)
+
+    // With consent: the seed write is dispatched.
+    const state2 = new QaLoopState()
+    const tools2 = makeQaLoopTools({ gate: fakeGate("perun"), state: state2, cwd, resolveParentID: async (s) => s, assignIssueIds: noopAssignIssueIds })
+    const resYes = resultJson(await tools2.qa_loop_start.execute(
+      { plan_path: "docs/testing/plans/2026-06-26-demo-test-plan.md", topic: "demo", report_path: "docs/testing/reports/2026-06-26-demo-report.md", allow_mutations: true },
+      ctx("perun"),
+    ))
+    expect(resYes.status).toBe("ok")
+    expect(resYes.dispatch_set).toContain("BE-01")
+  })
+
+  it("a Seed block with a NON-INSERT write verb is gated on allow_mutations alone, even with blocked-phrasing", async () => {
+    // The seed-consent gate keys on the `**Seed (psql/sqlite3):**` marker ALONE, not on the
+    // write verb — so UPDATE / DELETE / TRUNCATE / INSERT OR REPLACE seed writes strip under
+    // the default allow_mutations:false exactly like INSERT, even when a "403 / no state
+    // change" phrase elsewhere in the block would otherwise flip expectsSuccess=false. A
+    // verb-keyed gate (INSERT-only) would let these destructive verbs bypass consent.
+    const seeds: Record<string, string> = {
+      UPDATE: "UPDATE users SET role = 'admin' WHERE id = 1;",
+      DELETE: "DELETE FROM users WHERE id = 1;",
+      TRUNCATE: "TRUNCATE audit_log;",
+      UPSERT: "INSERT OR REPLACE INTO orders (id, status) VALUES (1, 'new');",
+    }
+    for (const [verb, sql] of Object.entries(seeds)) {
+      writeFileSync(
+        join(cwd, "docs/testing/plans/2026-06-26-demo-test-plan.md"),
+        [
+          "# Test Plan",
+          "",
+          "## BE Test Scenarios",
+          "",
+          `### BE-01: seeded state via ${verb}`,
+          "**Seed (psql/sqlite3):**",
+          "```sql",
+          sql,
+          "```",
+          "Then GET /orders/1 and assert 200. A missing row would be a 403 with no state change.",
+          "",
+        ].join("\n"),
+      )
+      // Without consent: the seed write is stripped (only scenario → empty dispatch set → the
+      // loud all-stripped guard fires). A verb-keyed gate would instead return ok with BE-01
+      // dispatchable — the SEC bypass this test pins shut for every non-INSERT write verb.
+      const stNo = new QaLoopState()
+      const toolsNo = makeQaLoopTools({ gate: fakeGate("perun"), state: stNo, cwd, resolveParentID: async (s) => s, assignIssueIds: noopAssignIssueIds })
+      const resNo = resultJson(await toolsNo.qa_loop_start.execute(
+        { plan_path: "docs/testing/plans/2026-06-26-demo-test-plan.md", topic: "demo", report_path: "docs/testing/reports/2026-06-26-demo-report.md" },
+        ctx("perun"),
+      ))
+      expect(resNo.status, `${verb} seed must strip without consent`).toBe("error")
+      expect(String(resNo.reason)).toMatch(/mutation guard|allow_mutations/)
+
+      // With consent: the seed write is dispatched.
+      const stYes = new QaLoopState()
+      const toolsYes = makeQaLoopTools({ gate: fakeGate("perun"), state: stYes, cwd, resolveParentID: async (s) => s, assignIssueIds: noopAssignIssueIds })
+      const resYes = resultJson(await toolsYes.qa_loop_start.execute(
+        { plan_path: "docs/testing/plans/2026-06-26-demo-test-plan.md", topic: "demo", report_path: "docs/testing/reports/2026-06-26-demo-report.md", allow_mutations: true },
+        ctx("perun"),
+      ))
+      expect(resYes.status, `${verb} seed must dispatch with consent`).toBe("ok")
+      expect(resYes.dispatch_set).toContain("BE-01")
+    }
+  })
+
+  it("a suffixed heading (### FE-01a) is surfaced standalone, not merged into the previous scenario", async () => {
+    // The malformed heading must NOT absorb the prior scenario's tail. It becomes its own
+    // id-carrying block; the trailing content ('blocked' phrasing) stays out of the seed block.
+    writeFileSync(
+      join(cwd, "docs/testing/plans/2026-06-26-demo-test-plan.md"),
+      [
+        "# Test Plan",
+        "",
+        "## BE Test Scenarios",
+        "",
+        "### BE-01: GET /health returns 200",
+        "Send GET /health and assert a 200 smoke response.",
+        "",
+        "### BE-02a: malformed suffix heading",
+        "Send POST /orders with no token; expect 401 and no state change.",
+        "",
+      ].join("\n"),
+    )
+    const tools = makeQaLoopTools({ gate: fakeGate("perun"), state, cwd, resolveParentID: async (s) => s, assignIssueIds: noopAssignIssueIds })
+    const res = resultJson(await tools.qa_loop_start.execute(
+      { plan_path: "docs/testing/plans/2026-06-26-demo-test-plan.md", topic: "demo", report_path: "docs/testing/reports/2026-06-26-demo-report.md" },
+      ctx("perun"),
+    ))
+    expect(res.status).toBe("ok")
+    const s = state.load("perun")!
+    // The well-formed BE-01 stays classified as a sanity smoke (its body was not
+    // polluted by the malformed heading's 'blocked/401/no state change' tail).
+    expect(s.scenarios["BE-01"]!.kind).toBe("sanity")
+    // The malformed heading is present as its own scenario key (surfaced, not swallowed).
+    expect(Object.keys(s.scenarios)).toContain("BE-02A")
+    // ...but it is recorded as a visible SKIP with a "no recognised prefix" reason and is
+    // NEVER dispatched — recording it as `fail` would keep stillFailing() non-empty forever
+    // (no Zmora wave ever ingests it), so the loop could never reach `final` and the run
+    // verdict/coverage would corrupt. Only the well-formed BE-01 is dispatched.
+    expect(s.scenarios["BE-02A"]!.current).toBe("skip")
+    expect(s.scenarios["BE-02A"]!.baseline).toBe("skip")
+    expect(s.scenarios["BE-02A"]!.reason).toMatch(/no recognised prefix/)
+    expect(res.dispatch_set).not.toContain("BE-02A")
+    expect(res.dispatch_set).toContain("BE-01")
   })
 
   it("errors loudly when every scenario is stripped by the mutation guard", async () => {
@@ -240,5 +382,9 @@ describe("qa_loop_start", () => {
     ))
     expect(res.status).toBe("error")
     expect(String(res.reason)).toMatch(/mutation guard|allow_mutations/)
+    // The guard must return BEFORE any side effects: no run_id minted and no
+    // pre-loop git ref created (capturePreLoopRef is never reached on this path).
+    expect(res.run_id).toBeUndefined()
+    expect(git(cwd, ["for-each-ref", "--format=%(refname)", "refs/qa-loop/pre/"])).toBe("")
   })
 })

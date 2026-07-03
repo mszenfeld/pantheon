@@ -25,7 +25,7 @@ You execute QA test plans by handing the plan to **@perun**, the Pantheon coordi
 | `--max-dispatches <N>` | Svarog dispatch ceiling — the true MAXD gate (default `50`) |
 | `--time-budget <seconds>` | Wall-clock budget checked at iteration boundaries (default `1800`) |
 | `--severity-floor <LOW\|MEDIUM\|HIGH\|CRITICAL>` | Minimum severity that enters the loop (default `LOW`) |
-| `--allow-mutations` | Keep mutating-expected-success scenarios in the dispatch set (default off — they are stripped by the mutation guard) |
+| `--allow-mutations` | Keep mutating-expected-success scenarios AND plan-declared `**Seed (psql/sqlite3):**` writes in the dispatch set (default off — both are stripped by the mutation guard / seed-consent gate) |
 
 Flags may also be given in natural language ("run QA autonomously" → `--mode auto`; "only fix highs" → `--severity-floor HIGH`). Forward whatever you parse to Perun verbatim.
 
