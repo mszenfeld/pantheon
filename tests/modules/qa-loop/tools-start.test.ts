@@ -653,4 +653,46 @@ describe("qa_loop_start", () => {
     expect(s.scenarios["BE-01_EXTRA"]!.reason).toMatch(/no recognised prefix/)
     expect(res.dispatch_set).not.toContain("BE-01_EXTRA")
   })
+
+  it("surfaces a single-digit id heading with an underscore suffix (### BE-2_seed) instead of absorbing its body", async () => {
+    // `### BE-2_seed:` matches neither the well-formed (`\d+\b` blocked by `_`) nor the OLD
+    // malformed (`\d+[A-Za-z0-9]` — single digit + `_` is not alphanumeric) regex, so it used
+    // to fall through and absorb its body (a seed DELETE) into the preceding scenario — which
+    // then mis-classified BE-01 as a seed write and errored with a misleading allow_mutations
+    // diagnosis. It must be surfaced as its own visible SKIP, its body kept out of BE-01.
+    writeFileSync(
+      join(cwd, "docs/testing/plans/2026-06-26-demo-test-plan.md"),
+      [
+        "# Test Plan",
+        "",
+        "## BE Test Scenarios",
+        "",
+        "### BE-01: GET /health returns 200",
+        "Send GET /health and assert a 200 smoke response.",
+        "",
+        "### BE-2_seed: single-digit id with an underscore suffix",
+        "**Seed (psql/sqlite3):**",
+        "```sql",
+        "DELETE FROM users WHERE id = 1;",
+        "```",
+        "",
+      ].join("\n"),
+    )
+    const tools = makeQaLoopTools({ gate: fakeGate("perun"), state, cwd, resolveParentID: async (s) => s, assignIssueIds: noopAssignIssueIds })
+    const res = resultJson(await tools.qa_loop_start.execute(
+      { plan_path: "docs/testing/plans/2026-06-26-demo-test-plan.md", topic: "demo", report_path: "docs/testing/reports/2026-06-26-demo-report.md" },
+      ctx("perun"),
+    ))
+    expect(res.status).toBe("ok")
+    const s = state.load("perun")!
+    // The typo'd heading is surfaced as its own SKIP (full suffix kept in the id) …
+    expect(Object.keys(s.scenarios)).toContain("BE-2_SEED")
+    expect(s.scenarios["BE-2_SEED"]!.current).toBe("skip")
+    expect(s.scenarios["BE-2_SEED"]!.reason).toMatch(/no recognised prefix/)
+    // … and its seed DELETE body did NOT get absorbed into BE-01 (which stays a dispatched smoke).
+    expect(s.scenarios["BE-01"]!.kind).toBe("sanity")
+    expect(s.scenarios["BE-01"]!.current).not.toBe("skip")
+    expect(res.dispatch_set).toContain("BE-01")
+    expect(res.dispatch_set).not.toContain("BE-2_SEED")
+  })
 })

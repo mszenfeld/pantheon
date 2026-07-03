@@ -49,7 +49,13 @@ function splitScenarios(planText: string): { id: string; block: string; malforme
   // as its own zero-body block, tagged `malformed`, so qa_loop_start records it as a
   // visible SKIP (never dispatched, never a phantom `fail`) rather than attaching it to
   // the preceding scenario.
-  const MALFORMED_HEADING = /^#{2,4}\s+(?:FE|BE|SETUP)-\d+[A-Za-z0-9]/i
+  // Detect ANY non-well-formed scenario-prefix heading (a prefix + digits followed by any
+  // non-space, non-colon char), so a single-digit id with a non-alphanumeric suffix like
+  // `### BE-2_seed:` is surfaced too — `[A-Za-z0-9]` used to miss it (single digit, `_` not
+  // alphanumeric), letting the line fall through and silently absorb its body into the
+  // preceding scenario. `[^\s:]` matches the extraction regex below so detection and id
+  // capture stay in lockstep.
+  const MALFORMED_HEADING = /^#{2,4}\s+(?:FE|BE|SETUP)-\d+[^\s:]/i
   for (const line of lines) {
     // Match the documented scenario heading (`### FE-01:` / `### BE-01:`,
     // test-plan-format §Plan Structure). Lenient on heading depth (##..####)

@@ -21,7 +21,7 @@ function splitScenarios(planText) {
   const lines = planText.split("\n");
   const blocks = [];
   let current = null;
-  const MALFORMED_HEADING = /^#{2,4}\s+(?:FE|BE|SETUP)-\d+[A-Za-z0-9]/i;
+  const MALFORMED_HEADING = /^#{2,4}\s+(?:FE|BE|SETUP)-\d+[^\s:]/i;
   for (const line of lines) {
     const m = /^#{2,4}\s+((?:FE|BE|SETUP)-\d+)\b/i.exec(line);
     if (m) {
