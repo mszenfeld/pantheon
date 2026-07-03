@@ -15,6 +15,7 @@ function deriveCoverage(s) {
   const not_verified = { "auth-unverified": 0, "mutation-guard": 0, "tool-unavailable": 0 };
   for (const sc of Object.values(s.scenarios)) {
     if (sc.current === "skip") {
+      if (sc.reason?.startsWith("malformed heading")) continue;
       not_verified[routeSkip(sc.reason ?? void 0).bucket]++;
     } else {
       exercised[COVERAGE_BUCKET[sc.kind]]++;

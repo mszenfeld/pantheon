@@ -131,6 +131,22 @@ describe("qa_loop_ingest", () => {
     expect(s.coverage.routing_warnings.length).toBe(1)
   })
 
+  it("excludes a malformed-heading skip from the coverage rollup (not miscounted as tool-unavailable)", () => {
+    // A malformed-heading SKIP is a parse artifact (an authoring/heading-format defect,
+    // shown verbatim in the All Scenarios table), not a scenario that went unverified for a
+    // tooling reason. deriveCoverage must NOT count it in not_verified — otherwise it lands in
+    // the tool-unavailable catch-all and misreads a heading typo as a tooling gap.
+    const s = state.load("perun")!
+    // FE-09 → a malformed-heading skip (excluded); BE-01 → a genuine tool gap (counted, control).
+    s.scenarios["FE-09"]!.current = "skip"
+    s.scenarios["FE-09"]!.reason = "malformed heading — no recognised prefix (expected FE-/BE-/SETUP-NN)"
+    s.scenarios["BE-01"]!.current = "skip"
+    s.scenarios["BE-01"]!.reason = "psql client not installed"
+    // Only the genuine tooling gap is counted; the malformed heading is excluded entirely.
+    // The pre-fix default fall-through would have made this 2 (malformed miscounted here).
+    expect(deriveCoverage(s).not_verified["tool-unavailable"]).toBe(1)
+  })
+
   it("ADOPT: mints from start_at_qa_id", async () => {
     const tools = makeQaLoopTools({ gate: fakeGate("perun"), state, cwd: "/tmp", resolveParentID: async (s) => s, assignIssueIds })
     const res = resultJson(await tools.qa_loop_ingest.execute(

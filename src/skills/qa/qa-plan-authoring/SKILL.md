@@ -229,9 +229,10 @@ the token fails with every secret present.
   readable in the tree → declare `AUTHORITY`/`ISSUER` as a Required env var, ALSO list
   it in the binding's `Inputs:` (a recipe `$VAR` absent from that binding's `Inputs:`
   is rejected by `parse_plan`), and reference `$AUTHORITY` in the recipe. `$AUTHORITY`
-  must be the WHOLE authority (`Egress: $AUTHORITY`; recipe
-  `"$AUTHORITY/<tenant>/oauth2/v2.0/token"`); the pasted value is a bare `scheme://host`
-  with NO path — a paste-time contract. The `(unverified — confirm at run time)` tag +
+  must be the WHOLE authority, tenant-id INCLUDED (`Egress: $AUTHORITY`; recipe
+  `"$AUTHORITY/oauth2/v2.0/token"`); the pasted value is a bare authority
+  `scheme://host/<tenant-id>` — the tenant-id is part of the authority; no `oauth2/…`
+  endpoint path — a paste-time contract. The `(unverified — confirm at run time)` tag +
   the config key name is the last resort; never emit a guessed authority as grounded.
 - **Multi-principal.** The grounded authority is APP-level. A second-principal binding
   (Step 6.5) declares the SAME `$AUTHORITY`/`$ISSUER` in its OWN `Inputs:` and reuses

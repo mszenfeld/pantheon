@@ -28,6 +28,12 @@ export function deriveCoverage(s: Sidecar): Coverage {
   const not_verified = { "auth-unverified": 0, "mutation-guard": 0, "tool-unavailable": 0 }
   for (const sc of Object.values(s.scenarios)) {
     if (sc.current === "skip") {
+      // A malformed-heading skip is a PARSE artifact (an authoring/heading-format defect,
+      // surfaced verbatim in the All Scenarios table), not a real scenario that went
+      // unverified for an auth / mutation-guard / tooling reason. The not_verified taxonomy
+      // has no authoring bucket, so counting it would land it in the `tool-unavailable`
+      // catch-all and misread a heading typo as a tooling gap — exclude it from the rollup.
+      if (sc.reason?.startsWith("malformed heading")) continue
       not_verified[routeSkip(sc.reason ?? undefined).bucket]++
     } else {
       exercised[COVERAGE_BUCKET[sc.kind]]++
