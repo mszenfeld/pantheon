@@ -1,4 +1,5 @@
 import type { ScenarioRecord, Sidecar, StopCause, RunResult, SeverityFloor, IterationRecord } from "./types.js"
+import { MALFORMED_HEADING_REASON } from "./coverage.js"
 
 const SEVERITY_RANK: Record<SeverityFloor, number> = {
   LOW: 0,
@@ -177,7 +178,13 @@ export function resultOf(s: Sidecar): RunResult {
   const records = Object.values(s.scenarios)
   const anyPass = records.some((sc) => sc.current === "pass")
   const anyFail = records.some((sc) => sc.current === "fail")
-  const featureScenarios = records.filter((sc) => sc.kind === "feature")
+  // Exclude malformed-heading skips (parse artifacts, recorded kind:"feature") from the
+  // feature-verdict path, mirroring deriveCoverage's rollup exclusion — a typo'd heading must
+  // NOT flip the run verdict (e.g. Fail→NotVerified via allFeaturesSkipped). The verdict is a
+  // pure function of REAL (well-formed) scenarios.
+  const featureScenarios = records.filter(
+    (sc) => sc.kind === "feature" && sc.reason !== MALFORMED_HEADING_REASON,
+  )
   const anyFeaturePass = featureScenarios.some((sc) => sc.current === "pass")
   const allFeaturesSkipped =
     featureScenarios.length > 0 && featureScenarios.every((sc) => sc.current === "skip")

@@ -4,7 +4,7 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { resolve, sep } from "node:path";
 import { hashPlan } from "./plan-hash.js";
 import { classifyScenario } from "./classify.js";
-import { routeSkip } from "./coverage.js";
+import { routeSkip, MALFORMED_HEADING_REASON } from "./coverage.js";
 import { capturePreLoopRef, refExists, restoreFailRef, antiHardcodeDiff, undoToPreLoop } from "./git-ops.js";
 import { stepEnter, stepEvaluate, resultOf } from "./state-machine.js";
 import { renderReport } from "./report.js";
@@ -154,7 +154,7 @@ function makeQaLoopTools(deps) {
             mutating: false,
             baseline: "skip",
             current: "skip",
-            reason: "malformed heading \u2014 no recognised prefix (expected FE-/BE-/SETUP-NN)"
+            reason: MALFORMED_HEADING_REASON
           };
           continue;
         }

@@ -3,6 +3,7 @@ const COVERAGE_BUCKET = {
   sanity: "sanity",
   negative: "enforcement"
 };
+const MALFORMED_HEADING_REASON = "malformed heading \u2014 no recognised prefix (expected FE-/BE-/SETUP-NN)";
 function routeSkip(reason) {
   const r = (reason ?? "").toLowerCase();
   if (/auth|login|token|credential|unauthor/.test(r)) return { bucket: "auth-unverified", warn: false };
@@ -15,7 +16,7 @@ function deriveCoverage(s) {
   const not_verified = { "auth-unverified": 0, "mutation-guard": 0, "tool-unavailable": 0 };
   for (const sc of Object.values(s.scenarios)) {
     if (sc.current === "skip") {
-      if (sc.reason?.startsWith("malformed heading")) continue;
+      if (sc.reason === MALFORMED_HEADING_REASON) continue;
       not_verified[routeSkip(sc.reason ?? void 0).bucket]++;
     } else {
       exercised[COVERAGE_BUCKET[sc.kind]]++;
@@ -25,6 +26,7 @@ function deriveCoverage(s) {
 }
 export {
   COVERAGE_BUCKET,
+  MALFORMED_HEADING_REASON,
   deriveCoverage,
   routeSkip
 };

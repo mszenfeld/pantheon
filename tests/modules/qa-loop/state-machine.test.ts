@@ -4,6 +4,7 @@ import {
   stepEvaluate,
   resultOf,
 } from "../../../src/modules/qa-loop/state-machine.js"
+import { MALFORMED_HEADING_REASON } from "../../../src/modules/qa-loop/coverage.js"
 import type { Sidecar, ScenarioRecord, IterationRecord } from "../../../src/modules/qa-loop/types.js"
 
 function scenario(p: Partial<ScenarioRecord>): ScenarioRecord {
@@ -433,5 +434,29 @@ describe("resultOf — the §4 Result mapping (order Pass > NotVerified > Budget
       iterations: [iter({ n: 1, stop_cause: "regression" })],
     })
     expect(resultOf(s)).toBe("Fail")
+  })
+
+  it("a malformed-heading skip does NOT flip the verdict (parse artifact excluded from the feature path)", () => {
+    // A typo'd heading is recorded kind:"feature"/current:"skip". It must NOT participate in
+    // the verdict: adding one to a sanity-only-pass plan must not flip the result — mirroring
+    // deriveCoverage's rollup exclusion, the verdict is a pure function of REAL scenarios.
+    const withoutMalformed = base({
+      scenarios: { "BE-02": scenario({ kind: "sanity", baseline: "pass", current: "pass" }) },
+    })
+    const withMalformed = base({
+      scenarios: {
+        "BE-02": scenario({ kind: "sanity", baseline: "pass", current: "pass" }),
+        "FE-02A": scenario({
+          kind: "feature",
+          baseline: "skip",
+          current: "skip",
+          reason: MALFORMED_HEADING_REASON,
+        }),
+      },
+    })
+    // Same verdict either way — the parse artifact is invisible to resultOf (pre-fix it
+    // flipped Fail→NotVerified because the malformed skip was the sole feature scenario).
+    expect(resultOf(withMalformed)).toBe(resultOf(withoutMalformed))
+    expect(resultOf(withMalformed)).toBe("Fail")
   })
 })

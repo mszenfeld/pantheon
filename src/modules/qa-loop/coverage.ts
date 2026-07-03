@@ -6,6 +6,16 @@ export const COVERAGE_BUCKET: Record<ScenarioKind, keyof Coverage["exercised"]> 
   negative: "enforcement",
 }
 
+/**
+ * The exact reason string qa_loop_start records for a malformed-heading SKIP (a parse
+ * artifact, not a real scenario). SINGLE-SOURCED here so every place that must recognise it —
+ * the producer (`tools.ts` splitScenarios/qa_loop_start), the coverage-rollup exclusion
+ * (`deriveCoverage` below), and the verdict exclusion (`resultOf` in state-machine.ts) — keys
+ * on the identical bytes. A reword can never silently desync producer from consumers.
+ */
+export const MALFORMED_HEADING_REASON =
+  "malformed heading — no recognised prefix (expected FE-/BE-/SETUP-NN)"
+
 /** Route a SKIP/NEED_INFO reason to a not_verified bucket (§5). `warn` flags an unrecognized reason. */
 export function routeSkip(reason: string | undefined): { bucket: keyof Coverage["not_verified"]; warn: boolean } {
   const r = (reason ?? "").toLowerCase()
@@ -33,7 +43,7 @@ export function deriveCoverage(s: Sidecar): Coverage {
       // unverified for an auth / mutation-guard / tooling reason. The not_verified taxonomy
       // has no authoring bucket, so counting it would land it in the `tool-unavailable`
       // catch-all and misread a heading typo as a tooling gap — exclude it from the rollup.
-      if (sc.reason?.startsWith("malformed heading")) continue
+      if (sc.reason === MALFORMED_HEADING_REASON) continue
       not_verified[routeSkip(sc.reason ?? undefined).bucket]++
     } else {
       exercised[COVERAGE_BUCKET[sc.kind]]++

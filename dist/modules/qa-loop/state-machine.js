@@ -1,3 +1,4 @@
+import { MALFORMED_HEADING_REASON } from "./coverage.js";
 const SEVERITY_RANK = {
   LOW: 0,
   MEDIUM: 1,
@@ -109,7 +110,9 @@ function resultOf(s) {
   const records = Object.values(s.scenarios);
   const anyPass = records.some((sc) => sc.current === "pass");
   const anyFail = records.some((sc) => sc.current === "fail");
-  const featureScenarios = records.filter((sc) => sc.kind === "feature");
+  const featureScenarios = records.filter(
+    (sc) => sc.kind === "feature" && sc.reason !== MALFORMED_HEADING_REASON
+  );
   const anyFeaturePass = featureScenarios.some((sc) => sc.current === "pass");
   const allFeaturesSkipped = featureScenarios.length > 0 && featureScenarios.every((sc) => sc.current === "skip");
   if (!hasFailAtOrAboveFloor(s) && anyFeaturePass) return "Pass";

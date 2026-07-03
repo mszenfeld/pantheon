@@ -6,7 +6,7 @@ import type { ToolContext } from "@opencode-ai/plugin"
 import { makeQaLoopTools } from "../../../src/modules/qa-loop/tools.js"
 import { QaLoopState } from "../../../src/modules/qa-loop/sidecar.js"
 import type { Sidecar } from "../../../src/modules/qa-loop/types.js"
-import { deriveCoverage } from "../../../src/modules/qa-loop/coverage.js"
+import { deriveCoverage, MALFORMED_HEADING_REASON } from "../../../src/modules/qa-loop/coverage.js"
 
 function fakeGate(id: string) {
   return { isCoordinatorCaller: (s: string) => s === id, isSetupCaller: () => false }
@@ -139,7 +139,7 @@ describe("qa_loop_ingest", () => {
     const s = state.load("perun")!
     // FE-09 → a malformed-heading skip (excluded); BE-01 → a genuine tool gap (counted, control).
     s.scenarios["FE-09"]!.current = "skip"
-    s.scenarios["FE-09"]!.reason = "malformed heading — no recognised prefix (expected FE-/BE-/SETUP-NN)"
+    s.scenarios["FE-09"]!.reason = MALFORMED_HEADING_REASON
     s.scenarios["BE-01"]!.current = "skip"
     s.scenarios["BE-01"]!.reason = "psql client not installed"
     // Only the genuine tooling gap is counted; the malformed heading is excluded entirely.
