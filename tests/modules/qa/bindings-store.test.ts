@@ -237,7 +237,7 @@ describe("BindingsStore.writeBinding — validation", () => {
     )
   })
 
-  it("returns duplicate and keeps existing on second write", () => {
+  it("a second MINTED write of the same name stays duplicate and keeps the first value (minted is write-once)", () => {
     store.writeBinding("perun1", "QA_BIND_X", "v1", "plain", "minted-recipe")
     const result = store.writeBinding(
       "perun1",
@@ -248,6 +248,150 @@ describe("BindingsStore.writeBinding — validation", () => {
     )
     expect(result.status).toBe("duplicate")
     expect(store.getBinding("perun1", "QA_BIND_X")?.value.unwrap()).toBe("v1")
+  })
+})
+
+describe("BindingsStore.writeBinding — user-paste correction (mid-run overwrite)", () => {
+  let store: BindingsStore
+  beforeEach(() => {
+    store = new BindingsStore()
+  })
+
+  it("a differing user-paste of the same name OVERWRITES in place and returns updated", () => {
+    expect(
+      store.writeBinding("p1", "QA_TOKEN", "truncated", "secret", "user-paste")
+        .status,
+    ).toBe("ok")
+    const r2 = store.writeBinding(
+      "p1",
+      "QA_TOKEN",
+      "complete",
+      "secret",
+      "user-paste",
+    )
+    expect(r2.status).toBe("updated")
+    expect(store.getBinding("p1", "QA_TOKEN")?.value.unwrap()).toBe("complete")
+  })
+
+  it("a byte-identical user-paste re-write returns duplicate (no-op)", () => {
+    store.writeBinding("p1", "QA_TOKEN", "same", "secret", "user-paste")
+    const r2 = store.writeBinding(
+      "p1",
+      "QA_TOKEN",
+      "same",
+      "secret",
+      "user-paste",
+    )
+    expect(r2.status).toBe("duplicate")
+    expect(store.getBinding("p1", "QA_TOKEN")?.value.unwrap()).toBe("same")
+  })
+
+  it("a user-paste may NOT overwrite a minted QA_BIND_* value — returns immutable, minted value kept", () => {
+    store.writeBinding(
+      "p1",
+      "QA_BIND_TOKEN",
+      "minted",
+      "secret",
+      "minted-recipe",
+    )
+    const r2 = store.writeBinding(
+      "p1",
+      "QA_BIND_TOKEN",
+      "pasted",
+      "secret",
+      "user-paste",
+    )
+    expect(r2.status).toBe("immutable")
+    if (r2.status === "immutable") expect(r2.reason).toContain("minted")
+    expect(store.getBinding("p1", "QA_BIND_TOKEN")?.value.unwrap()).toBe(
+      "minted",
+    )
+  })
+
+  it("a user-paste may NOT overwrite a PINNED value mid-wave — returns immutable; the correction lands once released", () => {
+    store.writeBinding("p1", "QA_TOKEN", "v1", "secret", "user-paste")
+    const snap = store.pinSnapshot("p1")
+    const refused = store.writeBinding(
+      "p1",
+      "QA_TOKEN",
+      "v2",
+      "secret",
+      "user-paste",
+    )
+    expect(refused.status).toBe("immutable")
+    if (refused.status === "immutable")
+      expect(refused.reason).toContain("pinned")
+    expect(store.getBinding("p1", "QA_TOKEN")?.value.unwrap()).toBe("v1")
+    // After the scrubber releases its snapshot, the correction lands.
+    store.releaseSnapshot(snap.id)
+    const r3 = store.writeBinding(
+      "p1",
+      "QA_TOKEN",
+      "v2",
+      "secret",
+      "user-paste",
+    )
+    expect(r3.status).toBe("updated")
+    expect(store.getBinding("p1", "QA_TOKEN")?.value.unwrap()).toBe("v2")
+  })
+
+  it("overwriting an existing user-paste name works AT the global cap (no new slot consumed)", () => {
+    // 255 minted across 8 parents + 1 user-paste name → exactly 256 (at cap).
+    for (let p = 0; p < 8; p++) {
+      const n = p === 0 ? 31 : 32
+      for (let i = 0; i < n; i++) {
+        store.writeBinding(
+          `p${p}`,
+          `QA_BIND_X${i}`,
+          "v",
+          "plain",
+          "minted-recipe",
+        )
+      }
+    }
+    expect(
+      store.writeBinding("p0", "TEST_TOK", "v1", "secret", "user-paste").status,
+    ).toBe("ok")
+    // At the global cap: a brand-new name on a fresh parent is refused...
+    expect(
+      store.writeBinding("p9", "TEST_NEW", "v", "secret", "user-paste").status,
+    ).toBe("error")
+    // ...but a correction to the EXISTING user-paste name still lands.
+    const r = store.writeBinding("p0", "TEST_TOK", "v2", "secret", "user-paste")
+    expect(r.status).toBe("updated")
+    expect(store.getBinding("p0", "TEST_TOK")?.value.unwrap()).toBe("v2")
+  })
+
+  it("an overwrite does NOT inflate the global count (a stray increment would surface as a spurious at-cap rejection)", () => {
+    // 7 parents × 32 minted = 224, plus p0 with 30 minted + 1 user-paste = 255
+    // → exactly ONE free global slot below the 256 cap.
+    for (let p = 1; p <= 7; p++) {
+      for (let i = 0; i < 32; i++) {
+        store.writeBinding(
+          `p${p}`,
+          `QA_BIND_X${i}`,
+          "v",
+          "plain",
+          "minted-recipe",
+        )
+      }
+    }
+    for (let i = 0; i < 30; i++) {
+      store.writeBinding("p0", `QA_BIND_X${i}`, "v", "plain", "minted-recipe")
+    }
+    expect(
+      store.writeBinding("p0", "TEST_TOK", "v1", "secret", "user-paste").status,
+    ).toBe("ok")
+    // globalCount is now 255 (one below cap). Overwriting the user-paste name
+    // must NOT consume the last slot — a stray #globalCount++ on the overwrite
+    // branch would push it to 256 and spuriously reject the fresh write below.
+    expect(
+      store.writeBinding("p0", "TEST_TOK", "v2", "secret", "user-paste").status,
+    ).toBe("updated")
+    // The single free global slot must still be available.
+    expect(
+      store.writeBinding("p9", "TEST_NEW", "v", "secret", "user-paste").status,
+    ).toBe("ok")
   })
 })
 

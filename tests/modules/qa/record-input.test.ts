@@ -89,15 +89,47 @@ describe("record_input tool handler", () => {
     expect(store.getBinding("perun-session", "X")).toBeDefined()
   })
 
-  it("duplicate write is silently accepted (existing kept)", async () => {
+  it("a differing re-paste of the same name OVERWRITES and returns updated (the mid-run credential-correction path)", async () => {
     const { store, state, handler } = makeDeps("p1")
     await handler({ name: "X", value: "v1" }, makeContext("p1"))
     // Simulate round-end before the second write so the second call doesn't
-    // bump the dialog counter into a fresh round just to test duplicate semantics.
+    // bump the dialog counter into a fresh round just to test overwrite semantics.
     state.endDialogRound("p1")
     const r2 = await handler({ name: "X", value: "v2" }, makeContext("p1"))
+    expect(r2.status).toBe("updated")
+    expect(store.getBinding("p1", "X")?.value.unwrap()).toBe("v2")
+  })
+
+  it("a byte-identical re-paste is a no-op and returns ok (idempotent)", async () => {
+    const { store, state, handler } = makeDeps("p1")
+    await handler({ name: "X", value: "v1" }, makeContext("p1"))
+    state.endDialogRound("p1")
+    const r2 = await handler({ name: "X", value: "v1" }, makeContext("p1"))
     expect(r2.status).toBe("ok")
     expect(store.getBinding("p1", "X")?.value.unwrap()).toBe("v1")
+  })
+
+  it("a paste colliding with a minted QA_BIND_* value is rejected (immutable), never silently accepted", async () => {
+    const { store, handler } = makeDeps("p1")
+    // A prior execute_recipe minted this binding; a user paste must not clobber
+    // it — and the handler must surface an honest rejection, not a laundered ok.
+    store.writeBinding(
+      "p1",
+      "QA_BIND_TOKEN",
+      "minted-value",
+      "secret",
+      "minted-recipe",
+    )
+    const result = await handler(
+      { name: "QA_BIND_TOKEN", value: "pasted-value" },
+      makeContext("p1"),
+    )
+    expect(result.status).toBe("rejected")
+    if (result.status === "rejected")
+      expect(result.reason).toContain("immutable")
+    expect(store.getBinding("p1", "QA_BIND_TOKEN")?.value.unwrap()).toBe(
+      "minted-value",
+    )
   })
 })
 

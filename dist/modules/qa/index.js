@@ -282,12 +282,13 @@ const AppVerkQAPlugin = async ({ client }) => {
           "Available only to Perun, invoked when parsing user replies during mid-run dialog. The value is stored as type=secret, source=user-paste \u2014 it is scrubbed from any specialist stderr that propagates back through the plugin.",
           "",
           "Result shape (JSON-stringified):",
-          '- `{ status: "ok" }` \u2014 recorded (also returned for duplicates, idempotent).',
-          '- `{ status: "rejected", reason }` \u2014 name failed denylist/regex check, or value failed charset/length validation.'
+          '- `{ status: "ok" }` \u2014 recorded (a new value, or a byte-identical re-paste \u2014 idempotent).',
+          '- `{ status: "updated" }` \u2014 a re-paste of an already-recorded name REPLACED the stored value; the corrected value now takes effect. Acknowledge as "Updated <NAME> (<N> chars)". This is the recovery path for a mistyped/expired credential mid-run.',
+          '- `{ status: "rejected", reason }` \u2014 name failed the denylist/regex check, the value failed charset/length validation, OR the name holds an immutable minted/pinned value that a paste may not overwrite.'
         ].join("\n"),
         args: {
           name: tool.schema.string().describe(
-            'Env var name (regular identifier, not necessarily QA_BIND_*), e.g. "TEST_USER_EMAIL". Must match /^[A-Z_][A-Z0-9_]*$/ and never a process-control name (PATH, NODE_OPTIONS, ...). Credential-prefixed names (AWS_, SUPABASE_, DATABASE_, ...) are accepted only when the parsed plan declares them as a binding Input; otherwise rejected.'
+            'Env var name (regular identifier, not necessarily QA_BIND_*), e.g. "TEST_USER_EMAIL". Must match /^[A-Z_][A-Z0-9_]*$/ and never a process-control name (PATH, NODE_OPTIONS, ...). Credential-prefixed names (AWS_, SUPABASE_, DATABASE_, ...) are accepted only when the parsed plan declares them \u2014 as a binding Input OR a Required environment variable (registered by a prior preflight call); otherwise rejected.'
           ),
           value: tool.schema.string().describe(
             "Value pasted by the user. Stored as type=secret, source=user-paste. Max 4096 chars; restricted charset (no control bytes)."

@@ -12,7 +12,9 @@ export interface BindingEntry {
 
 export type WriteResult =
   | { status: "ok" }
+  | { status: "updated" }
   | { status: "duplicate" }
+  | { status: "immutable"; reason: string }
   | { status: "error"; reason: string }
 
 export interface BindingSnapshot {
@@ -254,8 +256,42 @@ export class BindingsStore {
       parentMap = new Map()
       this.#map.set(parentID, parentMap)
     }
-    if (parentMap.has(name)) {
-      return { status: "duplicate" }
+    const existing = parentMap.get(name)
+    if (existing !== undefined) {
+      // A byte-identical re-write is a true idempotent no-op for ANY source.
+      if (existing.value.unwrap() === stored) {
+        return { status: "duplicate" }
+      }
+      // The value DIFFERS. A minted re-mint keeps the first value: QA_BIND_*
+      // bindings are write-once and execute_recipe treats any non-error as ok.
+      if (source === "minted-recipe") {
+        return { status: "duplicate" }
+      }
+      // Incoming is a user paste carrying a CORRECTED value. It may replace an
+      // existing user-paste value — re-pasting a truncated/expired credential
+      // mid-run is the whole point — but it must NEVER overwrite a minted
+      // QA_BIND_* value, nor an entry a snapshot has pinned (the scrubber may
+      // be reading it mid-wave — CWE-362 / CWE-672). Those stay immutable.
+      if (
+        existing.source === "minted-recipe" ||
+        this.isPinned(parentID, name)
+      ) {
+        const kind = existing.source === "minted-recipe" ? "minted" : "pinned"
+        return {
+          status: "immutable",
+          reason: `name '${name}' holds an immutable ${kind} value and cannot be overwritten by paste`,
+        }
+      }
+      // Both user-paste, unpinned → overwrite in place. The name already counts
+      // against the caps, so #globalCount is left untouched; createdAt is
+      // refreshed so the corrected value gets a fresh TTL window.
+      parentMap.set(name, {
+        value: new Secret(stored),
+        type,
+        source,
+        createdAt: Date.now(),
+      })
+      return { status: "updated" }
     }
     if (parentMap.size >= PER_PARENT_CAP) {
       return {

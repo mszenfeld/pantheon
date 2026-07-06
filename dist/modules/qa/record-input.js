@@ -22,6 +22,7 @@ function makeRecordInputHandler(deps) {
       { declaredInput }
     );
     if (write.status === "ok") return { status: "ok" };
+    if (write.status === "updated") return { status: "updated" };
     if (write.status === "duplicate") return { status: "ok" };
     return { status: "rejected", reason: write.reason };
   };

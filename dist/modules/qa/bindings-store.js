@@ -173,8 +173,28 @@ class BindingsStore {
       parentMap = /* @__PURE__ */ new Map();
       this.#map.set(parentID, parentMap);
     }
-    if (parentMap.has(name)) {
-      return { status: "duplicate" };
+    const existing = parentMap.get(name);
+    if (existing !== void 0) {
+      if (existing.value.unwrap() === stored) {
+        return { status: "duplicate" };
+      }
+      if (source === "minted-recipe") {
+        return { status: "duplicate" };
+      }
+      if (existing.source === "minted-recipe" || this.isPinned(parentID, name)) {
+        const kind = existing.source === "minted-recipe" ? "minted" : "pinned";
+        return {
+          status: "immutable",
+          reason: `name '${name}' holds an immutable ${kind} value and cannot be overwritten by paste`
+        };
+      }
+      parentMap.set(name, {
+        value: new Secret(stored),
+        type,
+        source,
+        createdAt: Date.now()
+      });
+      return { status: "updated" };
     }
     if (parentMap.size >= PER_PARENT_CAP) {
       return {
