@@ -211,4 +211,35 @@ describe("qa-plan-authoring skill", () => {
   it("Seed write-safety pins the Seeds fixtures consent marker (SEC seed-gate)", () => {
     expect(md).toContain("**Seeds fixtures:** BE-NN[, …] (requires allow_mutations)")
   })
+
+  it("Step 6.5 makes account-existence a first-class HUMAN-ONLY precondition, not misreadable prose (provisioning-delegation)", () => {
+    // Upstream root cause of the i-need-cv auto-provision improvisation: the plan buried
+    // "create test users … if necessary" in free prose because authoring had no account-existence
+    // class. preflight verifies credential VALUE presence, never account existence.
+    expect(md).toContain(
+      "Account existence is a human prerequisite that preflight cannot verify",
+    )
+    expect(md).toContain("account existence is a HUMAN-ONLY precondition")
+    expect(md).toContain("credential-presence ≠ account-existence")
+    // an unproducible account demotes its scenarios to provisioning-blocked, never agent-provisioned
+    expect(md).toContain("provisioning-blocked")
+  })
+
+  it("Step 5 Setup inference declares a scenario auth credential, keyed on scenarios not the diff (undeclared-auth-credential)", () => {
+    // Root cause of the ai-score session: a BE-only diff (aiScore filter + fence-strip) added no
+    // new `os.environ[...]`, so the diff-keyed Setup bullets fired nothing — yet every scenario
+    // carried `Authorization: Bearer <token>`. preflight([]) then passed trivially and the missing
+    // credential surfaced only mid-run as NEED_INFO. This bullet keys the declaration on the
+    // authored SCENARIOS.
+    expect(md).toContain(
+      "Any scenario you write that needs an authenticated call → declare its credential",
+    )
+    expect(md).toContain("keyed on the SCENARIOS, not only the diff")
+    // preflight([]) trivially passing on the empty list is named as the failure mode
+    expect(md).toContain("`preflight([])` passes trivially on the empty list")
+    // cross-links the canonical rule in test-plan-format
+    expect(md).toContain(
+      'see `test-plan-format` Setup Rules ("A scenario auth credential MUST be declared in `## Setup`")',
+    )
+  })
 })

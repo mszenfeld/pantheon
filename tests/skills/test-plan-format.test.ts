@@ -70,4 +70,28 @@ describe("test-plan-format skill", () => {
       "MANDATORY whenever any scenario carries a `**Seed (psql/sqlite3):**` step",
     )
   })
+
+  it("Setup Rules carry the account-existence-is-a-prerequisite rule (provisioning-delegation)", () => {
+    // Peer to qa-plan-authoring Step 6.5: preflight verifies credential presence, never account
+    // existence, so an auth-account precondition must be an imperative human Setup prerequisite.
+    expect(md).toContain("Account existence is a human prerequisite, not a value.")
+    expect(md).toContain("verifies credential *presence*, never account *existence*")
+  })
+
+  it("Setup Rules mandate declaring a scenario auth credential up front (undeclared-auth-credential)", () => {
+    // Root cause of the ai-score session: scenarios carried `Authorization: Bearer <token>`
+    // but `## Setup` declared no Required env var / binding, so `preflight([])` returned ok on
+    // the empty list and the missing credential only surfaced mid-run as NEED_INFO on every
+    // scenario. This rule moves the gap to preflight time via a declared NAME.
+    expect(md).toContain("A scenario auth credential MUST be declared in `## Setup`.")
+    expect(md).toContain("Authorization: Bearer <token>")
+    // both canonical Setup forms are named (static env var / dynamic binding)
+    expect(md).toContain("**Required environment variables:**` NAME")
+    expect(md).toContain("**Bindings:**` `QA_BIND_*` entry")
+    // explicitly the belt-and-suspenders COMPLEMENT to injection, not the injection cause
+    expect(md).toContain("belt-and-suspenders COMPLEMENT to shell-env injection, not its cause")
+    expect(md).toContain(
+      "reaches every `zmora-*` child through the `shell.env` hook regardless of declaration",
+    )
+  })
 })
