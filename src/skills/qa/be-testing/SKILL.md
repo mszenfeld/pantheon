@@ -54,6 +54,8 @@ For each BE scenario from the test plan:
 6. **Execute edge cases** — run each edge case as a sub-test
 7. **Record result** — pass/fail with response details (include the seed outcome when present)
 
+**Teardown blocks.** A `**Teardown (psql/sqlite3):**` block executes exactly like a Seed — the fenced SQL via the step's ONE plan-declared connection reference (`psql "$DATABASE_URL" -c '<SQL>'`) — but it UN-SEEDS what the Seed created. When Perun dispatches a task that is ONLY a teardown (the finalize teardown wave, run after all scenarios), run its SQL and report the un-seed outcome. A failed teardown is surfaced (so the operator can finish it by hand) but NEVER changes a scenario's pass/fail — it is cleanup, not a test.
+
 ---
 
 ## Tag handling (plan grounding tags)

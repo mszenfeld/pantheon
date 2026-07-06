@@ -95,9 +95,15 @@ A `provisioning-blocked` row MUST carry, in its Pointer cell, a `**Setup prerequ
 
 **Seed (psql/sqlite3):** *(optional — only for a plan-authored from-scratch write, Step 4.7)*
 ```sql
-<single INSERT statement, schema-grounded (file:line)>
+<single IDEMPOTENT INSERT (… ON CONFLICT DO NOTHING), schema-grounded (file:line), tagged with a run-unique discriminator>
 ```
-*(Executed FIRST via exactly ONE plan-declared connection reference — e.g. `psql "$DATABASE_URL" -c '<SQL>'`, the `$VAR`/DSN declared under `## Setup` — no other target. Requires the `## Setup` `**Seeds fixtures:**` bullet.)*
+*(Executed FIRST via exactly ONE plan-declared connection reference — e.g. `psql "$DATABASE_URL" -c '<SQL>'`, the `$VAR`/DSN declared under `## Setup` — no other target. Requires the `## Setup` `**Seeds fixtures:**` bullet. MUST be idempotent — the loop re-runs the plan on the final pass before the single teardown, so a fixed-PK INSERT would collide on its second run.)*
+
+**Teardown (psql/sqlite3):** *(optional — pairs with the Seed to make it AUTO-REVERTING; Step 4.7)*
+```sql
+<DELETE that removes EXACTLY what the Seed created, keyed by the SAME run-unique discriminator>
+```
+*(Executed LAST, via the SAME single plan-declared connection reference as the Seed. A paired Teardown + a LOCAL `base-url` makes the Seed run BY DEFAULT — no `allow_mutations` — because the loop runs this to un-seed at finalize (the teardown wave). A Seed with NO Teardown, or a NON-LOCAL `base-url`, stays consent-gated behind `allow_mutations`. Scope the discriminator so the DELETE can never touch a row the Seed did not create.)*
 
 **Method:** <HTTP method> <full URL or path>
 **Headers:** <required headers, e.g. Content-Type: application/json>
@@ -161,7 +167,7 @@ guarantees — Step 4.7).
 - **IPv6 hosts are not yet supported in DSNs; use an IPv4 address or hostname.**
 - **Env var names.** Must match `^[A-Z_][A-Z0-9_]*$`. Bullets that fail the regex are ignored with a warning.
 - **Minimize prerequisites.** Every `**Required environment variables:**` name and every binding `Inputs:` `$VAR` MUST be referenced by at least one scenario or recipe — drop unreferenced prerequisites; they inflate the preflight wall for nothing.
-- **Seeds fixtures marker.** `**Seeds fixtures:** BE-NN[, BE-NN…] (requires allow_mutations)` is a `## Setup` bullet that is MANDATORY whenever any scenario carries a `**Seed (psql/sqlite3):**` step (an R1 seam-seed OR a covered stage-driving write — authoring Step 4.7). It is the defined marker Perun's seed-consent gate keys on; omitting it means the seed strips silently under the mutation guard or the run stalls.
+- **Seeds fixtures marker.** `**Seeds fixtures:** BE-NN[, BE-NN…] (auto-reverts with a paired Teardown on a local base-url; else requires allow_mutations)` is a `## Setup` bullet that is MANDATORY whenever any scenario carries a `**Seed (psql/sqlite3):**` step (an R1 seam-seed OR a covered stage-driving write — authoring Step 4.7). It is the marker Perun surfaces to the operator; a seed that pairs a `**Teardown (psql/sqlite3):**` on a local `base-url` runs BY DEFAULT and is un-seeded at finalize, while a Seed with no Teardown (or a non-local `base-url`) strips under the mutation guard until `allow_mutations`. Omitting the marker hides that the run seeds at all.
 - **A scenario auth credential MUST be declared in `## Setup`.** If ANY scenario header carries an auth credential — `Authorization: Bearer <token>`, an `X-API-Key`/`Api-Key` header, or a session cookie — that credential MUST be declared under `## Setup`, in ONE of the two canonical forms, so `preflight` catches it UP FRONT and registers the declared NAME (never a placeholder like `<token>`):
   - a **static** credential the human supplies (a long-lived PAT, a pre-minted bearer) → a `**Required environment variables:**` NAME (e.g. `QA_API_BEARER_TOKEN`), and the scenario header references it by env var (`Authorization: Bearer $QA_API_BEARER_TOKEN`) — NOT the literal `<token>`; or
   - a **dynamic** credential minted at QA time from a login endpoint → a `**Bindings:**` `QA_BIND_*` entry (Auth-authority grounding rules apply), and the header references `$QA_BIND_<NAME>`.
@@ -412,4 +418,5 @@ Before saving the plan, verify:
 - [ ] If the Changes Summary names ≥2 statuses OR any changed surface is `provisioning-blocked`, `## Coverage Matrix` has one row per status and per changed external surface, each with exactly one disposition (`covered` / `blocked-by` / `out-of-scope` + harness-property reason / `provisioning-blocked` + Setup-prerequisite and/or `hermetic:` pointer)
 - [ ] No changed surface with a curl/psql/Playwright interface or effect is dispositioned `out-of-scope` (reachable ⇒ `covered`/`blocked-by`/`provisioning-blocked`)
 - [ ] Every scenario carrying `**Seed (psql/sqlite3):**`: `## Setup` carries `**Seeds fixtures:**`, the seed has exactly ONE plan-declared connection reference, and the block is free of BLOCKED-class negative phrasing (Step 4.7 rule (a))
+- [ ] Prefer a paired `**Teardown (psql/sqlite3):**` for every Seed so it AUTO-REVERTS on a local `base-url` (runs by default, un-seeded at finalize); the Teardown uses the SAME connection reference and deletes EXACTLY the seeded rows via the same run-unique discriminator. A Seed with no Teardown needs `allow_mutations` and leaves its rows behind.
 - [ ] Every read-only scenario (no Seed step) keeps its entire block free of bare present-tense write verbs (create/insert/update/write/save/delete/mutate/persist — Step 4.7 rule (c))

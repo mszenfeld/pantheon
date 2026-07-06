@@ -209,7 +209,34 @@ describe("qa-plan-authoring skill", () => {
   })
 
   it("Seed write-safety pins the Seeds fixtures consent marker (SEC seed-gate)", () => {
-    expect(md).toContain("**Seeds fixtures:** BE-NN[, …] (requires allow_mutations)")
+    expect(md).toContain("**Seeds fixtures:** BE-NN[, …] (auto-reverts with a paired Teardown on a local base-url; else requires allow_mutations)")
+  })
+
+  it("§8 teaches the auto-reverting seed (paired Teardown) as the DEFAULT shape (autorevert)", () => {
+    // The new default: a Seed with a paired Teardown on a local base-url runs WITHOUT
+    // allow_mutations and is un-seeded at finalize. If this drifts, authoring would again
+    // teach seeding as a consent-gated exception, contradicting the shipped tools.ts default.
+    expect(md).toContain("**Auto-reverting seed (paired Teardown) — the DEFAULT shape.**")
+    expect(md).toContain("run-unique discriminator")
+    // The discriminator must scope the DELETE (never an unscoped TRUNCATE).
+    expect(md).toContain("an unscoped `DELETE`/`TRUNCATE` is a defect")
+  })
+
+  it("§8 requires the auto-reverting seed to be IDEMPOTENT (re-runs on the final pass) (autorevert-idempotent)", () => {
+    // The loop re-runs the whole plan on the authoritative final pass before the single teardown,
+    // so a fixed-PK INSERT collides on its 2nd run → false FAIL. If this rule drifts, the marquee
+    // "modify then revert" flow silently mis-fails on any non-idempotent seed.
+    expect(md).toContain("the Seed MUST be IDEMPOTENT")
+    // Substring kept within one source line (the prose is hard-wrapped at ~col 90).
+    expect(md).toContain("the authoritative final pass (and on each retest)")
+  })
+
+  it("§8 requires the seed's DSN to be the same local/throwaway instance as base-url (autorevert-dsn)", () => {
+    // Phase-0 enforces the local floor on base-url only (it can't resolve the $VAR DSN), so a seed
+    // whose DSN points at a shared/prod DB would auto-write there. Pinned so the authoring rule
+    // that closes this residual can't silently vanish.
+    expect(md).toContain("declared connection DSN MUST point at the SAME local/throwaway instance as `base-url`")
+    expect(md).toContain("it cannot resolve the `$VAR` DSN")
   })
 
   it("Step 6.5 makes account-existence a first-class human precondition with a sanctioned provisioning-recipe escape (provisioning-delegation)", () => {

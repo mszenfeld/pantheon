@@ -71,6 +71,15 @@ describe("test-plan-format skill", () => {
     )
   })
 
+  it("§8 defines the paired Teardown block that makes a seed auto-reverting (TEST teardown)", () => {
+    // The reversal half of "modify then revert": a Seed with a paired Teardown on a local
+    // base-url runs by default and is un-seeded at finalize. Pinned so the block spec + the
+    // discriminator-scoping safety rule can't silently vanish.
+    expect(md).toContain("**Teardown (psql/sqlite3):**")
+    expect(md).toContain("AUTO-REVERTING")
+    expect(md).toContain("Scope the discriminator so the DELETE can never touch a row the Seed did not create")
+  })
+
   it("Setup Rules carry the account-existence-is-a-prerequisite rule (provisioning-delegation)", () => {
     // Peer to qa-plan-authoring Step 6.5: preflight verifies credential presence, never account
     // existence, so an auth-account precondition must be an imperative human Setup prerequisite.

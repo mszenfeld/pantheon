@@ -93,6 +93,36 @@ describe("Perun seed-consent gate doctrine (pinned against silent regression)", 
   })
 })
 
+describe("Perun auto-reverting mutation doctrine (§8 — pinned against silent regression)", () => {
+  it("teaches the seed-then-revert default: auto-reverting seeds run without allow_mutations, non-local/irreversible stay gated", () => {
+    // The user's ask: default to modify-then-revert, not refuse. A Seed/mutation with a paired
+    // Teardown on a LOCAL base-url runs by default and is un-seeded at finalize; irreversible or
+    // non-local writes keep the allow_mutations gate. Deleting this bullet would silently revert
+    // the default back to refuse-and-strip.
+    expect(perun).toContain("auto-reverting default (§8)")
+    expect(perun).toContain("AUTO-REVERTING")
+    expect(perun).toContain("`auto_reverting`")
+    // The non-local floor: off-localhost writes are never auto-run on a blanket default.
+    expect(perun).toContain("targets a NON-LOCAL host")
+  })
+
+  it("mandates the finalize teardown wave so the DB is actually reverted (the point of the feature)", () => {
+    // teardowns_pending from finalize MUST drive a zmora-be un-seed wave — otherwise seeds
+    // persist and "modify then revert" is a lie. Also pins the corrected undo semantics.
+    expect(perun).toContain("Teardown wave (§8)")
+    expect(perun).toContain("teardowns_pending")
+    expect(perun).toContain("seeds reverted")
+    // The undo ref restores FILES only; DB rows revert via the teardown wave.
+    expect(perun).toContain("FILES only")
+  })
+
+  it("bars Perun from self-authoring the Seed/Teardown blocks (Veles's lane) and ad-hoc Stribog seeding", () => {
+    // The i-need-cv friction was Perun improvising a Stribog seed. The fix routes a missing
+    // fixture back to planning (a declared Seed+Teardown), never an ad-hoc mutation.
+    expect(perun).toContain("do not ad-hoc it via Stribog")
+  })
+})
+
 describe("Perun provisioning doctrine: unprompted barred, plan-declared consent path sanctioned (pinned)", () => {
   it("keeps ad-hoc provisioning / fabricated creds / invented channel barred while opening the consent path", () => {
     // Real i-need-cv session: the user (harness owner) authorised account creation TWICE and was

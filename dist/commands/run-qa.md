@@ -25,7 +25,7 @@ You execute QA test plans by handing the plan to **@perun**, the Pantheon coordi
 | `--max-dispatches <N>` | Svarog dispatch ceiling — the true MAXD gate (default `50`) |
 | `--time-budget <seconds>` | Wall-clock budget checked at iteration boundaries (default `1800`) |
 | `--severity-floor <LOW\|MEDIUM\|HIGH\|CRITICAL>` | Minimum severity that enters the loop (default `LOW`) |
-| `--allow-mutations` | Keep mutating-expected-success scenarios AND plan-declared `**Seed (psql/sqlite3):**` writes in the dispatch set (default off — both are stripped by the mutation guard / seed-consent gate) |
+| `--allow-mutations` | Also run IRREVERSIBLE or NON-LOCAL mutations — a `**Seed (psql/sqlite3):**` / mutating-expected-success scenario with no paired `**Teardown (psql/sqlite3):**`, or one whose `base-url` is not localhost (default off — those stay stripped by the mutation guard / seed-consent gate). An AUTO-REVERTING seed (paired Teardown on a local `base-url`) already runs by default and is un-seeded by the teardown wave at finalize, so it needs no flag. |
 | `--allow-provisioning` | Arm plan-declared **provisioning recipes** (bindings with a `- Provisions:` marker that CREATE an account/principal) for the run — Perun passes `allow_provisioning: true` to `parse_plan` (default off — `execute_recipe` returns `provisioning_blocked` and the coordinator otherwise surfaces the provisioning-consent gate first) |
 
 Flags may also be given in natural language ("run QA autonomously" → `--mode auto`; "only fix highs" → `--severity-floor HIGH`). Forward whatever you parse to Perun verbatim.
@@ -96,7 +96,7 @@ Perun will then:
 7. **Merge findings** across waves in scenario-source order (the original markdown order, NOT wave order).
 8. **Assign QA-XXX IDs** via `assign_issue_ids` and sort by severity (CRITICAL → HIGH → MEDIUM → LOW).
 9. **Write the report** to `docs/testing/reports/YYYY-MM-DD-<topic>.md` where `<topic>` is the plan filename minus the leading date prefix and the trailing `-test-plan` suffix.
-10. **Run the loop to completion** and display the final summary (Result, Loop History, Coverage, and the `qa_loop_undo` recovery hint). There is no separate fix follow-up — fixing IS the loop.
+10. **Run the loop to completion**, then — if the run seeded any auto-reverting fixtures — run the **teardown wave** that un-seeds them (the DB counterpart of the file-only `qa_loop_undo`), and display the final summary (Result, Loop History, Coverage, seeds-reverted, and the `qa_loop_undo` recovery hint). There is no separate fix follow-up — fixing IS the loop.
 
 **Task Update:** Mark task 2 as `completed` using `todowrite` once you have handed off to `@perun`. Do not wait for Perun's response — the handoff completes your part of the workflow.
 

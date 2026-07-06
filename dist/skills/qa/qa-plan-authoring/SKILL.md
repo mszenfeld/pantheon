@@ -289,15 +289,40 @@ available live rung is a coverage-honesty defect (Step 6.8 refutes it).
   unavoidable: `**Depends-on:** <seed ID>` AND the read's first assertion is a
   seed-existence check failing as *seed-missing*.
 
+**Auto-reverting seed (paired Teardown) — the DEFAULT shape.** Pair every Seed with a
+`**Teardown (psql/sqlite3):**` block that DELETEs exactly what the Seed created. A Seed that
+has a Teardown AND a LOCAL `base-url` (localhost/127.0.0.1) is *auto-reverting*: Phase-0 keeps
+it in `dispatch_set` WITHOUT `allow_mutations`, and the loop runs the Teardown (LIFO) as a wave
+at finalize to un-seed it — the DB is left exactly as found ("modify then revert"). This is the
+preferred shape for any seam-seed: it makes seeding the DEFAULT, not a consent-gated exception.
+Rules: (a) the Teardown uses the SAME single plan-declared connection reference as the Seed;
+(b) the Seed tags its rows with a run-unique discriminator (a `title`/marker column value such as
+`qa-seed-<topic>`) and the Teardown deletes ONLY by that discriminator, so it can NEVER remove a
+row the Seed did not create — an unscoped `DELETE`/`TRUNCATE` is a defect; (c) a Seed with NO
+Teardown, or a non-local `base-url`, is irreversible-by-default → it stays stripped until
+`allow_mutations` and leaves its rows behind (say so in a `**Coverage delta:**` when you cannot
+author a Teardown); (d) keep the Teardown block, like the Seed, free of BLOCKED-class negative
+phrasing (classification hygiene); (e) **the Seed MUST be IDEMPOTENT** — `INSERT … ON CONFLICT DO
+NOTHING`, a delete-before-insert, or a MERGE/UPSERT — because the loop RE-RUNS the whole plan on
+the authoritative final pass (and on each retest) BEFORE the single teardown wave fires at
+finalize; a fixed-PK `INSERT` would hit a unique violation on its second run and the read-back
+would then FAIL against a missing row (a false negative, not a code defect); (f) the Seed's
+declared connection DSN MUST point at the SAME local/throwaway instance as `base-url` — Phase-0
+enforces the local floor on `base-url` only (it cannot resolve the `$VAR` DSN), so a DSN aimed at
+a shared/prod DB would auto-write there; keep both local. The `**Seeds fixtures:**` `## Setup`
+bullet is still MANDATORY — it declares the run seeds at all, independent of whether the seed
+auto-reverts.
+
 **Seed write-safety (mutation-guard interaction).** The Phase-0 guard treats a
 `**Seed (psql/sqlite3):**` block as a fixture WRITE by definition and strips it whenever
 `allow_mutations` is false — keyed on the marker ALONE, independent of the SQL verb
 (INSERT / UPDATE / DELETE / TRUNCATE / UPSERT / …) and independent of any blocked/negative
-phrasing in the block. So any plan with a Seed step MUST emit the `## Setup` bullet
-`**Seeds fixtures:** BE-NN[, …] (requires allow_mutations)` — the marker Perun's consent
-gate keys on; without it the seed strips under the default `allow_mutations: false` and its
-read-back then reports against an empty table (a false result), with no consent-gate
-recovery. Authoring rules: (a) a seed scenario keeps its ENTIRE block free of
+phrasing in the block. A Seed strips under the default `allow_mutations: false` UNLESS it is
+auto-reverting (paired Teardown + local `base-url`, above), in which case it runs by default and
+is un-seeded at finalize. So any plan with a Seed step MUST emit the `## Setup` bullet
+`**Seeds fixtures:** BE-NN[, …] (auto-reverts with a paired Teardown on a local base-url; else requires allow_mutations)` — the marker Perun surfaces to the operator; without it a stripped
+seed's read-back reports against an empty table (a false result) with no recovery, and an
+auto-reverting seed's DB touch is invisible up front. Authoring rules: (a) a seed scenario keeps its ENTIRE block free of
 negative/blocked phrasing (*reject / block / deny / forbidden / unauthorized / must not /
 should not / no state change|row|change* or a `401`/`403`/`4xx` literal) — NOT for
 write-safety (the marker gate already covers the write regardless of phrasing) but for
