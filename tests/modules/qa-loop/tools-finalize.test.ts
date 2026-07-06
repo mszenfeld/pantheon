@@ -37,7 +37,7 @@ function sidecar(reportPath: string, fe01Current: "pass" | "fail"): Sidecar {
   return {
     version: 1, run_id: "qa-loop-demo-1", plan_path: "p.md", plan_sha256: "x".repeat(64), report_path: reportPath,
     config: { mode: "approve", severity_floor: "LOW", max_iterations: 3, max_dispatches: 50, time_budget_s: 1800, allow_mutations: false },
-    started_at: now, updated_at: now, finalized_at: null,
+    started_at: now, updated_at: now, finalized_at: null, baseline_recorded: true,
     budgets: { iteration: 1, dispatch_count_total: 4, elapsed_s: 120, final_pass_elapsed_s: null },
     pre_loop: { undo_ref: "refs/qa-loop/pre/qa-loop-demo-1", dirty: false, dirty_files: [] },
     scenarios: { "FE-01": { qa_ids: ["QA-001"], kind: "feature", section: "FE", mutating: false, baseline: "fail", current: fe01Current, reason: null } },

@@ -82,6 +82,13 @@ export interface Sidecar {
   started_at: number
   updated_at: number
   finalized_at: number | null
+  // True once a baseline Zmora wave has been ingested (qa_loop_ingest phase:"baseline").
+  // Distinguishes a real "ran and failed" scenario state from the scaffold placeholder
+  // (every non-stripped scenario initializes baseline/current:"fail" BEFORE any wave runs):
+  // gates REUSE (never resume a never-baselined run into a phantom fix-phase) and `enter`
+  // (never enter the fix loop before the baseline wave). Absent on pre-field on-disk
+  // sidecars → read as falsy → treated as not-recorded (safe: forces a fresh baseline).
+  baseline_recorded: boolean
   budgets: {
     iteration: number
     dispatch_count_total: number

@@ -40,7 +40,7 @@ function baseSidecar(dir: string): Sidecar {
   return {
     version: 1, run_id: "qa-loop-demo-1", plan_path: join(dir, "p.md"), plan_sha256: hashPlan(PLAN_TEXT), report_path: join(dir, "2026-06-26-demo-report.md"),
     config: { mode: "approve", severity_floor: "LOW", max_iterations: 3, max_dispatches: 50, time_budget_s: 1800, allow_mutations: false },
-    started_at: now, updated_at: now, finalized_at: null,
+    started_at: now, updated_at: now, finalized_at: null, baseline_recorded: true,
     budgets: { iteration: 0, dispatch_count_total: 0, elapsed_s: 0, final_pass_elapsed_s: null },
     pre_loop: { undo_ref: "refs/qa-loop/pre/qa-loop-demo-1", dirty: false, dirty_files: [] },
     scenarios: {
@@ -71,6 +71,23 @@ describe("qa_loop_step", () => {
     const tools = makeQaLoopTools({ gate: fakeGate("perun"), state, cwd: "/tmp", resolveParentID: async (s) => s, assignIssueIds: noopAssign })
     const res = resultJson(await tools.qa_loop_step.execute({ phase: "enter" }, ctx("child")))
     expect(res.status).toBe("forbidden")
+  })
+
+  it("enter refuses before the baseline wave is ingested (baseline_recorded:false)", async () => {
+    // A premature enter — no baseline ingested, only scaffold placeholders — must NOT return the
+    // confusing { action:"fix", issues:[] }. It surfaces an actionable error naming the missing
+    // baseline wave so Perun runs it, rather than reverse-engineering a phantom fix-phase.
+    const s0 = state.load("perun")!
+    s0.baseline_recorded = false
+    state.save("perun", s0)
+    const tools = makeQaLoopTools({ gate: fakeGate("perun"), state, cwd: "/tmp", resolveParentID: async (s) => s, assignIssueIds: noopAssign })
+    const res = resultJson(await tools.qa_loop_step.execute({ phase: "enter" }, ctx("perun")))
+    expect(res.status).toBe("error")
+    expect(String(res.reason)).toMatch(/baseline not yet ingested/)
+    // The guard returns before any accounting: no iteration opened, counter not advanced.
+    const s = state.load("perun")!
+    expect(s.budgets.iteration).toBe(0)
+    expect(s.iterations.length).toBe(0)
   })
 
   it("enter increments the iteration once and returns the failing fix-set", async () => {

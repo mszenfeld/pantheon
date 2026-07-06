@@ -157,6 +157,14 @@ describe("qa_loop_start", () => {
     ))
     expect(res1.disposition).toBe("FRESH")
 
+    // REUSE only resumes a run whose baseline wave has already been ingested. A FRESH start
+    // leaves baseline_recorded:false (scaffold placeholders only), so flip it on the persisted
+    // sidecar to model a run that got past its baseline — otherwise the disposition gate below
+    // correctly declines to REUSE (see the never-baselined test).
+    const s1 = state.load("perun")!
+    s1.baseline_recorded = true
+    state.save("perun", s1)
+
     // Simulate a new server start: brand-new QaLoopState (cold in-process map) + new tools.
     const coldState = new QaLoopState()
     const tools2 = makeQaLoopTools({ gate: fakeGate("perun"), state: coldState, cwd, resolveParentID: async (s) => s, assignIssueIds: noopAssignIssueIds })
@@ -188,6 +196,34 @@ describe("qa_loop_start", () => {
     // that second builder against a silent regression the FRESH test cannot catch.
     const stripped2 = res2.stripped as { id: string; reason: string }[]
     expect(stripped2.some((e) => e.id === "BE-02" && /mutation-guard/.test(e.reason))).toBe(true)
+  })
+
+  it("does NOT REUSE a never-baselined sidecar (baseline_recorded:false) — re-scaffolds instead", async () => {
+    // A FRESH start writes an on-disk sidecar but records NO baseline wave, so every scenario
+    // still carries only the scaffold placeholder (baseline/current:"fail", zero qa_ids). REUSing
+    // that state drops Perun into a phantom fix-phase where qa_loop_step(enter) returns
+    // { action:"fix", issues:[] } ("fix nothing") — the exact friction that forced a manual
+    // undo+restart. The disposition must decline to REUSE and re-scaffold (FRESH, no report on disk).
+    const tools1 = makeQaLoopTools({ gate: fakeGate("perun"), state, cwd, resolveParentID: async (s) => s, assignIssueIds: noopAssignIssueIds })
+    const res1 = resultJson(await tools1.qa_loop_start.execute(
+      { plan_path: "docs/testing/plans/2026-06-26-demo-test-plan.md", topic: "demo", report_path: "docs/testing/reports/2026-06-26-demo-report.md" },
+      ctx("perun"),
+    ))
+    expect(res1.disposition).toBe("FRESH")
+    // Sanity: the FRESH scaffold left the marker false (the precondition for this test).
+    expect(state.load("perun")!.baseline_recorded).toBe(false)
+
+    // Cold-map re-entry with the SAME plan + report paths, matching plan hash — but no baseline.
+    const coldState = new QaLoopState()
+    const tools2 = makeQaLoopTools({ gate: fakeGate("perun"), state: coldState, cwd, resolveParentID: async (s) => s, assignIssueIds: noopAssignIssueIds })
+    const res2 = resultJson(await tools2.qa_loop_start.execute(
+      { plan_path: "docs/testing/plans/2026-06-26-demo-test-plan.md", topic: "demo", report_path: "docs/testing/reports/2026-06-26-demo-report.md" },
+      ctx("perun"),
+    ))
+    // Re-scaffolded, NOT resumed: no report file exists on disk, so it is a fresh FRESH.
+    expect(res2.status).toBe("ok")
+    expect(res2.disposition).toBe("FRESH")
+    expect(res2.disposition).not.toBe("REUSE")
   })
 
   it("ADOPT: seeds qa_id_start_at beyond the highest existing QA-N in the report", async () => {

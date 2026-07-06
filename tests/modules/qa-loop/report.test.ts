@@ -20,6 +20,7 @@ function sidecar(p: Partial<Sidecar> = {}): Sidecar {
     started_at: 0,
     updated_at: 0,
     finalized_at: null,
+    baseline_recorded: true,
     budgets: { iteration: 1, dispatch_count_total: 4, elapsed_s: 120, final_pass_elapsed_s: null },
     pre_loop: { undo_ref: "refs/qa-loop/pre/qa-loop-demo-1", dirty: false, dirty_files: [] },
     scenarios: {

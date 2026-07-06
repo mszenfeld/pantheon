@@ -203,7 +203,14 @@ export function makeQaLoopTools(deps: QaLoopToolDeps) {
       // Idempotency disposition (§5 table). Cross-session REUSE requires reading
       // the on-disk sidecar — the in-process Map is cold on a fresh server start.
       const onDisk = state.loadFromDisk(absReportPath)
-      if (onDisk && onDisk.plan_sha256 === sha) {
+      // REUSE requires a run worth resuming: same plan hash AND a baseline wave already
+      // ingested. A never-baselined sidecar carries only the scaffold placeholders (every
+      // scenario baseline/current:"fail", zero qa_ids) — resuming it drops Perun straight
+      // into a phantom fix-phase where `enter` returns { action:"fix", issues:[] } ("fix
+      // nothing"), forcing a manual undo+restart. Without the marker it falls through to
+      // ADOPT/FRESH, which re-scaffolds and runs the baseline wave normally. (`=== true`
+      // so a pre-field on-disk sidecar, where the flag is undefined, also re-baselines.)
+      if (onDisk && onDisk.plan_sha256 === sha && onDisk.baseline_recorded === true) {
         // REUSE: same plan hash, same report stem — resume the prior run.
         onDisk.updated_at = Date.now()
         state.save(parentId, onDisk)
@@ -355,6 +362,7 @@ export function makeQaLoopTools(deps: QaLoopToolDeps) {
         started_at: now,
         updated_at: now,
         finalized_at: null,
+        baseline_recorded: false,
         budgets: {
           iteration: 0,
           dispatch_count_total: 0,
@@ -478,6 +486,11 @@ export function makeQaLoopTools(deps: QaLoopToolDeps) {
         }
       }
 
+      // A baseline wave has now been recorded — the scenario states reflect a real Zmora
+      // run, not the scaffold placeholders. Unlocks REUSE-resume and the fix-loop `enter`
+      // gate (see Sidecar.baseline_recorded). retest/final ingests leave it as-is (already true).
+      if (args.phase === "baseline") s.baseline_recorded = true
+
       s.updated_at = Date.now()
       state.save(parentId, s)
       return JSON.stringify({ status: "ok", new_qa_ids: minted.map((m) => m.id) })
@@ -487,7 +500,7 @@ export function makeQaLoopTools(deps: QaLoopToolDeps) {
   const qa_loop_step = tool({
     description: [
       "Advance the loop state machine. Perun-only.",
-      "- `phase:\"enter\"` (2.0): increments the iteration ONLY when starting a new one; on re-entry into a not-yet-`evaluated` iteration it resumes from the stored `phase` WITHOUT a second increment (MAXI stays exact). Returns `{ action:\"fix\", issues }` | `{ action:\"stop\", stop_cause }` | `{ action:\"final\" }`.",
+      "- `phase:\"enter\"` (2.0): increments the iteration ONLY when starting a new one; on re-entry into a not-yet-`evaluated` iteration it resumes from the stored `phase` WITHOUT a second increment (MAXI stays exact). Returns `{ action:\"fix\", issues }` | `{ action:\"stop\", stop_cause }` | `{ action:\"final\" }`. Requires a baseline wave first — returns `{ status:\"error\" }` if called before `qa_loop_ingest(phase:\"baseline\")` (guards against entering the fix loop on scaffold placeholders).",
       "- `phase:\"evaluate\"` (2f): no increment; regression-first then no-progress against THIS iteration's retest. Advances the row to `evaluated`. Returns `{ action:\"continue\" }` | `{ action:\"stop\", stop_cause }` | `{ action:\"final\" }`.",
       "",
       'Result shape: `{ status:"ok", ...decision }` or `{ status:"forbidden", reason }`.',
@@ -502,6 +515,20 @@ export function makeQaLoopTools(deps: QaLoopToolDeps) {
       if (!s) return JSON.stringify({ status: "error", reason: "no active loop run" })
 
       if (args.phase === "enter") {
+        // Precondition: the baseline wave must have been ingested. Entering the fix loop
+        // with only scaffold placeholders (every scenario current:"fail", zero qa_ids) is
+        // what produced the confusing { action:"fix", issues:[] } — surface an actionable
+        // error instead so Perun runs the baseline wave rather than reverse-engineering a
+        // phantom fix-phase. (Disposition already downgrades a never-baselined REUSE to
+        // FRESH; this is the belt-and-suspenders guard for a direct premature enter.)
+        if (!s.baseline_recorded) {
+          return JSON.stringify({
+            status: "error",
+            reason:
+              "baseline not yet ingested — dispatch the dispatch_set to Zmora and call qa_loop_ingest(phase:\"baseline\") before entering the fix loop (qa_loop_step phase:\"enter\").",
+          })
+        }
+
         // §4 tamper guard: re-hash the plan on every enter. A plan edited mid-run can no
         // longer be trusted against the baseline, so the loop stops here with plan-tamper
         // (perun.md Workflow-1 §2.0). An unreadable plan mid-run is also treated as tamper.

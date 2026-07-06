@@ -23,6 +23,7 @@ function makeSidecar(reportDir: string): Sidecar {
     started_at: 1000,
     updated_at: 1000,
     finalized_at: null,
+    baseline_recorded: true,
     budgets: {
       iteration: 0,
       dispatch_count_total: 0,

@@ -41,7 +41,7 @@ function seedSidecar(state: QaLoopState, parentId: string, dir: string) {
     plan_sha256: "x".repeat(64),
     report_path: join(dir, "2026-06-26-demo-report.md"),
     config: { mode: "approve", severity_floor: "LOW", max_iterations: 3, max_dispatches: 50, time_budget_s: 1800, allow_mutations: false },
-    started_at: now, updated_at: now, finalized_at: null,
+    started_at: now, updated_at: now, finalized_at: null, baseline_recorded: false,
     budgets: { iteration: 0, dispatch_count_total: 0, elapsed_s: 0, final_pass_elapsed_s: null },
     pre_loop: { undo_ref: "refs/qa-loop/pre/qa-loop-demo-1", dirty: false, dirty_files: [] },
     scenarios: {
@@ -118,6 +118,28 @@ describe("qa_loop_ingest", () => {
     expect(s.issues["QA-001"]!.location).toBe("src/login.ts:10")
     expect(s.issues["QA-001"]!.status).toBe("open")
     expect(res.new_qa_ids).toEqual(["QA-001"])
+  })
+
+  it("a baseline ingest sets baseline_recorded; a retest ingest leaves it unchanged", async () => {
+    // baseline_recorded is the signal that a real Zmora wave has run — it gates REUSE-resume and
+    // the fix-loop `enter` guard. Only a phase:"baseline" ingest may set it; retest/final (which
+    // run AFTER baseline) must never be the thing that flips it, or a resume could skip baseline.
+    const tools = makeQaLoopTools({ gate: fakeGate("perun"), state, cwd: "/tmp", resolveParentID: async (s) => s, assignIssueIds })
+    expect(state.load("perun")!.baseline_recorded).toBe(false)
+
+    // A retest ingest on a not-yet-baselined sidecar must NOT set the marker.
+    await tools.qa_loop_ingest.execute(
+      { phase: "retest", results: [{ scenario: "FE-01", state: "pass" }] },
+      ctx("perun"),
+    )
+    expect(state.load("perun")!.baseline_recorded).toBe(false)
+
+    // The baseline wave records it.
+    await tools.qa_loop_ingest.execute(
+      { phase: "baseline", results: [{ scenario: "FE-01", state: "pass" }] },
+      ctx("perun"),
+    )
+    expect(state.load("perun")!.baseline_recorded).toBe(true)
   })
 
   it("routes an unknown SKIP reason to tool-unavailable + a routing warning", async () => {

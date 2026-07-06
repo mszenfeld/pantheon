@@ -79,6 +79,7 @@ interface Sidecar {
     started_at: number;
     updated_at: number;
     finalized_at: number | null;
+    baseline_recorded: boolean;
     budgets: {
         iteration: number;
         dispatch_count_total: number;

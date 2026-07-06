@@ -119,7 +119,7 @@ function makeQaLoopTools(deps) {
         allow_mutations: allowMutations
       };
       const onDisk = state.loadFromDisk(absReportPath);
-      if (onDisk && onDisk.plan_sha256 === sha) {
+      if (onDisk && onDisk.plan_sha256 === sha && onDisk.baseline_recorded === true) {
         onDisk.updated_at = Date.now();
         state.save(parentId, onDisk);
         return JSON.stringify({
@@ -215,6 +215,7 @@ function makeQaLoopTools(deps) {
         started_at: now,
         updated_at: now,
         finalized_at: null,
+        baseline_recorded: false,
         budgets: {
           iteration: 0,
           dispatch_count_total: 0,
@@ -326,6 +327,7 @@ function makeQaLoopTools(deps) {
           s.issues[f.id] = issue;
         }
       }
+      if (args.phase === "baseline") s.baseline_recorded = true;
       s.updated_at = Date.now();
       state.save(parentId, s);
       return JSON.stringify({ status: "ok", new_qa_ids: minted.map((m) => m.id) });
@@ -334,7 +336,7 @@ function makeQaLoopTools(deps) {
   const qa_loop_step = tool({
     description: [
       "Advance the loop state machine. Perun-only.",
-      '- `phase:"enter"` (2.0): increments the iteration ONLY when starting a new one; on re-entry into a not-yet-`evaluated` iteration it resumes from the stored `phase` WITHOUT a second increment (MAXI stays exact). Returns `{ action:"fix", issues }` | `{ action:"stop", stop_cause }` | `{ action:"final" }`.',
+      '- `phase:"enter"` (2.0): increments the iteration ONLY when starting a new one; on re-entry into a not-yet-`evaluated` iteration it resumes from the stored `phase` WITHOUT a second increment (MAXI stays exact). Returns `{ action:"fix", issues }` | `{ action:"stop", stop_cause }` | `{ action:"final" }`. Requires a baseline wave first \u2014 returns `{ status:"error" }` if called before `qa_loop_ingest(phase:"baseline")` (guards against entering the fix loop on scaffold placeholders).',
       '- `phase:"evaluate"` (2f): no increment; regression-first then no-progress against THIS iteration\'s retest. Advances the row to `evaluated`. Returns `{ action:"continue" }` | `{ action:"stop", stop_cause }` | `{ action:"final" }`.',
       "",
       'Result shape: `{ status:"ok", ...decision }` or `{ status:"forbidden", reason }`.'
@@ -348,6 +350,12 @@ function makeQaLoopTools(deps) {
       const s = state.load(parentId);
       if (!s) return JSON.stringify({ status: "error", reason: "no active loop run" });
       if (args.phase === "enter") {
+        if (!s.baseline_recorded) {
+          return JSON.stringify({
+            status: "error",
+            reason: 'baseline not yet ingested \u2014 dispatch the dispatch_set to Zmora and call qa_loop_ingest(phase:"baseline") before entering the fix loop (qa_loop_step phase:"enter").'
+          });
+        }
         let tampered = false;
         try {
           tampered = hashPlan(readFileSync(s.plan_path, "utf8")) !== s.plan_sha256;
