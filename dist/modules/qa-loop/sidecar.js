@@ -1,4 +1,4 @@
-import { renameSync, writeFileSync, readFileSync, existsSync } from "node:fs";
+import { renameSync, writeFileSync, readFileSync, existsSync, mkdirSync } from "node:fs";
 import { dirname, join, basename } from "node:path";
 function sidecarPathFor(reportPath) {
   const dir = dirname(reportPath);
@@ -17,6 +17,7 @@ class QaLoopState {
     this.mem.set(parentId, s);
     const path = sidecarPathFor(s.report_path);
     const tmp = `${path}.tmp`;
+    mkdirSync(dirname(path), { recursive: true });
     writeFileSync(tmp, JSON.stringify(s, null, 2), "utf8");
     renameSync(tmp, path);
   }

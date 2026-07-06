@@ -160,7 +160,7 @@ export function makeQaLoopTools(deps: QaLoopToolDeps) {
       "Phase 0 of the QA loop (RESOLVE & GUARD). Perun-only. Hashes the plan for idempotency, decides REUSE/ADOPT/FRESH, classifies every scenario, strips mutating-expected-success scenarios from the dispatch set (mutation guard), captures the pre-loop undo ref, and runs the working-tree dirty check.",
       "",
       "Result shape (JSON-stringified):",
-      '- `{ status: "ok", disposition: "REUSE"|"ADOPT"|"FRESH", run_id, pre_loop_ref, dispatch_set: string[], dirty: boolean, dirty_files: string[], qa_id_start_at?: number }`.',
+      '- `{ status: "ok", disposition: "REUSE"|"ADOPT"|"FRESH", run_id, pre_loop_ref, dispatch_set: string[], stripped: { id, reason }[], dirty: boolean, dirty_files: string[], qa_id_start_at?: number }`.',
       '- `{ status: "forbidden", reason }` — caller is not the coordinator.',
     ].join("\n"),
     args: {
@@ -215,6 +215,9 @@ export function makeQaLoopTools(deps: QaLoopToolDeps) {
           dispatch_set: Object.entries(onDisk.scenarios)
             .filter(([, sc]) => sc.current !== "skip")
             .map(([id]) => id),
+          stripped: Object.entries(onDisk.scenarios)
+            .filter(([, sc]) => sc.reason?.startsWith("mutation-guard"))
+            .map(([id, sc]) => ({ id, reason: sc.reason })),
           dirty: onDisk.pre_loop.dirty,
           dirty_files: onDisk.pre_loop.dirty_files,
         })
@@ -383,6 +386,13 @@ export function makeQaLoopTools(deps: QaLoopToolDeps) {
         run_id: runId,
         pre_loop_ref: undoRef,
         dispatch_set: dispatchSet,
+        // Surface the mutation-guard strips so the coordinator can tell the operator WHICH
+        // scenarios were excluded (and why) up front, rather than the operator only learning
+        // at the final report that the run under-covered the change. Excludes malformed-heading
+        // skips (their reason does not start with "mutation-guard").
+        stripped: Object.entries(scenarios)
+          .filter(([, sc]) => sc.reason?.startsWith("mutation-guard"))
+          .map(([id, sc]) => ({ id, reason: sc.reason })),
         dirty,
         dirty_files,
         ...(qaIdStartAt !== undefined ? { qa_id_start_at: qaIdStartAt } : {}),

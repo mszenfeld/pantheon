@@ -74,6 +74,22 @@ describe("QaLoopState", () => {
     expect(readdirSync(dir).some((f) => f.endsWith(".tmp"))).toBe(false)
   })
 
+  it("creates the report-derived directory when it does not exist (no ENOENT on a fresh reports dir)", () => {
+    // Regression: qa_loop_start is the first writer and can run before the coordinator's
+    // `mkdir -p docs/testing/reports`. Point report_path at a nested dir that does NOT exist
+    // yet — every other test pre-creates the dir (via mkdtemp), which masked the raw ENOENT.
+    const st = new QaLoopState()
+    const nested = join(dir, "docs", "testing", "reports")
+    const s = makeSidecar(nested)
+    expect(existsSync(nested)).toBe(false)
+
+    expect(() => st.save("ses_parent", s)).not.toThrow()
+
+    const expectedPath = join(nested, "2026-06-26-demo-loop-state.json")
+    expect(existsSync(expectedPath)).toBe(true)
+    expect(JSON.parse(readFileSync(expectedPath, "utf8")) as Sidecar).toEqual(s)
+  })
+
   it("loads from disk when the in-process map is cold (cross-session resume)", () => {
     const writer = new QaLoopState()
     const s = makeSidecar(dir)

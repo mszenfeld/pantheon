@@ -122,6 +122,21 @@ describe("qa_loop_start", () => {
     expect(res.dispatch_set).not.toContain("BE-02")
   })
 
+  it("FRESH: surfaces the mutation-guard strips on the return (stripped[]), not just omitting them from dispatch_set", async () => {
+    const tools = makeQaLoopTools({ gate: fakeGate("perun"), state, cwd, resolveParentID: async (s) => s, assignIssueIds: noopAssignIssueIds })
+    const res = resultJson(await tools.qa_loop_start.execute(
+      { plan_path: "docs/testing/plans/2026-06-26-demo-test-plan.md", topic: "demo", report_path: "docs/testing/reports/2026-06-26-demo-report.md" },
+      ctx("perun"),
+    ))
+    // BE-02 (mutating-expected-success) is stripped from dispatch — the return must NAME it and
+    // its reason so the coordinator can give the operator an up-front heads-up, rather than the
+    // operator only discovering the reduced coverage in the final report.
+    const stripped = res.stripped as { id: string; reason: string }[]
+    expect(stripped.some((e) => e.id === "BE-02" && /mutation-guard/.test(e.reason))).toBe(true)
+    // a KEPT scenario never appears in stripped
+    expect(stripped.some((e) => e.id === "BE-03")).toBe(false)
+  })
+
   it("--allow-mutations keeps mutating-expected-success in the dispatch set", async () => {
     const tools = makeQaLoopTools({ gate: fakeGate("perun"), state, cwd, resolveParentID: async (s) => s, assignIssueIds: noopAssignIssueIds })
     const res = resultJson(await tools.qa_loop_start.execute(
@@ -167,6 +182,12 @@ describe("qa_loop_start", () => {
     // Scenario classification is preserved from the prior run (carry-over observable).
     expect(Object.keys(resumed.scenarios)).toContain("FE-01")
     expect(resumed.scenarios["BE-02"]!.current).toBe("skip")
+
+    // The REUSE return surfaces the mutation-guard strips too — it builds `stripped` from the
+    // disk-round-tripped onDisk.scenarios (a DIFFERENT source than the FRESH path), so this pins
+    // that second builder against a silent regression the FRESH test cannot catch.
+    const stripped2 = res2.stripped as { id: string; reason: string }[]
+    expect(stripped2.some((e) => e.id === "BE-02" && /mutation-guard/.test(e.reason))).toBe(true)
   })
 
   it("ADOPT: seeds qa_id_start_at beyond the highest existing QA-N in the report", async () => {

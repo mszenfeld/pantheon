@@ -1,4 +1,4 @@
-import { renameSync, writeFileSync, readFileSync, existsSync } from "node:fs"
+import { renameSync, writeFileSync, readFileSync, existsSync, mkdirSync } from "node:fs"
 import { dirname, join, basename } from "node:path"
 import type { Sidecar } from "./types.js"
 
@@ -34,6 +34,13 @@ export class QaLoopState {
     this.mem.set(parentId, s)
     const path = sidecarPathFor(s.report_path)
     const tmp = `${path}.tmp`
+    // Self-sufficiency: create the report-derived directory if it does not exist yet.
+    // qa_loop_start is the FIRST writer and can be invoked before the coordinator has
+    // run `mkdir -p docs/testing/reports`, so relying on that mkdir left the tool dying
+    // on a raw ENOENT on a fresh repo. Owning the mkdir here demotes the coordinator's
+    // mkdir to belt-and-suspenders. The report writer (qa_loop_finalize) targets this
+    // same directory, which the sidecar write has by then already created.
+    mkdirSync(dirname(path), { recursive: true })
     // atomic: write to a sibling temp file, then rename over the target (same dir => atomic on POSIX).
     writeFileSync(tmp, JSON.stringify(s, null, 2), "utf8")
     renameSync(tmp, path)
