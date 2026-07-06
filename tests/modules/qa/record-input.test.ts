@@ -15,6 +15,7 @@ function bindingWithInputs(inputs: string[]): ParsedBinding {
     inputs,
     egress: "$SUPABASE_URL",
     recipe: "curl -sf $SUPABASE_URL",
+    provisions: null,
   }
 }
 

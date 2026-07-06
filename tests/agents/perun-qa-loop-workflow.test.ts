@@ -93,19 +93,25 @@ describe("Perun seed-consent gate doctrine (pinned against silent regression)", 
   })
 })
 
-describe("Perun account-provisioning-offer prohibition (pinned against silent regression)", () => {
-  it("bars Perun from offering to create accounts/principals or soliciting a provisioning secret", () => {
-    // Real i-need-cv session: a swappable coordinator model improvised an "I'll create the test
-    // users / generate their credentials via a SERVICE_KEY export+restart" offer that no lane can
-    // execute, and its own credential-prefix denylist then dead-ended the user's compliant paste.
-    // This bullet closes the runtime vacuum (perun.md enumerated forbidden credential MINTING but
-    // never the provisioning OFFER). Deleting/rewording it would let the improvisation return with
-    // the rest of the suite green.
+describe("Perun provisioning doctrine: unprompted barred, plan-declared consent path sanctioned (pinned)", () => {
+  it("keeps ad-hoc provisioning / fabricated creds / invented channel barred while opening the consent path", () => {
+    // Real i-need-cv session: the user (harness owner) authorised account creation TWICE and was
+    // still refused — the doctrine offered only a flat dead-end, no sanctioned in-session path.
+    // Phase 2 opens one: a plan-declared `- Provisions:` recipe run under the allow_provisioning
+    // consent gate + the user-supplied key. The prohibition on UNPROMPTED provisioning, FABRICATED
+    // credentials, and INVENTED channels stays; only the dead-end becomes a guided, auditable path.
+    // Dropping either half (the prohibition, or the sanctioned path) regresses with the suite green.
+    // Still-forbidden half:
     expect(perun).toContain(
-      "Offer to create or provision test users, accounts, or principals itself",
+      "fabricate login credentials, or invent a privileged channel",
     )
+    // Sanctioned half — a plan-declared recipe run under the consent gate:
+    expect(perun).toContain("provisioning recipe")
+    expect(perun).toContain("provisioning-consent gate")
+    expect(perun).toContain("allow_provisioning")
+    // The old flat stop is replaced by a GUIDE, but the trigger phrase is still handled:
     expect(perun).toContain("prepare the accounts yourself")
-    expect(perun).toContain("do NOT counter-offer to do it yourself")
+    expect(perun).toContain("GUIDE the user onto")
   })
 })
 

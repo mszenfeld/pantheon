@@ -28,6 +28,17 @@ declare class QaRunState {
      * parent has no record). Read by `record_input`'s denylist exemption.
      */
     getDeclaredEnv(parentID: string): ReadonlySet<string>;
+    /**
+     * Record operator consent to run provisioning recipes for this run. Set from
+     * `parse_plan({ allow_provisioning })` after the user confirms the gate.
+     * Materialises the run record if absent so consent survives an early call.
+     */
+    setAllowProvisioning(parentID: string, allow: boolean): void;
+    /**
+     * Whether provisioning recipes are consented for this run (false when the
+     * parent has no record). Read by `execute_recipe` to gate a `provisions` binding.
+     */
+    getAllowProvisioning(parentID: string): boolean;
     getDialogRound(parentID: string): number;
     incrementDialogRound(parentID: string): number;
     /**

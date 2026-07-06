@@ -9,6 +9,17 @@ interface ParsedBinding {
     inputs: string[];
     egress: string;
     recipe: string;
+    /**
+     * Non-null when the binding's recipe PROVISIONS a principal — i.e. it CREATES
+     * an account / fixture / tenant (a write to the target system) rather than
+     * minting a token for an already-existing one (a login read). Parsed from an
+     * optional `- Provisions: <principal>` field on the binding; the value is the
+     * human-readable principal description surfaced in the provisioning-consent
+     * gate. A provisioning recipe runs only under recorded `allow_provisioning`
+     * consent (execute-recipe.ts) — the sanctioned, auditable account-creation
+     * path. `null` = an ordinary token-minting recipe, which needs no consent.
+     */
+    provisions: string | null;
 }
 type ParseResult = {
     status: "ok";

@@ -26,6 +26,7 @@ You execute QA test plans by handing the plan to **@perun**, the Pantheon coordi
 | `--time-budget <seconds>` | Wall-clock budget checked at iteration boundaries (default `1800`) |
 | `--severity-floor <LOW\|MEDIUM\|HIGH\|CRITICAL>` | Minimum severity that enters the loop (default `LOW`) |
 | `--allow-mutations` | Keep mutating-expected-success scenarios AND plan-declared `**Seed (psql/sqlite3):**` writes in the dispatch set (default off — both are stripped by the mutation guard / seed-consent gate) |
+| `--allow-provisioning` | Arm plan-declared **provisioning recipes** (bindings with a `- Provisions:` marker that CREATE an account/principal) for the run — Perun passes `allow_provisioning: true` to `parse_plan` (default off — `execute_recipe` returns `provisioning_blocked` and the coordinator otherwise surfaces the provisioning-consent gate first) |
 
 Flags may also be given in natural language ("run QA autonomously" → `--mode auto`; "only fix highs" → `--severity-floor HIGH`). Forward whatever you parse to Perun verbatim.
 

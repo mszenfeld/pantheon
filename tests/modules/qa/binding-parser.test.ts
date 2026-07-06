@@ -59,6 +59,82 @@ describe("parseBindings", () => {
     expect(cv.name).toBe("QA_BIND_CV_ID")
     expect(cv.type).toBe("plain")
     expect(cv.inputs).toEqual(["QA_BIND_TOKEN", "BASE_URL"])
+
+    // Neither sample binding declares a `- Provisions:` marker, so both are ordinary
+    // recipes needing no provisioning consent — even QA_BIND_CV_ID, which POSTs a CV
+    // (the marker is an explicit opt-in the author must write, never inferred from the verb).
+    expect(token.provisions).toBeNull()
+    expect(cv.provisions).toBeNull()
+  })
+
+  it("parses the optional `- Provisions:` marker as the principal the recipe creates", () => {
+    const plan = [
+      "## Setup",
+      "**Bindings:**",
+      "- `QA_BIND_USER_A` (plain) — provisioned test user A",
+      "  - Inputs: `$SUPABASE_SERVICE_KEY`, `$ADMIN_URL`, `$TEST_USER_EMAIL_A`",
+      "  - Egress: `$ADMIN_URL`",
+      "  - Provisions: a confirmed Supabase auth user",
+      "  - Recipe:",
+      "    ```bash",
+      `    curl -sS -X POST "$ADMIN_URL/auth/v1/admin/users" -H "apikey: $SUPABASE_SERVICE_KEY" --data-urlencode "email=$TEST_USER_EMAIL_A" | jq -er .id`,
+      "    ```",
+      "",
+    ].join("\n")
+    const result = parseBindings(plan)
+    expect(result.status).toBe("ok")
+    if (result.status !== "ok") return
+    expect(result.bindings).toHaveLength(1)
+    // Presence flags a provisioning recipe; the captured text is the principal echoed in
+    // the provisioning-consent gate. `execute_recipe` refuses it without allow_provisioning.
+    expect(result.bindings[0]!.provisions).toBe("a confirmed Supabase auth user")
+  })
+
+  it("rejects a valueless `- Provisions:` marker (a silent gate-disable footgun)", () => {
+    // `- Provisions:` with no principal after it would NOT match the value regex and be ignored,
+    // leaving provisions:null — silently disabling the consent gate for a recipe the author
+    // explicitly flagged as provisioning. It must error, forcing the author to name the principal.
+    const plan = [
+      "## Setup",
+      "**Bindings:**",
+      "- `QA_BIND_USER_A` (plain) — user",
+      "  - Inputs: `$ADMIN_URL`",
+      "  - Egress: `$ADMIN_URL`",
+      "  - Provisions:",
+      "  - Recipe:",
+      "    ```bash",
+      `    curl -sS "$ADMIN_URL" | jq -er .id`,
+      "    ```",
+      "",
+    ].join("\n")
+    const result = parseBindings(plan)
+    expect(result.status).toBe("error")
+    if (result.status === "error") {
+      expect(result.reason).toMatch(/Provisions.*requires a principal/)
+    }
+  })
+
+  it("parses `- Provisions:` regardless of sub-field position (after the Recipe block)", () => {
+    // The parser matches sub-fields order-independently; the format doc places Provisions between
+    // Egress and Recipe, but a refactor that assumed a fixed position could silently drop a
+    // trailing marker and disable the gate. Pin the order-independence.
+    const plan = [
+      "## Setup",
+      "**Bindings:**",
+      "- `QA_BIND_USER_A` (plain) — user",
+      "  - Inputs: `$ADMIN_URL`",
+      "  - Egress: `$ADMIN_URL`",
+      "  - Recipe:",
+      "    ```bash",
+      `    curl -sS -X POST "$ADMIN_URL/admin/users" | jq -er .id`,
+      "    ```",
+      "  - Provisions: a user declared after the recipe",
+      "",
+    ].join("\n")
+    const result = parseBindings(plan)
+    expect(result.status).toBe("ok")
+    if (result.status !== "ok") return
+    expect(result.bindings[0]!.provisions).toBe("a user declared after the recipe")
   })
 
   it("ignores ## Blockers / Findings + ## Coverage Matrix + Blocked-by (parser-inert)", () => {

@@ -30,6 +30,9 @@ type ExecuteRecipeResult = {
     stderr_tail: string;
 } | {
     status: "unknown_binding";
+} | {
+    status: "provisioning_blocked";
+    reason: string;
 };
 interface ExecuteRecipeContext {
     sessionID: string;

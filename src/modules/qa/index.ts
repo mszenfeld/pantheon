@@ -295,16 +295,24 @@ export const AppVerkQAPlugin: Plugin = async ({ client }) => {
           "The plan text is parsed in-process — the binding values themselves are NEVER produced here, only the recipe AST. Value materialisation happens later in `execute_recipe`.",
           "",
           "Result shape (JSON-stringified):",
-          '- `{ status: "ok", bindings: string[] }` — bindings stored; `bindings` lists the names parsed (e.g. `["QA_BIND_TOKEN"]`). Empty array means the plan has no `## Setup` / `**Bindings:**` subsection — Perun should proceed to dispatch without any zmora-setup tasks.',
+          '- `{ status: "ok", bindings: string[], provisioning: {name, provisions}[], allow_provisioning: boolean }` — bindings stored; `bindings` lists the names parsed (e.g. `["QA_BIND_TOKEN"]`). Empty array means the plan has no `## Setup` / `**Bindings:**` subsection — Perun should proceed to dispatch without any zmora-setup tasks.',
           '- `{ status: "error", reason }` — parse/validation failed (invalid binding name, recipe AST rejection, etc.). Surface `reason` to the user verbatim and abort the QA run.',
           "",
-          "Idempotent: calling twice with the same plan replaces the stored plan (later wins). Safe to call again on resume.",
+          "`provisioning` names the bindings whose recipe CREATES a principal (they carry a `- Provisions:` field — an account/fixture WRITE, not a token-minting login). Each runs only when `allow_provisioning` is true; otherwise `execute_recipe` returns `{status:\"provisioning_blocked\"}`. If `provisioning` is non-empty and you have NOT yet obtained consent, surface the provisioning-consent gate (name each principal + its egress host + the privileged key) and re-call parse_plan with `allow_provisioning:true` after the user confirms.",
+          "",
+          "Idempotent: calling twice replaces the stored plan AND the consent flag (later wins) — this is exactly how you arm provisioning after the user confirms the gate. Safe to call again on resume.",
         ].join("\n"),
         args: {
           plan: tool.schema
             .string()
             .describe(
               "Full text of the QA plan markdown. Perun passes the contents read via `Read` — do not summarise or trim.",
+            ),
+          allow_provisioning: tool.schema
+            .boolean()
+            .optional()
+            .describe(
+              "Operator consent to run PROVISIONING recipes — bindings carrying a `- Provisions:` marker that CREATE an account/principal (a write to the target system). Default false: without it `execute_recipe` refuses those recipes and the account is never created. Pass true ONLY after surfacing the provisioning-consent gate and the user confirms. Token-minting recipes (login→JWT, the common case) are unaffected.",
             ),
         },
         async execute(args, ctx) {
@@ -321,9 +329,21 @@ export const AppVerkQAPlugin: Plugin = async ({ client }) => {
             return JSON.stringify({ status: "error", reason: parsed.reason })
           }
           state.storePlan(parentID, parsed.bindings)
+          // Arm provisioning recipes only on explicit operator consent (default false).
+          // Records the flag execute_recipe reads to gate a `- Provisions:` binding; a
+          // re-call with allow_provisioning:true is how Perun arms it after the gate.
+          const allowProvisioning = args.allow_provisioning === true
+          state.setAllowProvisioning(parentID, allowProvisioning)
+          // Surface every provisioning binding so Perun can name each principal in the
+          // consent gate rather than discovering the block only at execute_recipe time.
+          const provisioning = parsed.bindings
+            .filter((b) => b.provisions !== null)
+            .map((b) => ({ name: b.name, provisions: b.provisions }))
           return JSON.stringify({
             status: "ok",
             bindings: parsed.bindings.map((b) => b.name),
+            provisioning,
+            allow_provisioning: allowProvisioning,
           })
         },
       }),
@@ -338,6 +358,7 @@ export const AppVerkQAPlugin: Plugin = async ({ client }) => {
           '- `{ status: "need_info", missing: string[] }` — recipe inputs are not yet bound; Perun must collect them first.',
           '- `{ status: "recipe_failed", reason, stderr_tail }` — bash exit non-zero, timeout, or output validation failed. `stderr_tail` is scrubbed of secrets and truncated to 200 chars.',
           '- `{ status: "unknown_binding" }` — `binding_name` is not in the parent run\'s plan.',
+          '- `{ status: "provisioning_blocked", reason }` — the binding is a PROVISIONING recipe (a `- Provisions:` marker: it creates a principal) and the run has no `allow_provisioning` consent. The account is NOT created; surface the provisioning-consent gate and re-run `parse_plan` with `allow_provisioning:true` once the user confirms, then re-dispatch this SETUP scenario.',
         ].join("\n"),
         args: {
           binding_name: tool.schema

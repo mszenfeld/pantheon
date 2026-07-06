@@ -612,4 +612,143 @@ describe("wire-up: parse_plan + dispatch + shell.env + scrub", () => {
     expect(result).toContain('"status":"ok"')
     expect(result).toContain('"bindings":[]')
   })
+
+  const PROVISIONING_PLAN = `
+## Setup
+**Bindings:**
+- \`QA_BIND_USER_A\` (plain) — provisioned test user A
+  - Inputs: \`$SUPABASE_SERVICE_KEY\`, \`$ADMIN_URL\`
+  - Egress: \`$ADMIN_URL\`
+  - Provisions: a confirmed Supabase auth user
+  - Recipe:
+    \`\`\`bash
+    curl -sS -X POST "$ADMIN_URL/auth/v1/admin/users" -H "apikey: $SUPABASE_SERVICE_KEY" | jq -er .id
+    \`\`\`
+`
+
+  it("parse_plan surfaces provisioning bindings and defaults consent to false", async () => {
+    const pluginInput = {
+      client: { session: { get: async () => ({ data: { parentID: undefined } }) } },
+    } as never
+    const pluginResult = await AppVerkQAPlugin(pluginInput)
+    const parsePlanTool = pluginResult.tool?.parse_plan
+    // No allow_provisioning arg → consent defaults false; the return NAMES the provisioning
+    // binding + principal so Perun can surface the gate rather than dead-ending at execute_recipe.
+    const result = await parsePlanTool!.execute(
+      { plan: PROVISIONING_PLAN },
+      makeToolContext("perun-prov-default"),
+    )
+    const parsed = JSON.parse(result as string)
+    expect(parsed.status).toBe("ok")
+    expect(parsed.allow_provisioning).toBe(false)
+    expect(parsed.provisioning).toEqual([
+      { name: "QA_BIND_USER_A", provisions: "a confirmed Supabase auth user" },
+    ])
+  })
+
+  it("parse_plan with allow_provisioning:true arms provisioning consent for the run", async () => {
+    const pluginInput = {
+      client: { session: { get: async () => ({ data: { parentID: undefined } }) } },
+    } as never
+    const pluginResult = await AppVerkQAPlugin(pluginInput)
+    const parsePlanTool = pluginResult.tool?.parse_plan
+    const result = await parsePlanTool!.execute(
+      { plan: PROVISIONING_PLAN, allow_provisioning: true },
+      makeToolContext("perun-prov-consented"),
+    )
+    const parsed = JSON.parse(result as string)
+    expect(parsed.status).toBe("ok")
+    expect(parsed.allow_provisioning).toBe(true)
+  })
+
+  it("record_input accepts the privileged provisioning key ONLY because the plan declares it as an Input", async () => {
+    // The safety argument the doctrine leans on: the human supplies the admin key, but record_input
+    // accepts it SOLELY via the declaredInput denylist exemption (a plan-declared recipe Input). An
+    // UNDECLARED credential-prefixed key stays rejected, so a provisioning recipe can never acquire
+    // a privileged key out of band. This pins both halves of that junction through the real tools.
+    const pluginInput = {
+      client: { session: { get: async () => ({ data: { parentID: undefined } }) } },
+    } as never
+
+    // Declared: PROVISIONING_PLAN lists $SUPABASE_SERVICE_KEY in the binding's Inputs → accepted.
+    const pluginA = await AppVerkQAPlugin(pluginInput)
+    await pluginA.tool!.parse_plan!.execute(
+      { plan: PROVISIONING_PLAN },
+      makeToolContext("perun-key-declared"),
+    )
+    const accepted = await pluginA.tool!.record_input!.execute(
+      { name: "SUPABASE_SERVICE_KEY", value: "svc-role-key-abc123" },
+      makeToolContext("perun-key-declared"),
+    )
+    expect(accepted).toContain('"status":"ok"')
+
+    // Undeclared: a plan with no binding referencing that key → the credential-prefix denylist rejects it.
+    const pluginB = await AppVerkQAPlugin(pluginInput)
+    await pluginB.tool!.parse_plan!.execute(
+      { plan: "# Plan\n\n## FE Test Scenarios\n### FE-01: nothing\n" },
+      makeToolContext("perun-key-undeclared"),
+    )
+    const rejected = await pluginB.tool!.record_input!.execute(
+      { name: "SUPABASE_SERVICE_KEY", value: "svc-role-key-abc123" },
+      makeToolContext("perun-key-undeclared"),
+    )
+    expect(rejected).toContain('"status":"rejected"')
+    expect(rejected).toMatch(/denylist|credential-prefix/)
+  })
+
+  it("end-to-end: consent set via the parse_plan TOOL unblocks the execute_recipe TOOL on the shared run state", async () => {
+    // The single security-critical seam: parse_plan (Perun) writes allow_provisioning into the SAME
+    // QaRunState that execute_recipe (zmora-setup) reads, keyed by the shared parentID. Proven WITHOUT
+    // running the recipe: with the recipe input unbound, a CONSENTED run passes the gate and reaches
+    // need_info, while an UNCONSENTED run stops at provisioning_blocked. A parentID-keying regression
+    // (consent written to one scope, read from another) would flip the consented case back to blocked.
+    const HI2_PLAN = `
+## Setup
+**Bindings:**
+- \`QA_BIND_USER_A\` (plain) — provisioned user A
+  - Inputs: \`$QA_HI2_ADMIN_URL\`
+  - Egress: \`$QA_HI2_ADMIN_URL\`
+  - Provisions: a confirmed auth user
+  - Recipe:
+    \`\`\`bash
+    curl -sS -X POST "$QA_HI2_ADMIN_URL/admin/users" | jq -er .id
+    \`\`\`
+`
+    // Coordinator session resolves to itself; the zmora-setup child resolves to the SAME parent.
+    const client = {
+      session: {
+        get: async (req: { path: { id: string } }) => ({
+          data: { parentID: req.path.id === "setup-child-hi2" ? "perun-hi2" : undefined },
+        }),
+      },
+    } as never
+    const pluginResult = await AppVerkQAPlugin({ client } as never)
+    const ext = getDispatchExtensions()
+    // Register the setup child so isSetupCaller passes (it shares parentID "perun-hi2" with parse_plan).
+    ext.sessionAgentRegistry!.register("setup-child-hi2", "zmora-setup")
+
+    const parsePlan = pluginResult.tool!.parse_plan!
+    const executeRecipe = pluginResult.tool!.execute_recipe!
+
+    // 1. Parse WITHOUT consent → execute_recipe blocks at the gate (before input resolution).
+    await parsePlan.execute({ plan: HI2_PLAN }, makeToolContext("perun-hi2"))
+    const blocked = await executeRecipe.execute(
+      { binding_name: "QA_BIND_USER_A" },
+      makeToolContext("setup-child-hi2"),
+    )
+    expect(blocked).toContain('"status":"provisioning_blocked"')
+
+    // 2. Re-parse WITH consent → the gate opens; with the input still unbound the handler now reaches
+    //    need_info (NOT provisioning_blocked), proving the consent write reached the reader's scope.
+    await parsePlan.execute(
+      { plan: HI2_PLAN, allow_provisioning: true },
+      makeToolContext("perun-hi2"),
+    )
+    const past = await executeRecipe.execute(
+      { binding_name: "QA_BIND_USER_A" },
+      makeToolContext("setup-child-hi2"),
+    )
+    expect(past).not.toContain("provisioning_blocked")
+    expect(past).toContain('"status":"need_info"')
+  })
 })

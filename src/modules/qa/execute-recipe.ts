@@ -34,6 +34,10 @@ export type ExecuteRecipeResult =
   | { status: "need_info"; missing: string[] }
   | { status: "recipe_failed"; reason: string; stderr_tail: string }
   | { status: "unknown_binding" }
+  // A provisioning recipe (creates a principal) dispatched without recorded
+  // allow_provisioning consent. The account is NOT created; Perun surfaces the
+  // provisioning-consent gate and re-arms via parse_plan once the user confirms.
+  | { status: "provisioning_blocked"; reason: string }
 
 export interface ExecuteRecipeContext {
   sessionID: string
@@ -53,6 +57,21 @@ export function makeExecuteRecipeHandler(
     const bindings = deps.state.getBindings(parentID) ?? []
     const target = bindings.find((b) => b.name === args.binding_name)
     if (target === undefined) return { status: "unknown_binding" }
+
+    // Provisioning-consent gate. A recipe that CREATES a principal (declared via the
+    // binding's `- Provisions:` field) is a write to the target system — it runs ONLY
+    // under recorded operator consent. Without allow_provisioning the account is never
+    // created: Perun surfaces the provisioning-consent gate and the user confirms
+    // (parse_plan sets the flag). Checked BEFORE endDialogRound / input resolution so a
+    // refused provisioning neither consumes the dialog round nor probes for inputs.
+    // Token-minting recipes (provisions === null — the common login→JWT case) skip this
+    // entirely. Mirrors the qa-loop seed-consent gate for the recipe path.
+    if (target.provisions !== null && !deps.state.getAllowProvisioning(parentID)) {
+      return {
+        status: "provisioning_blocked",
+        reason: `binding '${target.name}' provisions ${target.provisions} (an account/principal write) and runs only under allow_provisioning consent — surface the provisioning-consent gate, then re-run parse_plan with allow_provisioning:true once the user confirms.`,
+      }
+    }
 
     // Re-dispatch to zmora-setup means the prior mid-run dialog round (if
     // any) has concluded — the next `record_input` call should count as a

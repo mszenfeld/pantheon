@@ -212,17 +212,23 @@ describe("qa-plan-authoring skill", () => {
     expect(md).toContain("**Seeds fixtures:** BE-NN[, …] (requires allow_mutations)")
   })
 
-  it("Step 6.5 makes account-existence a first-class HUMAN-ONLY precondition, not misreadable prose (provisioning-delegation)", () => {
+  it("Step 6.5 makes account-existence a first-class human precondition with a sanctioned provisioning-recipe escape (provisioning-delegation)", () => {
     // Upstream root cause of the i-need-cv auto-provision improvisation: the plan buried
     // "create test users … if necessary" in free prose because authoring had no account-existence
-    // class. preflight verifies credential VALUE presence, never account existence.
+    // class. preflight verifies credential VALUE presence, never account existence. Phase 2 adds
+    // the sanctioned escape: a `- Provisions:` recipe run under the allow_provisioning consent gate,
+    // so a producible account no longer dead-ends as a human-only prerequisite.
     expect(md).toContain(
       "Account existence is a human prerequisite that preflight cannot verify",
     )
-    expect(md).toContain("account existence is a HUMAN-ONLY precondition")
+    expect(md).toContain("account existence DEFAULTS to a human precondition")
     expect(md).toContain("credential-presence ≠ account-existence")
-    // an unproducible account demotes its scenarios to provisioning-blocked, never agent-provisioned
+    // An unproducible account demotes its scenarios to provisioning-blocked...
     expect(md).toContain("provisioning-blocked")
+    // ...but a producible one is declared as a provisioning recipe under consent (the escape).
+    expect(md).toContain("Escape — a provisioning recipe.")
+    expect(md).toContain("- Provisions:")
+    expect(md).toContain("allow_provisioning")
   })
 
   it("Step 5 Setup inference declares a scenario auth credential, keyed on scenarios not the diff (undeclared-auth-credential)", () => {

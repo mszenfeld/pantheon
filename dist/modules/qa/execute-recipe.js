@@ -14,6 +14,12 @@ function makeExecuteRecipeHandler(deps) {
     const bindings = deps.state.getBindings(parentID) ?? [];
     const target = bindings.find((b) => b.name === args.binding_name);
     if (target === void 0) return { status: "unknown_binding" };
+    if (target.provisions !== null && !deps.state.getAllowProvisioning(parentID)) {
+      return {
+        status: "provisioning_blocked",
+        reason: `binding '${target.name}' provisions ${target.provisions} (an account/principal write) and runs only under allow_provisioning consent \u2014 surface the provisioning-consent gate, then re-run parse_plan with allow_provisioning:true once the user confirms.`
+      };
+    }
     deps.state.endDialogRound(parentID);
     const composedEnv = {};
     const missing = [];

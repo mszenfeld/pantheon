@@ -78,6 +78,16 @@ describe("test-plan-format skill", () => {
     expect(md).toContain("verifies credential *presence*, never account *existence*")
   })
 
+  it("Field rules define the optional `- Provisions:` provisioning-recipe marker (provisioning-consent)", () => {
+    // Phase 2: the ONLY declarative way to sanction account creation. Its presence marks a recipe
+    // as a principal WRITE and arms the allow_provisioning consent gate; omitting it keeps a recipe
+    // a token-minting read. Rewording this away would strand the sanctioned account-creation path.
+    expect(md).toContain("Provisions (optional).")
+    expect(md).toContain("- Provisions: <principal>")
+    expect(md).toContain("provisioning-consent gate")
+    expect(md).toContain("allow_provisioning")
+  })
+
   it("Setup Rules mandate declaring a scenario auth credential up front (undeclared-auth-credential)", () => {
     // Root cause of the ai-score session: scenarios carried `Authorization: Bearer <token>`
     // but `## Setup` declared no Required env var / binding, so `preflight([])` returned ok on
