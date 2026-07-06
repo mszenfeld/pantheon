@@ -92,3 +92,74 @@ describe("Perun seed-consent gate doctrine (pinned against silent regression)", 
     expect(perun).toContain("regardless of any blocked phrasing")
   })
 })
+
+describe("Perun account-provisioning-offer prohibition (pinned against silent regression)", () => {
+  it("bars Perun from offering to create accounts/principals or soliciting a provisioning secret", () => {
+    // Real i-need-cv session: a swappable coordinator model improvised an "I'll create the test
+    // users / generate their credentials via a SERVICE_KEY export+restart" offer that no lane can
+    // execute, and its own credential-prefix denylist then dead-ended the user's compliant paste.
+    // This bullet closes the runtime vacuum (perun.md enumerated forbidden credential MINTING but
+    // never the provisioning OFFER). Deleting/rewording it would let the improvisation return with
+    // the rest of the suite green.
+    expect(perun).toContain(
+      "Offer to create or provision test users, accounts, or principals itself",
+    )
+    expect(perun).toContain("prepare the accounts yourself")
+    expect(perun).toContain("do NOT counter-offer to do it yourself")
+  })
+})
+
+describe("Perun credential-recovery & diagnostic-honesty doctrine (pinned against silent regression)", () => {
+  it("tells Perun a re-paste REPLACES the stored value and returns updated", () => {
+    // Real SynergyCodes session: the store dropped a corrected re-paste as a
+    // duplicate no-op while telling Perun {status:"ok"}. D1 made the store
+    // overwrite (returning "updated"); this doctrine tells Perun to use it
+    // instead of pushing the user to export-and-restart. Rewording it back
+    // would resurrect the unrecoverable-bad-first-paste loop, suite still green.
+    expect(perun).toContain("Credential-recovery & diagnostic honesty")
+    expect(perun).toContain("REPLACES the stored value")
+    expect(perun).toContain('{status: "updated"}')
+    // The user-facing confirmation string is the observable contract of the
+    // overwrite path — pin it so a reword cannot drop the "Updated" ack.
+    expect(perun).toContain("Updated <NAME> (<N> chars)")
+    expect(perun).toContain(
+      "export-and-restart is only for an UNDECLARED credential-prefixed boot secret",
+    )
+  })
+
+  it("pins the status-aware user-reply echo LINE with literals unique to it (not the doctrine block)", () => {
+    // The echo line (user-reply parsing) branches on record_input's status: a
+    // first paste "Recorded values for: ... Re-attempting setup...", an
+    // {status:"updated"} re-paste "Updated <NAME> (<N> chars).", and a
+    // {status:"rejected"} surfaces the reason and does NOT re-attempt. The
+    // "Updated <NAME> (<N> chars)" / '{status: "updated"}' literals ALSO live in
+    // the doctrine block below, so they cannot guard the echo line — pin text
+    // that appears ONLY on the echo line so a revert to the pre-status-aware
+    // form (which passed the whole suite) is caught here.
+    expect(perun).toContain("Re-attempting setup...")
+    expect(perun).toContain("do NOT re-attempt with the same value")
+  })
+
+  it("bars inferring credential state from a write-only tool, and bans the Stribog credential probe", () => {
+    // Perun twice confabulated a root cause off unobservable state: a decoded
+    // "expired" verdict, then an "injection broken" verdict read from a Stribog
+    // probe the zmora-scoped shell.env hook deliberately never feeds.
+    expect(perun).toContain("write-only")
+    expect(perun).toContain("401 Invalid or expired token")
+    expect(perun).toContain("401 Not authenticated")
+    expect(perun).toContain("never a Stribog diagnostic")
+  })
+})
+
+describe("Perun write-only credential rule (pinned against silent regression)", () => {
+  it("bars decoding/echoing a pasted credential — the scrubber cannot redact decoded plaintext", () => {
+    // Real SynergyCodes session: Perun base64-decoded the user's JWT, printed
+    // its identity claims (name/email/tid/roles) and manufactured a false
+    // "expired" verdict. This universal MUST-NOT bullet closes that PII leak;
+    // the deterministic scrubber cannot backstop it (decoded plaintext is not a
+    // substring of the stored base64 value).
+    expect(perun).toContain("Decode, inspect, or echo a pasted credential")
+    expect(perun).toContain("WRITE-ONLY")
+    expect(perun).toContain("NEVER base64-decode it")
+  })
+})
