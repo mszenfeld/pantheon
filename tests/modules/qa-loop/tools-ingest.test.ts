@@ -44,6 +44,7 @@ function seedSidecar(state: QaLoopState, parentId: string, dir: string) {
     started_at: now, updated_at: now, finalized_at: null, baseline_recorded: false,
     budgets: { iteration: 0, dispatch_count_total: 0, elapsed_s: 0, final_pass_elapsed_s: null },
     pre_loop: { undo_ref: "refs/qa-loop/pre/qa-loop-demo-1", dirty: false, dirty_files: [] },
+    teardowns: [],
     scenarios: {
       "FE-01": { qa_ids: [], kind: "feature", section: "FE", mutating: false, baseline: "fail", current: "fail", reason: null },
       "BE-01": { qa_ids: [], kind: "sanity", section: "BE", mutating: false, baseline: "pass", current: "pass", reason: null },

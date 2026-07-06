@@ -44,6 +44,29 @@ interface QaLoopToolDeps {
  * canonical marker; the leniency here is defense-in-depth, not license to vary it.
  */
 declare const SEED_MARKER: RegExp;
+/**
+ * The plan-declared un-seed marker (`**Teardown (psql/sqlite3):**`), the reversal paired with a
+ * Seed/mutating scenario (§8). Same leading-marker leniency as SEED_MARKER. Its PRESENCE (with a
+ * well-formed fenced block, see extractTeardown) is what makes a mutation auto-reverting — and so
+ * runnable by DEFAULT on a local base URL, without allow_mutations. A bare marker with no fence
+ * does not count (extractTeardown returns null → treated as no teardown → the mutation stays
+ * consent-gated): a malformed reversal must never silently unlock the default.
+ */
+declare const TEARDOWN_MARKER: RegExp;
+/**
+ * True iff the plan's frontmatter `base-url:` resolves to a loopback host (§8 non-local floor).
+ * Scoped to the leading YAML frontmatter block (between the first two `---` fences) so a stray
+ * `base-url:` in a scenario body cannot spoof locality. No base URL, an unparseable URL, or a
+ * non-loopback host all return false → the auto-revert default does NOT apply (safe: consent-gated).
+ */
+declare function baseUrlIsLocal(planText: string): boolean;
+/**
+ * Extract a scenario's `**Teardown (psql/sqlite3):**` region — the marker line through the end of
+ * the fenced code block that follows it — so Perun can hand exactly that (and nothing else) to a
+ * zmora-be teardown wave. Returns null when the marker is absent OR carries no fenced block (a bare
+ * marker is not a usable reversal); the null makes the scenario "has no teardown" for classification.
+ */
+declare function extractTeardown(block: string): string | null;
 /** Loop budget defaults — the single source the tool reads (docs quote these). */
 declare const QA_LOOP_DEFAULTS: {
     readonly maxIterations: 3;
@@ -180,4 +203,4 @@ declare function makeQaLoopTools(deps: QaLoopToolDeps): {
     };
 };
 
-export { QA_LOOP_DEFAULTS, type QaLoopToolDeps, SEED_MARKER, makeQaLoopTools };
+export { QA_LOOP_DEFAULTS, type QaLoopToolDeps, SEED_MARKER, TEARDOWN_MARKER, baseUrlIsLocal, extractTeardown, makeQaLoopTools };

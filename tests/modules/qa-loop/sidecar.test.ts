@@ -31,6 +31,7 @@ function makeSidecar(reportDir: string): Sidecar {
       final_pass_elapsed_s: null,
     },
     pre_loop: { undo_ref: "refs/qa-loop/pre/qa-loop-demo-1", dirty: false, dirty_files: [] },
+    teardowns: [],
     scenarios: {},
     issues: {},
     iterations: [],

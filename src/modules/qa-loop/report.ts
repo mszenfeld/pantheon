@@ -95,9 +95,29 @@ export function renderReport(s: Sidecar): string {
   lines.push("## Recovery")
   lines.push("")
   lines.push(
-    `Run \`qa_loop_undo\` to revert everything this loop did — it restores \`${s.pre_loop.undo_ref}\` (a plain git ref you can also restore from your own shell).`,
+    `Run \`qa_loop_undo\` to revert the FILE changes this loop made — it restores \`${s.pre_loop.undo_ref}\` (a plain git ref you can also restore from your own shell). The ref captures the working tree only; any seeded DB rows are reverted separately by the teardown steps below.`,
   )
   lines.push("")
+
+  // ── Teardown (DB revert) ──────────────────────────────────────────────────
+  // The auto-reverting seeds/mutations that ran (§8). Listed LIFO — the same order Perun's
+  // post-finalize zmora-be teardown wave runs them — so the operator can re-run them by hand if
+  // the wave did not complete. Each block already carries its own fenced SQL; rendered verbatim.
+  const teardowns = s.teardowns ?? []
+  if (teardowns.length > 0) {
+    lines.push("### Teardown (DB revert)")
+    lines.push("")
+    lines.push(
+      `${teardowns.length} auto-reverting seed/mutation ran. Perun runs these un-seed steps as a zmora-be wave at finalize; run them from your own shell if that wave did not complete:`,
+    )
+    lines.push("")
+    for (const t of [...teardowns].reverse()) {
+      lines.push(`**${t.scenario}**`)
+      lines.push("")
+      lines.push(t.block)
+      lines.push("")
+    }
+  }
 
   return lines.join("\n")
 }

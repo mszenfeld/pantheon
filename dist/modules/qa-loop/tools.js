@@ -55,6 +55,39 @@ function detectDirty(cwd) {
   return { dirty: true, dirty_files };
 }
 const SEED_MARKER = /^\s*(?:[-*+]\s+|\d+[.)]\s+|>\s*)?\*\*Seed\s*\(\s*psql\s*\/\s*sqlite3\s*\)\s*:\*\*/im;
+const TEARDOWN_MARKER = /^\s*(?:[-*+]\s+|\d+[.)]\s+|>\s*)?\*\*Teardown\s*\(\s*psql\s*\/\s*sqlite3\s*\)\s*:\*\*/im;
+const LOCAL_HOSTS = /* @__PURE__ */ new Set(["localhost", "127.0.0.1", "::1"]);
+function baseUrlIsLocal(planText) {
+  const fm = /^---\r?\n([\s\S]*?)\r?\n---/m.exec(planText);
+  if (!fm) return false;
+  const m = /^base-url:\s*(.+)$/im.exec(fm[1]);
+  if (!m) return false;
+  const raw = m[1].trim().replace(/^["']|["']$/g, "");
+  try {
+    const host = new URL(raw).hostname.replace(/^\[|\]$/g, "");
+    return LOCAL_HOSTS.has(host);
+  } catch {
+    return false;
+  }
+}
+function extractTeardown(block) {
+  const lines = block.split("\n");
+  let start = -1;
+  for (let i = 0; i < lines.length; i++) {
+    if (TEARDOWN_MARKER.test(lines[i])) {
+      start = i;
+      break;
+    }
+  }
+  if (start === -1) return null;
+  let k = start + 1;
+  while (k < lines.length && !/^\s*```/.test(lines[k])) k++;
+  if (k >= lines.length) return null;
+  let end = k + 1;
+  while (end < lines.length && !/^\s*```\s*$/.test(lines[end])) end++;
+  if (end >= lines.length) return null;
+  return lines.slice(start, end + 1).join("\n").trim();
+}
 const QA_LOOP_DEFAULTS = { maxIterations: 3, maxDispatches: 50, timeBudgetS: 1800 };
 function containedPath(cwd, p) {
   const root = resolve(cwd);
@@ -82,10 +115,12 @@ function makeQaLoopTools(deps) {
   const { gate, state, cwd, resolveParentID, assignIssueIds } = deps;
   const qa_loop_start = tool({
     description: [
-      "Phase 0 of the QA loop (RESOLVE & GUARD). Perun-only. Hashes the plan for idempotency, decides REUSE/ADOPT/FRESH, classifies every scenario, strips mutating-expected-success scenarios from the dispatch set (mutation guard), captures the pre-loop undo ref, and runs the working-tree dirty check.",
+      "Phase 0 of the QA loop (RESOLVE & GUARD). Perun-only. Hashes the plan for idempotency, decides REUSE/ADOPT/FRESH, classifies every scenario, applies the mutation guard, captures the pre-loop undo ref, and runs the working-tree dirty check.",
+      "",
+      "Mutation policy (\xA78): a Seed / mutating-expected-success scenario that declares a paired `**Teardown (psql/sqlite3):**` AND targets a LOCAL base URL is AUTO-REVERTING, so it RUNS BY DEFAULT and its id is listed in `auto_reverting` (the loop hands the teardown SQL back at finalize/undo for a zmora-be un-seed wave). An irreversible (no Teardown) or non-local mutation stays stripped unless `allow_mutations` is set.",
       "",
       "Result shape (JSON-stringified):",
-      '- `{ status: "ok", disposition: "REUSE"|"ADOPT"|"FRESH", run_id, pre_loop_ref, dispatch_set: string[], stripped: { id, reason }[], dirty: boolean, dirty_files: string[], qa_id_start_at?: number }`.',
+      '- `{ status: "ok", disposition: "REUSE"|"ADOPT"|"FRESH", run_id, pre_loop_ref, dispatch_set: string[], stripped: { id, reason }[], auto_reverting: string[], dirty: boolean, dirty_files: string[], qa_id_start_at?: number }`.',
       '- `{ status: "forbidden", reason }` \u2014 caller is not the coordinator.'
     ].join("\n"),
     args: {
@@ -129,6 +164,7 @@ function makeQaLoopTools(deps) {
           pre_loop_ref: onDisk.pre_loop.undo_ref,
           dispatch_set: Object.entries(onDisk.scenarios).filter(([, sc]) => sc.current !== "skip").map(([id]) => id),
           stripped: Object.entries(onDisk.scenarios).filter(([, sc]) => sc.reason?.startsWith("mutation-guard")).map(([id, sc]) => ({ id, reason: sc.reason })),
+          auto_reverting: (onDisk.teardowns ?? []).map((t) => t.scenario),
           dirty: onDisk.pre_loop.dirty,
           dirty_files: onDisk.pre_loop.dirty_files
         });
@@ -144,8 +180,10 @@ function makeQaLoopTools(deps) {
         reportExists = false;
       }
       const disposition = reportExists ? "ADOPT" : "FRESH";
+      const targetIsLocal = baseUrlIsLocal(planText);
       const scenarios = {};
       const dispatchSet = [];
+      const teardowns = [];
       for (const { id, block, malformed } of splitScenarios(planText)) {
         if (malformed) {
           scenarios[id] = {
@@ -167,7 +205,10 @@ function makeQaLoopTools(deps) {
         }
         const { kind, mutating, expectsSuccess } = classifyScenario(block);
         const isSeedWrite = SEED_MARKER.test(block);
-        const stripped = isSeedWrite ? !allowMutations : mutating && expectsSuccess && !allowMutations;
+        const gatedMutation = isSeedWrite || mutating && expectsSuccess;
+        const teardownBlock = extractTeardown(block);
+        const autoReverting = gatedMutation && teardownBlock !== null && targetIsLocal;
+        const stripped = gatedMutation && !autoReverting && !allowMutations;
         scenarios[id] = {
           qa_ids: [],
           kind,
@@ -175,9 +216,12 @@ function makeQaLoopTools(deps) {
           mutating,
           baseline: stripped ? "skip" : "fail",
           current: stripped ? "skip" : "fail",
-          reason: stripped ? isSeedWrite ? "mutation-guard: plan-declared Seed write requires allow_mutations (seed-consent gate)" : "mutation-guard: mutating scenario expected to succeed" : null
+          reason: stripped ? isSeedWrite ? "mutation-guard: plan-declared Seed write needs a paired **Teardown (psql/sqlite3):** on a local base URL (auto-revert), or allow_mutations" : "mutation-guard: mutating scenario expected to succeed \u2014 pair a **Teardown (psql/sqlite3):** on a local base URL (auto-revert), or re-run with allow_mutations" : null
         };
-        if (!stripped) dispatchSet.push(id);
+        if (!stripped) {
+          dispatchSet.push(id);
+          if (teardownBlock !== null) teardowns.push({ scenario: id, block: teardownBlock });
+        }
       }
       if (Object.keys(scenarios).length === 0) {
         return JSON.stringify({
@@ -223,6 +267,7 @@ function makeQaLoopTools(deps) {
           final_pass_elapsed_s: null
         },
         pre_loop: preLoop,
+        teardowns,
         scenarios,
         issues: {},
         iterations: [],
@@ -251,6 +296,10 @@ function makeQaLoopTools(deps) {
         // at the final report that the run under-covered the change. Excludes malformed-heading
         // skips (their reason does not start with "mutation-guard").
         stripped: Object.entries(scenarios).filter(([, sc]) => sc.reason?.startsWith("mutation-guard")).map(([id, sc]) => ({ id, reason: sc.reason })),
+        // Scenarios that mutate but run by DEFAULT because they declared a reversal on a local
+        // target (§8). Perun tells the operator these seed-then-revert, and MUST run the teardown
+        // wave (qa_loop_finalize hands back the SQL) so the loop leaves the DB clean.
+        auto_reverting: teardowns.map((t) => t.scenario),
         dirty,
         dirty_files,
         ...qaIdStartAt !== void 0 ? { qa_id_start_at: qaIdStartAt } : {}
@@ -482,7 +531,9 @@ function makeQaLoopTools(deps) {
       "Phase 4 (SUMMARY). Perun-only. Computes the run result via the Result mapping (Pass>NotVerified>BudgetExhausted>Stopped>Fail), then \u2014 and ONLY here, the oracle-separation invariant \u2014 transitions each `fix-attempted` issue to `fixed` when its scenario's `current` is `pass` after the FINAL ingest. Renders + writes the report markdown (the sole writer of `\u2705 Fixed`) and records `final_pass_elapsed_s`.",
       'The tool records `final_pass_elapsed_s` itself: it measures wall-clock from the FINAL ingest (`s.updated_at`, last set by `qa_loop_ingest({phase:"final"})`) to this finalize call \u2014 Perun cannot measure wall-clock, so it does NOT supply it. `final_pass_elapsed_s` is an OPTIONAL override only (e.g. for deterministic tests).',
       "",
-      'Result shape: `{ status:"ok", result, report_path }` or `{ status:"forbidden", reason }`.'
+      "Also returns `teardowns_pending` (\xA78): the recorded reversals for the auto-reverting seeds/mutations that ran, LIFO. When non-empty, Perun MUST dispatch a zmora-be teardown wave to run each block (un-seeding the DB rows the run created) before reporting done \u2014 the pre-loop ref reverts FILES only, not DB rows.",
+      "",
+      'Result shape: `{ status:"ok", result, report_path, teardowns_pending: { scenario, block }[] }` or `{ status:"forbidden", reason }`.'
     ].join("\n"),
     args: {
       final_pass_elapsed_s: tool.schema.number().optional().describe("Optional override for the final-pass wall-clock seconds; omit to let the tool compute it from the FINAL-ingest timestamp.")
@@ -507,14 +558,21 @@ function makeQaLoopTools(deps) {
       s.updated_at = s.finalized_at;
       state.save(parentId, s);
       writeFileSync(s.report_path, renderReport(s));
-      return JSON.stringify({ status: "ok", result: s.result, report_path: s.report_path });
+      const teardowns_pending = [...s.teardowns ?? []].reverse();
+      return JSON.stringify({
+        status: "ok",
+        result: s.result,
+        report_path: s.report_path,
+        teardowns_pending
+      });
     }
   });
   const qa_loop_undo = tool({
     description: [
       "Total undo (\xA76): revert the whole working tree to `refs/qa-loop/pre/<run>`, returning the user to exactly the pre-loop state (including any pre-existing dirty work). Perun-only \u2014 the coordinator cannot `git reset` itself, so it invokes this tool on request.",
+      "The ref restores FILES only. `teardowns_pending` (\xA78, LIFO) carries the DB reversals for any auto-reverting seeds/mutations that ran; when non-empty, Perun runs a zmora-be teardown wave to un-seed the rows too, so undo reverts BOTH files and data.",
       "",
-      'Result shape: `{ status:"ok", restored_ref }` | `{ status:"error", reason }` | `{ status:"forbidden", reason }`.'
+      'Result shape: `{ status:"ok", restored_ref, teardowns_pending: { scenario, block }[] }` | `{ status:"error", reason }` | `{ status:"forbidden", reason }`.'
     ].join("\n"),
     args: {},
     async execute(_args, ctx) {
@@ -527,7 +585,8 @@ function makeQaLoopTools(deps) {
         return JSON.stringify({ status: "error", reason: `pre-loop ref ${ref} is missing` });
       }
       undoToPreLoop(cwd, ref);
-      return JSON.stringify({ status: "ok", restored_ref: ref });
+      const teardowns_pending = [...s.teardowns ?? []].reverse();
+      return JSON.stringify({ status: "ok", restored_ref: ref, teardowns_pending });
     }
   });
   return {
@@ -542,5 +601,8 @@ function makeQaLoopTools(deps) {
 export {
   QA_LOOP_DEFAULTS,
   SEED_MARKER,
+  TEARDOWN_MARKER,
+  baseUrlIsLocal,
+  extractTeardown,
   makeQaLoopTools
 };

@@ -96,6 +96,13 @@ export interface Sidecar {
     final_pass_elapsed_s: number | null
   }
   pre_loop: { undo_ref: string; dirty: boolean; dirty_files: string[] }
+  // Recorded un-seed steps for the auto-reverting mutations that ran this loop (§8). Each
+  // entry is the `**Teardown (psql/sqlite3):**` block of a scenario that mutated on a LOCAL
+  // base URL and so ran by DEFAULT (no allow_mutations) BECAUSE it declared a reversal. The
+  // git pre_loop ref restores FILES only — DB rows are reverted by running these blocks, which
+  // qa_loop_finalize/qa_loop_undo hand back to Perun (LIFO) for a zmora-be teardown wave.
+  // Absent on pre-field on-disk sidecars → read as `?? []` (safe: nothing to revert).
+  teardowns: { scenario: string; block: string }[]
   scenarios: Record<string, ScenarioRecord>
   issues: Record<string, IssueRecord>
   iterations: IterationRecord[]

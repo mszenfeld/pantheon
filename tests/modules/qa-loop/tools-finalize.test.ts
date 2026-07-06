@@ -40,6 +40,7 @@ function sidecar(reportPath: string, fe01Current: "pass" | "fail"): Sidecar {
     started_at: now, updated_at: now, finalized_at: null, baseline_recorded: true,
     budgets: { iteration: 1, dispatch_count_total: 4, elapsed_s: 120, final_pass_elapsed_s: null },
     pre_loop: { undo_ref: "refs/qa-loop/pre/qa-loop-demo-1", dirty: false, dirty_files: [] },
+    teardowns: [],
     scenarios: { "FE-01": { qa_ids: ["QA-001"], kind: "feature", section: "FE", mutating: false, baseline: "fail", current: fe01Current, reason: null } },
     issues: { "QA-001": { severity: "HIGH", scenario: "FE-01", location: "x:1", title: "t", problem: "p", remediation: "r", status: "fix-attempted", fixed_at: null, fix: { svarog_status: "READY", escalate_reason: null, child_session_id: "ses_a", checkpoint_ref: "refs/svarog/ckpt/ses_a", changed: ["src/x.ts"], hardcode_warnings: [] } } },
     iterations: [{ n: 1, phase: "evaluated", pending: [], in_flight: null, attempted_so_far: ["QA-001"], now_passing: [], still_failing: [], stop_cause: null, regressions: [], warnings: [], dispatches_this_iter: 4, elapsed_s: 120 }],
@@ -81,6 +82,31 @@ describe("qa_loop_finalize", () => {
     expect(s.finalized_at).not.toBeNull()
     const report = readFileSync(join(cwd, "docs/testing/reports/r.md"), "utf8")
     expect(report).toContain("✅ Fixed")
+  })
+
+  it("§8 returns teardowns_pending LIFO (reverse of seed order) and lists them in the report", async () => {
+    const s0 = sidecar(join(cwd, "docs/testing/reports/r.md"), "pass")
+    s0.teardowns = [
+      { scenario: "BE-01", block: "DELETE seed-one" },
+      { scenario: "BE-02", block: "DELETE seed-two" },
+    ]
+    state.save("perun", s0)
+    const res = resultJson(await tools().qa_loop_finalize.execute({ final_pass_elapsed_s: 0 }, ctx("perun")))
+    expect(res.status).toBe("ok")
+    // LIFO: BE-02 (seeded last) tears down first.
+    expect(res.teardowns_pending).toEqual([
+      { scenario: "BE-02", block: "DELETE seed-two" },
+      { scenario: "BE-01", block: "DELETE seed-one" },
+    ])
+    const report = readFileSync(join(cwd, "docs/testing/reports/r.md"), "utf8")
+    expect(report).toContain("Teardown (DB revert)")
+    expect(report).toContain("DELETE seed-two")
+  })
+
+  it("§8 teardowns_pending is [] when the run seeded nothing", async () => {
+    state.save("perun", sidecar(join(cwd, "docs/testing/reports/r.md"), "pass"))
+    const res = resultJson(await tools().qa_loop_finalize.execute({ final_pass_elapsed_s: 0 }, ctx("perun")))
+    expect(res.teardowns_pending).toEqual([])
   })
 
   it("computes final_pass_elapsed_s itself when no override is passed", async () => {

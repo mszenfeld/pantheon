@@ -23,6 +23,7 @@ function sidecar(p: Partial<Sidecar> = {}): Sidecar {
     baseline_recorded: true,
     budgets: { iteration: 1, dispatch_count_total: 4, elapsed_s: 120, final_pass_elapsed_s: null },
     pre_loop: { undo_ref: "refs/qa-loop/pre/qa-loop-demo-1", dirty: false, dirty_files: [] },
+    teardowns: [],
     scenarios: {
       "FE-01": {
         qa_ids: ["QA-001"], kind: "feature", section: "FE",
@@ -121,5 +122,30 @@ describe("renderReport (§5)", () => {
     const md = renderReport(sidecar())
     expect(md).toContain("qa_loop_undo")
     expect(md).toContain("refs/qa-loop/pre/qa-loop-demo-1")
+  })
+
+  it("§8 the recovery line scopes qa_loop_undo to FILE changes (no longer oversells 'everything')", () => {
+    const md = renderReport(sidecar())
+    expect(md).toContain("revert the FILE changes")
+    expect(md).not.toContain("revert everything this loop did")
+  })
+
+  it("§8 renders the Teardown (DB revert) section LIFO when the run seeded auto-reverting rows", () => {
+    const md = renderReport(sidecar({
+      teardowns: [
+        { scenario: "BE-01", block: "**Teardown (psql/sqlite3):**\n```sql\nDELETE one\n```" },
+        { scenario: "BE-02", block: "**Teardown (psql/sqlite3):**\n```sql\nDELETE two\n```" },
+      ],
+    }))
+    expect(md).toContain("### Teardown (DB revert)")
+    // LIFO: BE-02 listed before BE-01.
+    expect(md.indexOf("BE-02")).toBeLessThan(md.indexOf("BE-01"))
+    expect(md).toContain("DELETE two")
+    expect(md).toContain("DELETE one")
+  })
+
+  it("§8 omits the Teardown section entirely when nothing was seeded", () => {
+    const md = renderReport(sidecar({ teardowns: [] }))
+    expect(md).not.toContain("Teardown (DB revert)")
   })
 })

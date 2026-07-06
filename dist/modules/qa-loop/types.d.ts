@@ -91,6 +91,10 @@ interface Sidecar {
         dirty: boolean;
         dirty_files: string[];
     };
+    teardowns: {
+        scenario: string;
+        block: string;
+    }[];
     scenarios: Record<string, ScenarioRecord>;
     issues: Record<string, IssueRecord>;
     iterations: IterationRecord[];

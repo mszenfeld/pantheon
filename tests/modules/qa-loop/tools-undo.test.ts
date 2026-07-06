@@ -41,6 +41,7 @@ function minimalSidecar(reportPath: string): Sidecar {
     started_at: now, updated_at: now, finalized_at: null, baseline_recorded: true,
     budgets: { iteration: 0, dispatch_count_total: 0, elapsed_s: 0, final_pass_elapsed_s: null },
     pre_loop: { undo_ref: "refs/qa-loop/pre/qa-loop-demo-1", dirty: false, dirty_files: [] },
+    teardowns: [],
     scenarios: {}, issues: {}, iterations: [],
     coverage: { exercised: { feature: 0, sanity: 0, enforcement: 0 }, not_verified: { "auth-unverified": 0, "mutation-guard": 0, "tool-unavailable": 0 }, routing_warnings: [] },
     result: null,
@@ -76,6 +77,24 @@ describe("qa_loop_undo", () => {
     expect(res.status).toBe("ok")
     expect(undo).toHaveBeenCalledWith("/tmp", "refs/qa-loop/pre/qa-loop-demo-1")
     expect(res.restored_ref).toBe("refs/qa-loop/pre/qa-loop-demo-1")
+  })
+
+  it("§8 hands back teardowns_pending LIFO so a manual undo also un-seeds the DB", async () => {
+    vi.spyOn(gitOps, "refExists").mockReturnValue(true)
+    vi.spyOn(gitOps, "undoToPreLoop").mockReturnValue(undefined)
+    const s = minimalSidecar(join(dir, "r.md"))
+    s.teardowns = [
+      { scenario: "BE-01", block: "DELETE a" },
+      { scenario: "BE-02", block: "DELETE b" },
+    ]
+    state.save("perun", s)
+    const res = resultJson(await tools().qa_loop_undo.execute({}, ctx("perun")))
+    expect(res.status).toBe("ok")
+    expect(res.restored_ref).toBe("refs/qa-loop/pre/qa-loop-demo-1")
+    expect(res.teardowns_pending).toEqual([
+      { scenario: "BE-02", block: "DELETE b" },
+      { scenario: "BE-01", block: "DELETE a" },
+    ])
   })
 
   it("errors when the pre-loop ref is missing", async () => {

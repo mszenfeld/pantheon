@@ -4,7 +4,7 @@ import { mkdtempSync, rmSync, writeFileSync, mkdirSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import type { ToolContext } from "@opencode-ai/plugin"
-import { makeQaLoopTools } from "../../../src/modules/qa-loop/tools.js"
+import { makeQaLoopTools, baseUrlIsLocal, extractTeardown } from "../../../src/modules/qa-loop/tools.js"
 import { QaLoopState } from "../../../src/modules/qa-loop/sidecar.js"
 import { deriveCoverage } from "../../../src/modules/qa-loop/coverage.js"
 
@@ -751,5 +751,118 @@ describe("qa_loop_start", () => {
     expect(s.scenarios["BE-01"]!.current).not.toBe("skip")
     expect(res.dispatch_set).toContain("BE-01")
     expect(res.dispatch_set).not.toContain("BE-2_SEED")
+  })
+
+  // ── §8 auto-reverting seed (paired Teardown + local base-url runs by default) ──────────────
+  const AUTOREVERT_PLAN = (baseUrl: string, withFence = true) =>
+    [
+      "---",
+      `base-url: ${baseUrl}`,
+      "---",
+      "",
+      "# Test Plan",
+      "",
+      "## BE Test Scenarios",
+      "",
+      "### BE-01: seeded order is visible",
+      "**Seed (psql/sqlite3):**",
+      "```sql",
+      // Idempotent (ON CONFLICT) — the loop re-runs the plan on the final pass before the single teardown.
+      "INSERT INTO orders (id, title) VALUES (1, 'qa-seed-demo') ON CONFLICT (id) DO NOTHING;",
+      "```",
+      "**Teardown (psql/sqlite3):**",
+      ...(withFence
+        ? ["```sql", "DELETE FROM orders WHERE title = 'qa-seed-demo';", "```"]
+        : []),
+      "Then GET /orders/1 and assert 200.",
+      "",
+    ].join("\n")
+
+  it("§8 auto-reverting seed (Seed + Teardown + LOCAL base-url) runs by DEFAULT and records its teardown", async () => {
+    writeFileSync(join(cwd, "docs/testing/plans/2026-06-26-demo-test-plan.md"), AUTOREVERT_PLAN("http://localhost:8000"))
+    const tools = makeQaLoopTools({ gate: fakeGate("perun"), state, cwd, resolveParentID: async (s) => s, assignIssueIds: noopAssignIssueIds })
+    // NO allow_mutations — the paired Teardown + local target make it auto-reverting → runs by default.
+    const res = resultJson(await tools.qa_loop_start.execute(
+      { plan_path: "docs/testing/plans/2026-06-26-demo-test-plan.md", topic: "demo", report_path: "docs/testing/reports/2026-06-26-demo-report.md" },
+      ctx("perun"),
+    ))
+    expect(res.status).toBe("ok")
+    expect(res.dispatch_set).toContain("BE-01")
+    expect(res.auto_reverting).toEqual(["BE-01"])
+    // The reversal is recorded on the sidecar (handed back LIFO at finalize/undo).
+    const s = state.load("perun")!
+    expect(s.teardowns).toHaveLength(1)
+    expect(s.teardowns[0]!.scenario).toBe("BE-01")
+    expect(s.teardowns[0]!.block).toContain("DELETE FROM orders WHERE title = 'qa-seed-demo';")
+    // NOT counted as a mutation-guard strip.
+    expect(res.stripped).toEqual([])
+  })
+
+  it("§8 the SAME seed on a NON-LOCAL base-url stays consent-gated (stripped without allow_mutations)", async () => {
+    writeFileSync(join(cwd, "docs/testing/plans/2026-06-26-demo-test-plan.md"), AUTOREVERT_PLAN("https://staging.example.com"))
+    const tools = makeQaLoopTools({ gate: fakeGate("perun"), state, cwd, resolveParentID: async (s) => s, assignIssueIds: noopAssignIssueIds })
+    // A Teardown does NOT unlock the default off-localhost — the non-local floor holds.
+    const resNo = resultJson(await tools.qa_loop_start.execute(
+      { plan_path: "docs/testing/plans/2026-06-26-demo-test-plan.md", topic: "demo", report_path: "docs/testing/reports/2026-06-26-demo-report.md" },
+      ctx("perun"),
+    ))
+    // Only scenario → stripped → empty dispatch → loud all-stripped error.
+    expect(resNo.status).toBe("error")
+    expect(String(resNo.reason)).toMatch(/mutation guard|allow_mutations/)
+    // With explicit consent it runs (and still records the teardown for cleanup).
+    const state2 = new QaLoopState()
+    const tools2 = makeQaLoopTools({ gate: fakeGate("perun"), state: state2, cwd, resolveParentID: async (s) => s, assignIssueIds: noopAssignIssueIds })
+    const resYes = resultJson(await tools2.qa_loop_start.execute(
+      { plan_path: "docs/testing/plans/2026-06-26-demo-test-plan.md", topic: "demo", report_path: "docs/testing/reports/2026-06-26-demo-report.md", allow_mutations: true },
+      ctx("perun"),
+    ))
+    expect(resYes.status).toBe("ok")
+    expect(resYes.dispatch_set).toContain("BE-01")
+    expect(state2.load("perun")!.teardowns).toHaveLength(1)
+  })
+
+  it("§8 a Seed with a BARE Teardown marker (no fenced block) is NOT auto-reverting → stripped", async () => {
+    writeFileSync(join(cwd, "docs/testing/plans/2026-06-26-demo-test-plan.md"), AUTOREVERT_PLAN("http://localhost:8000", false))
+    const tools = makeQaLoopTools({ gate: fakeGate("perun"), state, cwd, resolveParentID: async (s) => s, assignIssueIds: noopAssignIssueIds })
+    // A malformed reversal must not silently unlock the default — the seed stays gated.
+    const res = resultJson(await tools.qa_loop_start.execute(
+      { plan_path: "docs/testing/plans/2026-06-26-demo-test-plan.md", topic: "demo", report_path: "docs/testing/reports/2026-06-26-demo-report.md" },
+      ctx("perun"),
+    ))
+    expect(res.status).toBe("error")
+    expect(String(res.reason)).toMatch(/mutation guard|allow_mutations/)
+  })
+})
+
+describe("§8 baseUrlIsLocal / extractTeardown helpers", () => {
+  const fm = (url: string) => `---\nbase-url: ${url}\n---\n\n# Plan\n`
+
+  it("baseUrlIsLocal is true only for loopback hosts in the frontmatter", () => {
+    expect(baseUrlIsLocal(fm("http://localhost:8000"))).toBe(true)
+    expect(baseUrlIsLocal(fm("http://127.0.0.1:8010"))).toBe(true)
+    expect(baseUrlIsLocal(fm("http://[::1]:8000"))).toBe(true)
+    expect(baseUrlIsLocal(fm("https://staging.example.com"))).toBe(false)
+    expect(baseUrlIsLocal(fm("http://10.0.0.5:8000"))).toBe(false)
+    // No frontmatter / no base-url → not provably local → false (safe: consent-gated).
+    expect(baseUrlIsLocal("# Plan\nbody\n")).toBe(false)
+  })
+
+  it("baseUrlIsLocal ignores a base-url that appears only in a scenario body (frontmatter-scoped, fail closed)", () => {
+    const plan = "---\nseverity: LOW\n---\n\n### BE-01\nbase-url: http://localhost:9999 (prose)\n"
+    expect(baseUrlIsLocal(plan)).toBe(false)
+    // No frontmatter fence at all → a body base-url is ignored (cannot spoof locality).
+    expect(baseUrlIsLocal("### BE-01\nbase-url: http://localhost:8000\n")).toBe(false)
+  })
+
+  it("extractTeardown returns the marker+fence region, or null for a bare/unterminated marker", () => {
+    const withFence = ["prose", "**Teardown (psql/sqlite3):**", "```sql", "DELETE FROM t WHERE k = 'x';", "```", "more"].join("\n")
+    const got = extractTeardown(withFence)
+    expect(got).toContain("**Teardown (psql/sqlite3):**")
+    expect(got).toContain("DELETE FROM t WHERE k = 'x';")
+    expect(got).not.toContain("more")
+    // Bare marker, no fence → null (not a usable reversal).
+    expect(extractTeardown("**Teardown (psql/sqlite3):**\nno fence here")).toBeNull()
+    // No marker at all → null.
+    expect(extractTeardown("### BE-01\njust a read")).toBeNull()
   })
 })
