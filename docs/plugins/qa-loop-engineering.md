@@ -40,7 +40,11 @@ An unrecognized SKIP reason falls back to `tool-unavailable` and is appended to 
 
 ## The mutation guard
 
-The loop re-runs scenarios (baseline + per-iteration re-test + final), so a mutating scenario's side effects **compound**. By default the loop **strips mutating-expected-success scenarios pre-dispatch** (HTTP `POST`/`PUT`/`PATCH`/`DELETE` or a write/DB-write step expected to succeed) — the mutating call never executes — recording each as `mutation-guard`. A `negative`-kind scenario asserting a mutation is **blocked** is **not** stripped (the write never lands; stripping it would gut enforcement coverage). `--allow-mutations` keeps them in.
+The loop re-runs scenarios (baseline + per-iteration re-test + final), so a mutating scenario's side effects **compound**. Two rules keep the loop safe to re-run — the design-spec §7 strip and the §8 seed-then-revert default (kept in sync with `src/modules/qa-loop/tools.ts` and `src/agents/perun.md`):
+
+**§7 — strip irreversible / unconsented writes.** A **mutating-expected-success** scenario (HTTP `POST`/`PUT`/`PATCH`/`DELETE` or a write/DB-write step expected to succeed) is **stripped pre-dispatch** — the mutating call never executes — and recorded as `mutation-guard`. A plan-declared **`**Seed (psql/sqlite3):**`** block is a fixture write and is stripped the same way, keyed on the **marker alone** (any verb — INSERT / UPDATE / DELETE / TRUNCATE), regardless of any "blocked / 403" phrasing elsewhere in the block. A `negative`-kind scenario asserting a mutation is **blocked** is **not** stripped (the write never lands; stripping it would gut enforcement coverage).
+
+**§8 — seed-then-revert by default.** The default is *modify-then-revert*, not *refuse*. A gated write that pairs a **`**Teardown (psql/sqlite3):**`** block (marker → fenced SQL) **AND** targets a **LOCAL** `base-url` (loopback: `localhost` / `127.0.0.1` / `::1`) is **auto-reverting**: it **runs by default** (no `--allow-mutations`), its id is returned in `qa_loop_start`'s `auto_reverting`, and the loop un-seeds it via the **finalize teardown wave** — `qa_loop_finalize` (and `qa_loop_undo`) return `teardowns_pending`, the recorded reversals LIFO, which Perun **must** dispatch to `zmora-be` so the DB is left clean (the pre-loop git ref reverts FILES only, not DB rows). A write that is **irreversible** (no usable paired Teardown) or targets a **non-local** host cannot be auto-reverted, so it stays stripped until `--allow-mutations` is passed — the explicit consent leg for exactly those two classes.
 
 ## Oracle honesty
 

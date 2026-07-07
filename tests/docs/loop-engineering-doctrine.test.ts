@@ -34,4 +34,21 @@ describe("loop-engineering doctrine doc", () => {
     const doc = readFileSync(docPath, "utf8")
     expect(doc).toMatch(/oracle separation|independent re-run|only.*final.*Fixed/i)
   })
+
+  it("documents the §8 auto-reverting-seed default (kept in sync with tools.ts / perun.md)", () => {
+    // The pre-branch doc described only strip-by-default; pin the shipped §8 behavior so a
+    // regression back to that stale text (the canonical doc lagging the code) fails here.
+    const doc = readFileSync(docPath, "utf8")
+    for (const term of [
+      "auto-reverting",
+      "Teardown",
+      "auto_reverting",
+      "teardowns_pending",
+      "allow-mutations",
+    ]) {
+      expect(doc).toContain(term)
+    }
+    // The non-local floor: the default only applies against a loopback base-url.
+    expect(doc).toMatch(/local|loopback/i)
+  })
 })
