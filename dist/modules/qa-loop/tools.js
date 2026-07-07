@@ -3,7 +3,7 @@ import { execFileSync } from "node:child_process";
 import { readFileSync, writeFileSync } from "node:fs";
 import { resolve, sep } from "node:path";
 import { hashPlan } from "./plan-hash.js";
-import { classifyScenario } from "./classify.js";
+import { classifyForDispatch, baseUrlIsLocal, teardownHasLiteralDsn } from "./teardown.js";
 import { routeSkip, MALFORMED_HEADING_REASON } from "./coverage.js";
 import { capturePreLoopRef, refExists, restoreFailRef, antiHardcodeDiff, undoToPreLoop } from "./git-ops.js";
 import { stepEnter, stepEvaluate, resultOf } from "./state-machine.js";
@@ -54,51 +54,6 @@ function detectDirty(cwd) {
   const dirty_files = lines.map((l) => l.slice(3).trim());
   return { dirty: true, dirty_files };
 }
-const SEED_MARKER = /^\s*(?:[-*+]\s+|\d+[.)]\s+|>\s*)?\*\*Seed\s*\(\s*psql\s*\/\s*sqlite3\s*\)\s*:\*\*/im;
-const TEARDOWN_MARKER = /^\s*(?:[-*+]\s+|\d+[.)]\s+|>\s*)?\*\*Teardown\s*\(\s*psql\s*\/\s*sqlite3\s*\)\s*:\*\*/im;
-const LOCAL_HOSTS = /* @__PURE__ */ new Set(["localhost", "127.0.0.1", "::1"]);
-function baseUrlIsLocal(planText) {
-  const fm = /^---\r?\n([\s\S]*?)\r?\n---/m.exec(planText);
-  if (!fm) return false;
-  const m = /^base-url:\s*(.+)$/im.exec(fm[1]);
-  if (!m) return false;
-  const raw = m[1].trim().replace(/^["']|["']$/g, "");
-  try {
-    const host = new URL(raw).hostname.replace(/^\[|\]$/g, "");
-    return LOCAL_HOSTS.has(host);
-  } catch {
-    return false;
-  }
-}
-function teardownSpan(lines) {
-  let start = -1;
-  for (let i = 0; i < lines.length; i++) {
-    if (TEARDOWN_MARKER.test(lines[i])) {
-      start = i;
-      break;
-    }
-  }
-  if (start === -1) return null;
-  let k = start + 1;
-  while (k < lines.length && lines[k].trim() === "") k++;
-  if (k >= lines.length || !/^\s*```/.test(lines[k])) return null;
-  let end = k + 1;
-  while (end < lines.length && !/^\s*```\s*$/.test(lines[end])) end++;
-  if (end >= lines.length) return null;
-  return { start, end };
-}
-function extractTeardown(block) {
-  const lines = block.split("\n");
-  const span = teardownSpan(lines);
-  if (!span) return null;
-  return lines.slice(span.start, span.end + 1).join("\n").trim();
-}
-function classifyBodyExcludingTeardown(block) {
-  const lines = block.split("\n");
-  const span = teardownSpan(lines);
-  if (!span) return block;
-  return [...lines.slice(0, span.start), ...lines.slice(span.end + 1)].join("\n");
-}
 const QA_LOOP_DEFAULTS = { maxIterations: 3, maxDispatches: 50, timeBudgetS: 1800 };
 function containedPath(cwd, p) {
   const root = resolve(cwd);
@@ -120,6 +75,20 @@ function newIterationRow(n, opts) {
     warnings: [],
     dispatches_this_iter: 0,
     elapsed_s: 0
+  };
+}
+function strippedFrom(scenarios) {
+  return Object.entries(scenarios).filter(([, sc]) => sc.reason?.startsWith("mutation-guard")).map(([id, sc]) => ({ id, reason: sc.reason }));
+}
+function buildStartResult(s) {
+  return {
+    run_id: s.run_id,
+    pre_loop_ref: s.pre_loop.undo_ref,
+    dispatch_set: Object.entries(s.scenarios).filter(([, sc]) => sc.current !== "skip").map(([id]) => id),
+    stripped: strippedFrom(s.scenarios),
+    auto_reverting: [...s.auto_reverting ?? []],
+    dirty: s.pre_loop.dirty,
+    dirty_files: s.pre_loop.dirty_files
   };
 }
 function makeQaLoopTools(deps) {
@@ -171,13 +140,7 @@ function makeQaLoopTools(deps) {
         return JSON.stringify({
           status: "ok",
           disposition: "REUSE",
-          run_id: onDisk.run_id,
-          pre_loop_ref: onDisk.pre_loop.undo_ref,
-          dispatch_set: Object.entries(onDisk.scenarios).filter(([, sc]) => sc.current !== "skip").map(([id]) => id),
-          stripped: Object.entries(onDisk.scenarios).filter(([, sc]) => sc.reason?.startsWith("mutation-guard")).map(([id, sc]) => ({ id, reason: sc.reason })),
-          auto_reverting: (onDisk.teardowns ?? []).map((t) => t.scenario),
-          dirty: onDisk.pre_loop.dirty,
-          dirty_files: onDisk.pre_loop.dirty_files
+          ...buildStartResult(onDisk)
         });
       }
       let reportExists = false;
@@ -215,25 +178,26 @@ function makeQaLoopTools(deps) {
             reason: `duplicate scenario id ${id} \u2014 scenario ids must be unique (test-plan-format \xA7Plan Structure). A repeated id silently overwrites the first block and can mask a consent-stripped Seed write; give each scenario a distinct FE-/BE-/SETUP-NN id.`
           });
         }
-        const isSeedWrite = SEED_MARKER.test(block);
-        const teardownBlock = extractTeardown(block);
-        const { kind, mutating, expectsSuccess } = classifyScenario(classifyBodyExcludingTeardown(block));
-        const gatedMutation = isSeedWrite || mutating && expectsSuccess;
-        const autoReverting = gatedMutation && teardownBlock !== null && targetIsLocal;
-        const stripped = gatedMutation && !autoReverting && !allowMutations;
+        const cls = classifyForDispatch(block, { allowMutations, targetIsLocal });
+        if (cls.teardownBlock !== null && teardownHasLiteralDsn(cls.teardownBlock)) {
+          return JSON.stringify({
+            status: "error",
+            reason: `scenario ${id}: **Teardown (psql/sqlite3):** must connect via a plan-declared $VAR DSN (e.g. psql "$DATABASE_URL"), not a literal host \u2014 a literal DSN bypasses the \xA78 local-floor vouch.`
+          });
+        }
         scenarios[id] = {
           qa_ids: [],
-          kind,
+          kind: cls.kind,
           section: sectionOf(id),
-          mutating,
-          baseline: stripped ? "skip" : "fail",
-          current: stripped ? "skip" : "fail",
-          reason: stripped ? isSeedWrite ? "mutation-guard: plan-declared Seed write needs a paired **Teardown (psql/sqlite3):** on a local base URL (auto-revert), or allow_mutations" : "mutation-guard: mutating scenario expected to succeed \u2014 pair a **Teardown (psql/sqlite3):** on a local base URL (auto-revert), or re-run with allow_mutations" : null
+          mutating: cls.mutating,
+          baseline: cls.stripped ? "skip" : "fail",
+          current: cls.stripped ? "skip" : "fail",
+          reason: cls.stripped ? cls.isSeedWrite ? "mutation-guard: plan-declared Seed write needs a paired **Teardown (psql/sqlite3):** on a local base URL (auto-revert), or allow_mutations" : "mutation-guard: mutating scenario expected to succeed \u2014 pair a **Teardown (psql/sqlite3):** on a local base URL (auto-revert), or re-run with allow_mutations" : null
         };
-        if (!stripped) {
+        if (!cls.stripped) {
           dispatchSet.push(id);
-          if (autoReverting) autoRevertingIds.push(id);
-          if (teardownBlock !== null && gatedMutation) teardowns.push({ scenario: id, block: teardownBlock });
+          if (cls.autoReverting) autoRevertingIds.push(id);
+          if (cls.teardownBlock !== null && cls.gatedMutation) teardowns.push({ scenario: id, block: cls.teardownBlock });
         }
       }
       if (Object.keys(scenarios).length === 0) {
@@ -281,6 +245,9 @@ function makeQaLoopTools(deps) {
         },
         pre_loop: preLoop,
         teardowns,
+        // The STRICT auto-reverting subset (§8), persisted so a cross-session REUSE resume returns
+        // the same `auto_reverting` FRESH did — distinct from the `teardowns` wave superset above.
+        auto_reverting: autoRevertingIds,
         scenarios,
         issues: {},
         iterations: [],
@@ -301,21 +268,7 @@ function makeQaLoopTools(deps) {
       return JSON.stringify({
         status: "ok",
         disposition,
-        run_id: runId,
-        pre_loop_ref: undoRef,
-        dispatch_set: dispatchSet,
-        // Surface the mutation-guard strips so the coordinator can tell the operator WHICH
-        // scenarios were excluded (and why) up front, rather than the operator only learning
-        // at the final report that the run under-covered the change. Excludes malformed-heading
-        // skips (their reason does not start with "mutation-guard").
-        stripped: Object.entries(scenarios).filter(([, sc]) => sc.reason?.startsWith("mutation-guard")).map(([id, sc]) => ({ id, reason: sc.reason })),
-        // Scenarios that mutate but run by DEFAULT because they declared a reversal on a local
-        // target (§8) — the TRUE auto-reverting set (excludes consent-run non-local seeds that
-        // also carry a teardown). Perun tells the operator these seed-then-revert, and MUST run
-        // the teardown wave (qa_loop_finalize hands back the SQL) so the loop leaves the DB clean.
-        auto_reverting: autoRevertingIds,
-        dirty,
-        dirty_files,
+        ...buildStartResult(sidecar),
         ...qaIdStartAt !== void 0 ? { qa_id_start_at: qaIdStartAt } : {}
       });
     }
@@ -614,9 +567,5 @@ function makeQaLoopTools(deps) {
 }
 export {
   QA_LOOP_DEFAULTS,
-  SEED_MARKER,
-  TEARDOWN_MARKER,
-  baseUrlIsLocal,
-  extractTeardown,
   makeQaLoopTools
 };

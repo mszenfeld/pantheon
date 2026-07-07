@@ -41,6 +41,7 @@ function sidecar(reportPath: string, fe01Current: "pass" | "fail"): Sidecar {
     budgets: { iteration: 1, dispatch_count_total: 4, elapsed_s: 120, final_pass_elapsed_s: null },
     pre_loop: { undo_ref: "refs/qa-loop/pre/qa-loop-demo-1", dirty: false, dirty_files: [] },
     teardowns: [],
+    auto_reverting: [],
     scenarios: { "FE-01": { qa_ids: ["QA-001"], kind: "feature", section: "FE", mutating: false, baseline: "fail", current: fe01Current, reason: null } },
     issues: { "QA-001": { severity: "HIGH", scenario: "FE-01", location: "x:1", title: "t", problem: "p", remediation: "r", status: "fix-attempted", fixed_at: null, fix: { svarog_status: "READY", escalate_reason: null, child_session_id: "ses_a", checkpoint_ref: "refs/svarog/ckpt/ses_a", changed: ["src/x.ts"], hardcode_warnings: [] } } },
     iterations: [{ n: 1, phase: "evaluated", pending: [], in_flight: null, attempted_so_far: ["QA-001"], now_passing: [], still_failing: [], stop_cause: null, regressions: [], warnings: [], dispatches_this_iter: 4, elapsed_s: 120 }],

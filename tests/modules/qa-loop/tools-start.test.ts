@@ -4,7 +4,8 @@ import { mkdtempSync, rmSync, writeFileSync, mkdirSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import type { ToolContext } from "@opencode-ai/plugin"
-import { makeQaLoopTools, baseUrlIsLocal, extractTeardown } from "../../../src/modules/qa-loop/tools.js"
+import { makeQaLoopTools } from "../../../src/modules/qa-loop/tools.js"
+import { baseUrlIsLocal, extractTeardown, teardownHasLiteralDsn } from "../../../src/modules/qa-loop/teardown.js"
 import { QaLoopState } from "../../../src/modules/qa-loop/sidecar.js"
 import { deriveCoverage } from "../../../src/modules/qa-loop/coverage.js"
 
@@ -927,25 +928,81 @@ describe("qa_loop_start", () => {
     expect(state.load("perun")!.scenarios["BE-01"]!.kind).not.toBe("negative")
   })
 
-  it("§8 REUSE carries auto_reverting from the on-disk sidecar's recorded teardowns", async () => {
+  it("§8 REUSE returns the persisted STRICT auto_reverting subset, NOT the teardowns superset (MAINT regression)", async () => {
+    // Write a throwaway plan+report so the disposition is deterministic regardless of test order.
+    writeFileSync(join(cwd, "docs/testing/plans/2026-06-26-reuse-test-plan.md"), AUTOREVERT_PLAN("http://localhost:8000"))
     const tools1 = makeQaLoopTools({ gate: fakeGate("perun"), state, cwd, resolveParentID: async (s) => s, assignIssueIds: noopAssignIssueIds })
     const res1 = resultJson(await tools1.qa_loop_start.execute(
-      { plan_path: "docs/testing/plans/2026-06-26-demo-test-plan.md", topic: "demo", report_path: "docs/testing/reports/2026-06-26-demo-report.md" },
+      { plan_path: "docs/testing/plans/2026-06-26-reuse-test-plan.md", topic: "reuse", report_path: "docs/testing/reports/2026-06-26-reuse-report.md" },
       ctx("perun"),
     ))
     expect(res1.disposition).toBe("FRESH")
+    // Simulate a baselined run where the teardowns SUPERSET (the auto-reverting local seed PLUS a
+    // consent-run non-local seed) is strictly larger than the auto_reverting SUBSET. REUSE must echo
+    // the subset the FRESH start persisted, never re-derive the superset from teardowns (the
+    // REUSE auto_reverting-superset regression).
     const s1 = state.load("perun")!
     s1.baseline_recorded = true
-    s1.teardowns = [{ scenario: "BE-02", block: "DELETE FROM orders WHERE title='qa-seed';" }]
+    s1.teardowns = [
+      { scenario: "BE-01", block: "DELETE FROM orders WHERE title='qa-seed-demo';" },
+      { scenario: "BE-99", block: "DELETE FROM orders WHERE title='consent-nonlocal';" },
+    ]
+    s1.auto_reverting = ["BE-01"]
     state.save("perun", s1)
     const coldState = new QaLoopState()
     const tools2 = makeQaLoopTools({ gate: fakeGate("perun"), state: coldState, cwd, resolveParentID: async (s) => s, assignIssueIds: noopAssignIssueIds })
     const res2 = resultJson(await tools2.qa_loop_start.execute(
-      { plan_path: "docs/testing/plans/2026-06-26-demo-test-plan.md", topic: "demo", report_path: "docs/testing/reports/2026-06-26-demo-report.md" },
+      { plan_path: "docs/testing/plans/2026-06-26-reuse-test-plan.md", topic: "reuse", report_path: "docs/testing/reports/2026-06-26-reuse-report.md" },
       ctx("perun"),
     ))
     expect(res2.disposition).toBe("REUSE")
-    expect(res2.auto_reverting).toEqual(["BE-02"])
+    expect(res2.auto_reverting).toEqual(["BE-01"]) // the strict subset — NOT ["BE-01","BE-99"]
+  })
+
+  it("§8 GAP-1: a non-local allow_mutations seed that recorded a teardown does NOT resurface in auto_reverting on REUSE", async () => {
+    // The end-to-end regression guard: a consent-run non-local seed persists a teardown (superset)
+    // but an EMPTY auto_reverting (subset). A cold REUSE resume must return [] — the pre-fix REUSE
+    // path re-derived auto_reverting from teardowns and leaked ["BE-01"] here.
+    writeFileSync(join(cwd, "docs/testing/plans/2026-06-26-gap1-test-plan.md"), AUTOREVERT_PLAN("https://staging.example.com"))
+    const tools1 = makeQaLoopTools({ gate: fakeGate("perun"), state, cwd, resolveParentID: async (s) => s, assignIssueIds: noopAssignIssueIds })
+    const res1 = resultJson(await tools1.qa_loop_start.execute(
+      { plan_path: "docs/testing/plans/2026-06-26-gap1-test-plan.md", topic: "gap1", report_path: "docs/testing/reports/2026-06-26-gap1-report.md", allow_mutations: true },
+      ctx("perun"),
+    ))
+    expect(res1.status).toBe("ok")
+    expect(res1.auto_reverting).toEqual([]) // non-local consent seed → empty subset at FRESH …
+    const s1 = state.load("perun")!
+    expect(s1.teardowns).toHaveLength(1) // … but the teardown IS recorded (superset non-empty) …
+    expect(s1.auto_reverting).toEqual([]) // … and the persisted subset is empty.
+    s1.baseline_recorded = true
+    state.save("perun", s1)
+    const coldState = new QaLoopState()
+    const tools2 = makeQaLoopTools({ gate: fakeGate("perun"), state: coldState, cwd, resolveParentID: async (s) => s, assignIssueIds: noopAssignIssueIds })
+    const res2 = resultJson(await tools2.qa_loop_start.execute(
+      { plan_path: "docs/testing/plans/2026-06-26-gap1-test-plan.md", topic: "gap1", report_path: "docs/testing/reports/2026-06-26-gap1-report.md", allow_mutations: true },
+      ctx("perun"),
+    ))
+    expect(res2.disposition).toBe("REUSE")
+    expect(res2.auto_reverting).toEqual([]) // regression guard: must not leak the teardown superset
+  })
+
+  it("§8 SEC (GAP-2): qa_loop_start rejects a paired Teardown with a LITERAL DSN host even under a local base-url", async () => {
+    // The local floor is on the base-url only; a teardown's real egress is its DSN. A literal
+    // scheme://host DSN under base-url: http://localhost would let the wave write off-box — reject it.
+    writeFileSync(join(cwd, "docs/testing/plans/2026-06-26-litdsn-test-plan.md"), [
+      "---", "base-url: http://localhost:8000", "---", "", "# Test Plan", "", "## BE Test Scenarios", "",
+      "### BE-01: seeded order is visible",
+      "**Seed (psql/sqlite3):**", "```sql", "INSERT INTO orders (id,title) VALUES (1,'qa-seed') ON CONFLICT DO NOTHING;", "```",
+      "**Teardown (psql/sqlite3):**", "```bash", `psql "postgres://user@prod-db.company.com/app" -c "DELETE FROM orders WHERE title='qa-seed'"`, "```",
+      "Then GET /orders/1 and assert 200.", "",
+    ].join("\n"))
+    const tools = makeQaLoopTools({ gate: fakeGate("perun"), state, cwd, resolveParentID: async (s) => s, assignIssueIds: noopAssignIssueIds })
+    const res = resultJson(await tools.qa_loop_start.execute(
+      { plan_path: "docs/testing/plans/2026-06-26-litdsn-test-plan.md", topic: "litdsn", report_path: "docs/testing/reports/2026-06-26-litdsn-report.md" },
+      ctx("perun"),
+    ))
+    expect(res.status).toBe("error")
+    expect(String(res.reason)).toMatch(/\$VAR DSN|literal host/)
   })
 })
 
@@ -999,5 +1056,19 @@ describe("§8 baseUrlIsLocal / extractTeardown helpers", () => {
     // A ~~~ tilde fence is not the sanctioned form → null → the seed stays consent-gated (safe).
     const tilde = ["**Teardown (psql/sqlite3):**", "~~~sql", "DELETE FROM t", "~~~"].join("\n")
     expect(extractTeardown(tilde)).toBeNull()
+  })
+
+  it("teardownHasLiteralDsn flags an inline scheme://host DSN, passes the $VAR form and bare SQL (SEC GAP-2)", () => {
+    // Literal DSNs (the write egress the base-url floor cannot see) → true.
+    expect(teardownHasLiteralDsn(`psql "postgres://user:pw@prod-db.company.com/app" -c "DELETE FROM t"`)).toBe(true)
+    expect(teardownHasLiteralDsn(`sqlite3 "https://x/y.db" ".read q"`)).toBe(true)
+    // The legitimate $VAR form has no inline scheme:// → allowed.
+    expect(teardownHasLiteralDsn(`psql "$DATABASE_URL" -c "DELETE FROM t"`)).toBe(false)
+    // Bare fenced SQL (no psql/sqlite3 invocation) → allowed.
+    expect(teardownHasLiteralDsn(`DELETE FROM orders WHERE title='qa-seed';`)).toBe(false)
+    // The marker line itself (psql/sqlite3 but no ://) must not trip it.
+    expect(teardownHasLiteralDsn(`**Teardown (psql/sqlite3):**`)).toBe(false)
+    // The interpolated postgres://$VAR form is allowed via the $ lookahead.
+    expect(teardownHasLiteralDsn(`psql "postgres://$DB_HOST/app"`)).toBe(false)
   })
 })

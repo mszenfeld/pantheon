@@ -338,7 +338,9 @@ export const AppVerkQAPlugin: Plugin = async ({ client }) => {
           // consent gate rather than discovering the block only at execute_recipe time.
           const provisioning = parsed.bindings
             .filter((b) => b.provisions !== null)
-            .map((b) => ({ name: b.name, provisions: b.provisions }))
+            // `.filter` doesn't narrow the element type, but the predicate guarantees non-null here;
+            // `!` narrows the emitted `provisions` to `string` (the documented non-null contract).
+            .map((b) => ({ name: b.name, provisions: b.provisions! }))
           return JSON.stringify({
             status: "ok",
             bindings: parsed.bindings.map((b) => b.name),

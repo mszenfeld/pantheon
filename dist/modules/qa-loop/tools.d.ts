@@ -31,41 +31,6 @@ interface QaLoopToolDeps {
         location: string | null;
     }[]>;
 }
-/**
- * The plan-declared seed marker (`**Seed (psql/sqlite3):**`). Kept intentionally
- * PERMISSIVE — a SUPERSET of what be-testing's LLM executor recognizes: a leading
- * list-marker — unordered (`- ` / `* ` / `+ `) OR ordered (`1. ` / `2) `, the plan format's
- * numbered-step form, test-plan-format §Plan Structure) — or blockquote (`> `), and
- * incidental whitespace around the marker, all still match. The consent gate must never be
- * weaker than the executor: if be-testing would run the fenced SQL (it recognizes the marker
- * semantically), this MUST catch it so the write stays consent-gated. Still rejects prose
- * that only mentions "seed" (`**Seeded rows are visible**`, `**Seed the database manually**`)
- * because the `(psql/sqlite3)` clause is required. Authors must write the byte-exact
- * canonical marker; the leniency here is defense-in-depth, not license to vary it.
- */
-declare const SEED_MARKER: RegExp;
-/**
- * The plan-declared un-seed marker (`**Teardown (psql/sqlite3):**`), the reversal paired with a
- * Seed/mutating scenario (§8). Same leading-marker leniency as SEED_MARKER. Its PRESENCE (with a
- * well-formed fenced block, see extractTeardown) is what makes a mutation auto-reverting — and so
- * runnable by DEFAULT on a local base URL, without allow_mutations. A bare marker with no fence
- * does not count (extractTeardown returns null → treated as no teardown → the mutation stays
- * consent-gated): a malformed reversal must never silently unlock the default.
- */
-declare const TEARDOWN_MARKER: RegExp;
-/**
- * True iff the plan's frontmatter `base-url:` resolves to a loopback host (§8 non-local floor).
- * Scoped to the leading YAML frontmatter block (between the first two `---` fences) so a stray
- * `base-url:` in a scenario body cannot spoof locality. No base URL, an unparseable URL, or a
- * non-loopback host all return false → the auto-revert default does NOT apply (safe: consent-gated).
- */
-declare function baseUrlIsLocal(planText: string): boolean;
-/**
- * The `**Teardown (psql/sqlite3):**` region (marker line through its closing fence) — exactly what
- * Perun hands to a zmora-be teardown wave — or null when there is no usable teardown (see
- * teardownSpan). The null makes the scenario "has no teardown" for classification (stays gated).
- */
-declare function extractTeardown(block: string): string | null;
 /** Loop budget defaults — the single source the tool reads (docs quote these). */
 declare const QA_LOOP_DEFAULTS: {
     readonly maxIterations: 3;
@@ -202,4 +167,4 @@ declare function makeQaLoopTools(deps: QaLoopToolDeps): {
     };
 };
 
-export { QA_LOOP_DEFAULTS, type QaLoopToolDeps, SEED_MARKER, TEARDOWN_MARKER, baseUrlIsLocal, extractTeardown, makeQaLoopTools };
+export { QA_LOOP_DEFAULTS, type QaLoopToolDeps, makeQaLoopTools };

@@ -42,6 +42,7 @@ function minimalSidecar(reportPath: string): Sidecar {
     budgets: { iteration: 0, dispatch_count_total: 0, elapsed_s: 0, final_pass_elapsed_s: null },
     pre_loop: { undo_ref: "refs/qa-loop/pre/qa-loop-demo-1", dirty: false, dirty_files: [] },
     teardowns: [],
+    auto_reverting: [],
     scenarios: {}, issues: {}, iterations: [],
     coverage: { exercised: { feature: 0, sanity: 0, enforcement: 0 }, not_verified: { "auth-unverified": 0, "mutation-guard": 0, "tool-unavailable": 0 }, routing_warnings: [] },
     result: null,

@@ -95,6 +95,7 @@ interface Sidecar {
         scenario: string;
         block: string;
     }[];
+    auto_reverting: string[];
     scenarios: Record<string, ScenarioRecord>;
     issues: Record<string, IssueRecord>;
     iterations: IterationRecord[];

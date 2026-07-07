@@ -42,6 +42,7 @@ function sidecarWithIteration(reportPath: string): Sidecar {
     budgets: { iteration: 1, dispatch_count_total: 0, elapsed_s: 0, final_pass_elapsed_s: null },
     pre_loop: { undo_ref: "refs/qa-loop/pre/qa-loop-demo-1", dirty: false, dirty_files: [] },
     teardowns: [],
+    auto_reverting: [],
     scenarios: { "FE-01": { qa_ids: ["QA-001"], kind: "feature", section: "FE", mutating: false, baseline: "fail", current: "fail", reason: null }, "BE-02": { qa_ids: ["QA-002"], kind: "feature", section: "BE", mutating: false, baseline: "fail", current: "fail", reason: null } },
     issues: {
       "QA-001": { severity: "HIGH", scenario: "FE-01", location: "x:1", title: "t", problem: "p", remediation: "r", status: "open", fixed_at: null, fix: { svarog_status: null, escalate_reason: null, child_session_id: null, checkpoint_ref: null, changed: [], hardcode_warnings: [] } },

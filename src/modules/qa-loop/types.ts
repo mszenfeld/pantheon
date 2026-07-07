@@ -103,6 +103,13 @@ export interface Sidecar {
   // qa_loop_finalize/qa_loop_undo hand back to Perun (LIFO) for a zmora-be teardown wave.
   // Absent on pre-field on-disk sidecars → read as `?? []` (safe: nothing to revert).
   teardowns: { scenario: string; block: string }[]
+  // The STRICT auto-reverting subset (§8): scenario ids that mutated on a LOCAL base URL AND
+  // declared a paired Teardown, so they RAN BY DEFAULT (no allow_mutations) because they self-revert.
+  // A SUBSET of `teardowns` — a consent-run (allow_mutations) non-local seed records a teardown but
+  // is NOT auto-reverting and must not appear here. Persisted so a cross-session REUSE resume returns
+  // the SAME strict `auto_reverting` the FRESH start did, instead of re-deriving the non-local
+  // superset. Absent on pre-field on-disk sidecars → read as `?? []`.
+  auto_reverting: string[]
   scenarios: Record<string, ScenarioRecord>
   issues: Record<string, IssueRecord>
   iterations: IterationRecord[]
