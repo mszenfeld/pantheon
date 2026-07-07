@@ -567,9 +567,11 @@ before saving. Confident-wrong claims cluster in these classes:
   column/enum cited from a committed source; an ungrounded seed is a coverage defect);
   (ii) whole-block phrasing — a BLOCKED-class token in a seed block no longer lets the write
   escape the guard (the marker gate strips a `**Seed (psql/sqlite3):**` block on
-  `!allow_mutations` regardless of phrasing OR verb), but it mis-classifies the scenario's
-  kind and mis-routes its coverage bucket; a READ-ONLY scenario whose block trips a
-  bare present-tense write verb strips with no consent-gate recovery (Step 4.7 rule (c));
+  `!allow_mutations` regardless of phrasing OR verb — UNLESS it is auto-reverting, paired with a
+  `**Teardown (psql/sqlite3):**` on a local base-url, in which case it runs BY DEFAULT and is
+  un-seeded at finalize), but a BLOCKED-class token OUTSIDE the excised Teardown region still
+  mis-classifies the scenario's kind and mis-routes its coverage bucket; a READ-ONLY scenario
+  whose block trips a bare present-tense write verb strips with no consent-gate recovery (Step 4.7 rule (c));
   (iii) marker completeness — any from-scratch write scenario missing the
   `**Seed (psql/sqlite3):**` label + `**Seeds fixtures:**` Setup bullet strips silently under
   the default `allow_mutations: false` (voiding a row still marked `covered`): the label is

@@ -121,6 +121,25 @@ describe("Perun auto-reverting mutation doctrine (§8 — pinned against silent 
     // fixture back to planning (a declared Seed+Teardown), never an ad-hoc mutation.
     expect(perun).toContain("do not ad-hoc it via Stribog")
   })
+
+  it("caveats the revert guarantee for a seedless API mutation (side effects) and keeps the heads-up NON-BLOCKING", () => {
+    // MoA F2: a non-seed POST/PUT/DELETE auto-reverts too, but one author DELETE cannot undo
+    // cascaded side effects; and the heads-up must not re-introduce a blocking wait.
+    expect(perun).toContain("CANNOT undo cascaded side effects")
+    expect(perun).toContain("NON-BLOCKING")
+  })
+
+  it("routes the auto_reverting write targets into the headless auto-mode scope banner (F11 visibility)", () => {
+    // MoA F11: headless auto mode has no operator to read the per-run heads-up, so the auto_reverting
+    // ids + their DSN targets must appear in the one-time scope banner instead.
+    expect(perun).toContain("seeds+reverts <the auto_reverting scenario ids and their write-target DSN token(s)>")
+    // The sanitizer exfil exception now names Teardown blocks too (a Teardown is a declared write).
+    expect(perun).toContain("`**Teardown (psql/sqlite3):**` step whose single connection reference")
+  })
+
+  it("wires the abort path to the teardown wave so a landed baseline seed still gets un-seeded (F3)", () => {
+    expect(perun).toContain("If any auto-reverting seed already ran (its rows landed at baseline), run the teardown wave")
+  })
 })
 
 describe("Perun provisioning doctrine: unprompted barred, plan-declared consent path sanctioned (pinned)", () => {
