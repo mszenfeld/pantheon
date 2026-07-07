@@ -832,6 +832,121 @@ describe("qa_loop_start", () => {
     expect(res.status).toBe("error")
     expect(String(res.reason)).toMatch(/mutation guard|allow_mutations/)
   })
+
+  it("§8-fix a Seed with a BARE Teardown marker + a LATER **DB Check:** fence stays stripped (no adopting the SELECT)", async () => {
+    // The forward scan must NOT grab an unrelated later fence: a prose-only teardown whose next
+    // fenced block is a DB-Check SELECT would otherwise run the seed by default AND record the
+    // read-only SELECT as the "revert". The seed must stay consent-gated.
+    writeFileSync(join(cwd, "docs/testing/plans/2026-06-26-demo-test-plan.md"), [
+      "---", "base-url: http://localhost:8000", "---", "", "# Test Plan", "", "## BE Test Scenarios", "",
+      "### BE-01: seeded order is visible",
+      "**Seed (psql/sqlite3):**", "```sql", "INSERT INTO orders (id,title) VALUES (1,'qa-seed') ON CONFLICT DO NOTHING;", "```",
+      "**Teardown (psql/sqlite3):**", "Remove the seeded order after the test.",
+      "**DB Check:**", "```sql", "SELECT count(*) FROM orders WHERE title='qa-seed';", "```", "",
+    ].join("\n"))
+    const tools = makeQaLoopTools({ gate: fakeGate("perun"), state, cwd, resolveParentID: async (s) => s, assignIssueIds: noopAssignIssueIds })
+    const res = resultJson(await tools.qa_loop_start.execute(
+      { plan_path: "docs/testing/plans/2026-06-26-demo-test-plan.md", topic: "demo", report_path: "docs/testing/reports/2026-06-26-demo-report.md" },
+      ctx("perun"),
+    ))
+    // Only scenario → stripped → empty dispatch → loud all-stripped error (never auto_reverting).
+    expect(res.status).toBe("error")
+    expect(String(res.reason)).toMatch(/mutation guard|allow_mutations/)
+  })
+
+  it("§8 a NON-seed mutating-expected-success scenario (POST/201) with a paired Teardown auto-reverts by default", async () => {
+    // Chosen scope = seeds + mutating scenarios: a local mutating scenario that pairs a Teardown
+    // runs by default and is un-seeded at finalize — no Seed marker required.
+    writeFileSync(join(cwd, "docs/testing/plans/2026-06-26-demo-test-plan.md"), [
+      "---", "base-url: http://localhost:8000", "---", "", "# Test Plan", "", "## BE Test Scenarios", "",
+      "### BE-01: create a user",
+      "POST /api/users with a valid body; expect 201 and a new row.",
+      "**Teardown (psql/sqlite3):**", "```sql", "DELETE FROM users WHERE email='qa-seed@example.com';", "```", "",
+    ].join("\n"))
+    const tools = makeQaLoopTools({ gate: fakeGate("perun"), state, cwd, resolveParentID: async (s) => s, assignIssueIds: noopAssignIssueIds })
+    const res = resultJson(await tools.qa_loop_start.execute(
+      { plan_path: "docs/testing/plans/2026-06-26-demo-test-plan.md", topic: "demo", report_path: "docs/testing/reports/2026-06-26-demo-report.md" },
+      ctx("perun"),
+    ))
+    expect(res.status).toBe("ok")
+    expect(res.dispatch_set).toContain("BE-01")
+    expect(res.auto_reverting).toEqual(["BE-01"])
+    expect(state.load("perun")!.teardowns).toHaveLength(1)
+  })
+
+  it("§8 a NON-local seed run under allow_mutations records its teardown but is NOT labelled auto_reverting", async () => {
+    // auto_reverting is the TRUE self-reverting set; a consent-run non-local seed is torn down too
+    // (teardown recorded) but did NOT run by the auto-revert default, so it must not appear there.
+    writeFileSync(join(cwd, "docs/testing/plans/2026-06-26-demo-test-plan.md"), AUTOREVERT_PLAN("https://staging.example.com"))
+    const tools = makeQaLoopTools({ gate: fakeGate("perun"), state, cwd, resolveParentID: async (s) => s, assignIssueIds: noopAssignIssueIds })
+    const res = resultJson(await tools.qa_loop_start.execute(
+      { plan_path: "docs/testing/plans/2026-06-26-demo-test-plan.md", topic: "demo", report_path: "docs/testing/reports/2026-06-26-demo-report.md", allow_mutations: true },
+      ctx("perun"),
+    ))
+    expect(res.status).toBe("ok")
+    expect(res.dispatch_set).toContain("BE-01")
+    expect(res.auto_reverting).toEqual([]) // non-local → not auto-reverting …
+    expect(state.load("perun")!.teardowns).toHaveLength(1) // … but still un-seeded at finalize
+  })
+
+  it("§8 a negative-blocked NON-seed mutation with a Teardown does NOT queue a destructive DELETE", async () => {
+    // The write never lands (403), so no teardown should run against data the run never created.
+    writeFileSync(join(cwd, "docs/testing/plans/2026-06-26-demo-test-plan.md"), [
+      "---", "base-url: http://localhost:8000", "---", "", "# Test Plan", "", "## BE Test Scenarios", "",
+      "### BE-01: sanity smoke", "GET /health returns 200.", "",
+      "### BE-05: delete without auth is blocked",
+      "DELETE /orders/12345 with no token; expect 403 and no state change.",
+      "**Teardown (psql/sqlite3):**", "```sql", "DELETE FROM orders WHERE id=12345;", "```", "",
+    ].join("\n"))
+    const tools = makeQaLoopTools({ gate: fakeGate("perun"), state, cwd, resolveParentID: async (s) => s, assignIssueIds: noopAssignIssueIds })
+    const res = resultJson(await tools.qa_loop_start.execute(
+      { plan_path: "docs/testing/plans/2026-06-26-demo-test-plan.md", topic: "demo", report_path: "docs/testing/reports/2026-06-26-demo-report.md" },
+      ctx("perun"),
+    ))
+    expect(res.status).toBe("ok")
+    expect(res.dispatch_set).toContain("BE-05") // negative-blocked mutation runs (write never lands)
+    expect(res.auto_reverting).toEqual([])
+    expect(state.load("perun")!.teardowns).toHaveLength(0) // no DELETE queued for a scenario that wrote nothing
+  })
+
+  it("§8 a teardown's blocked-phrasing comment does NOT reclassify the seed FEATURE as negative", async () => {
+    writeFileSync(join(cwd, "docs/testing/plans/2026-06-26-demo-test-plan.md"), [
+      "---", "base-url: http://localhost:8000", "---", "", "# Test Plan", "", "## BE Test Scenarios", "",
+      "### BE-01: seeded order is visible",
+      "**Seed (psql/sqlite3):**", "```sql", "INSERT INTO orders (id,title) VALUES (1,'qa-seed') ON CONFLICT DO NOTHING;", "```",
+      "**Teardown (psql/sqlite3):**", "```sql", "-- cleanup: must not leave rows (was a 403 case)", "DELETE FROM orders WHERE title='qa-seed';", "```",
+      "Then GET /orders/1 and assert 200.", "",
+    ].join("\n"))
+    const tools = makeQaLoopTools({ gate: fakeGate("perun"), state, cwd, resolveParentID: async (s) => s, assignIssueIds: noopAssignIssueIds })
+    const res = resultJson(await tools.qa_loop_start.execute(
+      { plan_path: "docs/testing/plans/2026-06-26-demo-test-plan.md", topic: "demo", report_path: "docs/testing/reports/2026-06-26-demo-report.md" },
+      ctx("perun"),
+    ))
+    expect(res.status).toBe("ok")
+    // The "must not / 403" lives ONLY in the teardown region, which is excised before classify.
+    expect(state.load("perun")!.scenarios["BE-01"]!.kind).not.toBe("negative")
+  })
+
+  it("§8 REUSE carries auto_reverting from the on-disk sidecar's recorded teardowns", async () => {
+    const tools1 = makeQaLoopTools({ gate: fakeGate("perun"), state, cwd, resolveParentID: async (s) => s, assignIssueIds: noopAssignIssueIds })
+    const res1 = resultJson(await tools1.qa_loop_start.execute(
+      { plan_path: "docs/testing/plans/2026-06-26-demo-test-plan.md", topic: "demo", report_path: "docs/testing/reports/2026-06-26-demo-report.md" },
+      ctx("perun"),
+    ))
+    expect(res1.disposition).toBe("FRESH")
+    const s1 = state.load("perun")!
+    s1.baseline_recorded = true
+    s1.teardowns = [{ scenario: "BE-02", block: "DELETE FROM orders WHERE title='qa-seed';" }]
+    state.save("perun", s1)
+    const coldState = new QaLoopState()
+    const tools2 = makeQaLoopTools({ gate: fakeGate("perun"), state: coldState, cwd, resolveParentID: async (s) => s, assignIssueIds: noopAssignIssueIds })
+    const res2 = resultJson(await tools2.qa_loop_start.execute(
+      { plan_path: "docs/testing/plans/2026-06-26-demo-test-plan.md", topic: "demo", report_path: "docs/testing/reports/2026-06-26-demo-report.md" },
+      ctx("perun"),
+    ))
+    expect(res2.disposition).toBe("REUSE")
+    expect(res2.auto_reverting).toEqual(["BE-02"])
+  })
 })
 
 describe("§8 baseUrlIsLocal / extractTeardown helpers", () => {
@@ -864,5 +979,25 @@ describe("§8 baseUrlIsLocal / extractTeardown helpers", () => {
     expect(extractTeardown("**Teardown (psql/sqlite3):**\nno fence here")).toBeNull()
     // No marker at all → null.
     expect(extractTeardown("### BE-01\njust a read")).toBeNull()
+  })
+
+  it("extractTeardown requires the fence IMMEDIATELY after the marker (rejects adopting a later DB-Check fence)", () => {
+    // Bare marker + prose, then an UNRELATED later fence (a DB-Check SELECT) → null, NOT the SELECT.
+    const bareThenDbCheck = [
+      "**Teardown (psql/sqlite3):**", "Remove the seeded row after the test.",
+      "**DB Check:**", "```sql", "SELECT count(*) FROM orders WHERE title='qa-seed';", "```",
+    ].join("\n")
+    expect(extractTeardown(bareThenDbCheck)).toBeNull()
+    // A blank line between marker and fence IS allowed.
+    const blankThenFence = ["**Teardown (psql/sqlite3):**", "", "```sql", "DELETE FROM t WHERE k='x';", "```"].join("\n")
+    expect(extractTeardown(blankThenFence)).toContain("DELETE FROM t WHERE k='x';")
+  })
+
+  it("extractTeardown accepts a backtick fence of any language, rejects a tilde fence (fail closed)", () => {
+    const bash = ["**Teardown (psql/sqlite3):**", "```bash", "psql \"$DATABASE_URL\" -c 'DELETE FROM t'", "```"].join("\n")
+    expect(extractTeardown(bash)).toContain("DELETE FROM t")
+    // A ~~~ tilde fence is not the sanctioned form → null → the seed stays consent-gated (safe).
+    const tilde = ["**Teardown (psql/sqlite3):**", "~~~sql", "DELETE FROM t", "~~~"].join("\n")
+    expect(extractTeardown(tilde)).toBeNull()
   })
 })

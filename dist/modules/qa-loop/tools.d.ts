@@ -61,10 +61,9 @@ declare const TEARDOWN_MARKER: RegExp;
  */
 declare function baseUrlIsLocal(planText: string): boolean;
 /**
- * Extract a scenario's `**Teardown (psql/sqlite3):**` region — the marker line through the end of
- * the fenced code block that follows it — so Perun can hand exactly that (and nothing else) to a
- * zmora-be teardown wave. Returns null when the marker is absent OR carries no fenced block (a bare
- * marker is not a usable reversal); the null makes the scenario "has no teardown" for classification.
+ * The `**Teardown (psql/sqlite3):**` region (marker line through its closing fence) — exactly what
+ * Perun hands to a zmora-be teardown wave — or null when there is no usable teardown (see
+ * teardownSpan). The null makes the scenario "has no teardown" for classification (stays gated).
  */
 declare function extractTeardown(block: string): string | null;
 /** Loop budget defaults — the single source the tool reads (docs quote these). */

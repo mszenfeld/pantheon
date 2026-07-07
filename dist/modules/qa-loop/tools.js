@@ -70,8 +70,7 @@ function baseUrlIsLocal(planText) {
     return false;
   }
 }
-function extractTeardown(block) {
-  const lines = block.split("\n");
+function teardownSpan(lines) {
   let start = -1;
   for (let i = 0; i < lines.length; i++) {
     if (TEARDOWN_MARKER.test(lines[i])) {
@@ -81,12 +80,24 @@ function extractTeardown(block) {
   }
   if (start === -1) return null;
   let k = start + 1;
-  while (k < lines.length && !/^\s*```/.test(lines[k])) k++;
-  if (k >= lines.length) return null;
+  while (k < lines.length && lines[k].trim() === "") k++;
+  if (k >= lines.length || !/^\s*```/.test(lines[k])) return null;
   let end = k + 1;
   while (end < lines.length && !/^\s*```\s*$/.test(lines[end])) end++;
   if (end >= lines.length) return null;
-  return lines.slice(start, end + 1).join("\n").trim();
+  return { start, end };
+}
+function extractTeardown(block) {
+  const lines = block.split("\n");
+  const span = teardownSpan(lines);
+  if (!span) return null;
+  return lines.slice(span.start, span.end + 1).join("\n").trim();
+}
+function classifyBodyExcludingTeardown(block) {
+  const lines = block.split("\n");
+  const span = teardownSpan(lines);
+  if (!span) return block;
+  return [...lines.slice(0, span.start), ...lines.slice(span.end + 1)].join("\n");
 }
 const QA_LOOP_DEFAULTS = { maxIterations: 3, maxDispatches: 50, timeBudgetS: 1800 };
 function containedPath(cwd, p) {
@@ -184,6 +195,7 @@ function makeQaLoopTools(deps) {
       const scenarios = {};
       const dispatchSet = [];
       const teardowns = [];
+      const autoRevertingIds = [];
       for (const { id, block, malformed } of splitScenarios(planText)) {
         if (malformed) {
           scenarios[id] = {
@@ -203,10 +215,10 @@ function makeQaLoopTools(deps) {
             reason: `duplicate scenario id ${id} \u2014 scenario ids must be unique (test-plan-format \xA7Plan Structure). A repeated id silently overwrites the first block and can mask a consent-stripped Seed write; give each scenario a distinct FE-/BE-/SETUP-NN id.`
           });
         }
-        const { kind, mutating, expectsSuccess } = classifyScenario(block);
         const isSeedWrite = SEED_MARKER.test(block);
-        const gatedMutation = isSeedWrite || mutating && expectsSuccess;
         const teardownBlock = extractTeardown(block);
+        const { kind, mutating, expectsSuccess } = classifyScenario(classifyBodyExcludingTeardown(block));
+        const gatedMutation = isSeedWrite || mutating && expectsSuccess;
         const autoReverting = gatedMutation && teardownBlock !== null && targetIsLocal;
         const stripped = gatedMutation && !autoReverting && !allowMutations;
         scenarios[id] = {
@@ -220,7 +232,8 @@ function makeQaLoopTools(deps) {
         };
         if (!stripped) {
           dispatchSet.push(id);
-          if (teardownBlock !== null) teardowns.push({ scenario: id, block: teardownBlock });
+          if (autoReverting) autoRevertingIds.push(id);
+          if (teardownBlock !== null && gatedMutation) teardowns.push({ scenario: id, block: teardownBlock });
         }
       }
       if (Object.keys(scenarios).length === 0) {
@@ -297,9 +310,10 @@ function makeQaLoopTools(deps) {
         // skips (their reason does not start with "mutation-guard").
         stripped: Object.entries(scenarios).filter(([, sc]) => sc.reason?.startsWith("mutation-guard")).map(([id, sc]) => ({ id, reason: sc.reason })),
         // Scenarios that mutate but run by DEFAULT because they declared a reversal on a local
-        // target (§8). Perun tells the operator these seed-then-revert, and MUST run the teardown
-        // wave (qa_loop_finalize hands back the SQL) so the loop leaves the DB clean.
-        auto_reverting: teardowns.map((t) => t.scenario),
+        // target (§8) — the TRUE auto-reverting set (excludes consent-run non-local seeds that
+        // also carry a teardown). Perun tells the operator these seed-then-revert, and MUST run
+        // the teardown wave (qa_loop_finalize hands back the SQL) so the loop leaves the DB clean.
+        auto_reverting: autoRevertingIds,
         dirty,
         dirty_files,
         ...qaIdStartAt !== void 0 ? { qa_id_start_at: qaIdStartAt } : {}

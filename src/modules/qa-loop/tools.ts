@@ -160,25 +160,54 @@ export function baseUrlIsLocal(planText: string): boolean {
 }
 
 /**
- * Extract a scenario's `**Teardown (psql/sqlite3):**` region — the marker line through the end of
- * the fenced code block that follows it — so Perun can hand exactly that (and nothing else) to a
- * zmora-be teardown wave. Returns null when the marker is absent OR carries no fenced block (a bare
- * marker is not a usable reversal); the null makes the scenario "has no teardown" for classification.
+ * Locate a scenario's `**Teardown (psql/sqlite3):**` region as a [start, end] line span (marker
+ * line → its closing fence). The opening fence MUST be the first non-blank line after the marker:
+ * a bare marker whose next non-blank line is prose or another field (`**DB Check:**`, a step) has
+ * NO usable teardown. Without this bound the forward scan would adopt an UNRELATED later fence —
+ * e.g. a `**DB Check:**` SELECT — which both (a) silently unlocks the auto-revert default for a
+ * seed with no real reversal AND (b) records a read-only SELECT as the "teardown" the finalize
+ * wave runs, so `qa_loop_finalize` reports "seeds reverted" while the row persists. Returns null
+ * for absent marker / no immediate fence / unterminated fence.
  */
-export function extractTeardown(block: string): string | null {
-  const lines = block.split("\n")
+function teardownSpan(lines: string[]): { start: number; end: number } | null {
   let start = -1
   for (let i = 0; i < lines.length; i++) {
     if (TEARDOWN_MARKER.test(lines[i]!)) { start = i; break }
   }
   if (start === -1) return null
   let k = start + 1
-  while (k < lines.length && !/^\s*```/.test(lines[k]!)) k++
-  if (k >= lines.length) return null // marker with no opening fence → not a usable teardown
+  while (k < lines.length && lines[k]!.trim() === "") k++ // only blank lines may intervene
+  if (k >= lines.length || !/^\s*```/.test(lines[k]!)) return null // no fence immediately after marker
   let end = k + 1
   while (end < lines.length && !/^\s*```\s*$/.test(lines[end]!)) end++
   if (end >= lines.length) return null // unterminated fence → reject
-  return lines.slice(start, end + 1).join("\n").trim()
+  return { start, end }
+}
+
+/**
+ * The `**Teardown (psql/sqlite3):**` region (marker line through its closing fence) — exactly what
+ * Perun hands to a zmora-be teardown wave — or null when there is no usable teardown (see
+ * teardownSpan). The null makes the scenario "has no teardown" for classification (stays gated).
+ */
+export function extractTeardown(block: string): string | null {
+  const lines = block.split("\n")
+  const span = teardownSpan(lines)
+  if (!span) return null
+  return lines.slice(span.start, span.end + 1).join("\n").trim()
+}
+
+/**
+ * The scenario block with its Teardown region excised — the body `classifyScenario` should read.
+ * A teardown's blocked-phrasing comment (e.g. `-- cleanup: must not leave rows (was a 403 case)`)
+ * or its DELETE verb must NOT flip a seed FEATURE to `negative` and corrupt the coverage bucket;
+ * the seed now RUNS by default, so its (mis)classified kind reaches the report. No-op when there
+ * is no usable teardown span.
+ */
+function classifyBodyExcludingTeardown(block: string): string {
+  const lines = block.split("\n")
+  const span = teardownSpan(lines)
+  if (!span) return block
+  return [...lines.slice(0, span.start), ...lines.slice(span.end + 1)].join("\n")
 }
 
 /** Loop budget defaults — the single source the tool reads (docs quote these). */
@@ -319,8 +348,11 @@ export function makeQaLoopTools(deps: QaLoopToolDeps) {
       // Classify every scenario; apply the mutation guard pre-dispatch.
       const scenarios: Record<string, ScenarioRecord> = {}
       const dispatchSet: string[] = []
-      // Recorded reversals for the auto-reverting mutations that will run (§8).
+      // Recorded reversals for every RUNNING gated mutation that paired one — the wave superset
+      // (includes consent-run non-local seeds). `autoRevertingIds` is the strict subset that ran
+      // WITHOUT allow_mutations because it self-reverts (the exported `auto_reverting`). (§8)
       const teardowns: { scenario: string; block: string }[] = []
+      const autoRevertingIds: string[] = []
       for (const { id, block, malformed } of splitScenarios(planText)) {
         if (malformed) {
           // A suffixed/typo'd heading (e.g. `### BE-02a`) has no recognised scenario
@@ -355,7 +387,13 @@ export function makeQaLoopTools(deps: QaLoopToolDeps) {
             reason: `duplicate scenario id ${id} — scenario ids must be unique (test-plan-format §Plan Structure). A repeated id silently overwrites the first block and can mask a consent-stripped Seed write; give each scenario a distinct FE-/BE-/SETUP-NN id.`,
           })
         }
-        const { kind, mutating, expectsSuccess } = classifyScenario(block)
+        const isSeedWrite = SEED_MARKER.test(block)
+        // §8 the paired reversal (marker → its fenced block), or null when absent/malformed.
+        const teardownBlock = extractTeardown(block)
+        // Classify on the body with the Teardown region EXCISED (classifyBodyExcludingTeardown):
+        // a teardown's DELETE verb or a "must not / 403" comment must not flip a seed FEATURE to
+        // negative and corrupt the coverage bucket, since the seed now RUNS by default.
+        const { kind, mutating, expectsSuccess } = classifyScenario(classifyBodyExcludingTeardown(block))
         // A plan-declared Seed block (`**Seed (psql/sqlite3):**`) is a fixture WRITE by
         // definition — be-testing executes its fenced SQL before the request, for ANY
         // write verb (INSERT / UPDATE / DELETE / TRUNCATE / UPSERT / …). Gate it on
@@ -365,7 +403,6 @@ export function makeQaLoopTools(deps: QaLoopToolDeps) {
         // not verb-keyed (qa-plan-authoring §"Write-safety is marker-keyed"). Every
         // non-seed scenario keeps the §7 rule: strip only mutating-expected-success (a
         // negative-blocked mutation is kept, the write never lands — AC19/AC20).
-        const isSeedWrite = SEED_MARKER.test(block)
         // A "gated" mutation is one whose write actually LANDS: a Seed (any verb) or a non-seed
         // mutating scenario that expects success. A negative-blocked mutation (mutating &&
         // !expectsSuccess) is NOT gated — the write never lands (§7 AC19/AC20), so it runs
@@ -375,7 +412,6 @@ export function makeQaLoopTools(deps: QaLoopToolDeps) {
         // `**Teardown (psql/sqlite3):**` AND targets a LOCAL base URL runs by DEFAULT (no
         // allow_mutations) — the loop reverts it via the teardown wave at finalize. Irreversible
         // (no usable Teardown) OR non-local mutations keep the explicit allow_mutations gate.
-        const teardownBlock = extractTeardown(block)
         const autoReverting = gatedMutation && teardownBlock !== null && targetIsLocal
         const stripped = gatedMutation && !autoReverting && !allowMutations
         scenarios[id] = {
@@ -393,10 +429,15 @@ export function makeQaLoopTools(deps: QaLoopToolDeps) {
         }
         if (!stripped) {
           dispatchSet.push(id)
-          // Record the reversal for any RUNNING scenario that declares one — auto-reverting
-          // seeds, plus any consent-run (allow_mutations) mutation that also paired a teardown.
-          // Handed back LIFO by qa_loop_finalize / qa_loop_undo for the zmora-be teardown wave.
-          if (teardownBlock !== null) teardowns.push({ scenario: id, block: teardownBlock })
+          // The TRUE auto-reverting set (ran WITHOUT allow_mutations because it self-reverts) —
+          // exported as `auto_reverting`. A non-local seed run under allow_mutations records a
+          // teardown too (below) but is NOT auto-reverting, so it must not appear here.
+          if (autoReverting) autoRevertingIds.push(id)
+          // Record the reversal for a RUNNING scenario whose write LANDS and that paired one:
+          // auto-reverting seeds/mutations, plus any consent-run (allow_mutations) gated mutation.
+          // Gated on `gatedMutation` so a negative-blocked non-seed (write never lands) does NOT
+          // queue a destructive DELETE against data the run never created. Handed back LIFO at finalize.
+          if (teardownBlock !== null && gatedMutation) teardowns.push({ scenario: id, block: teardownBlock })
         }
       }
 
@@ -492,9 +533,10 @@ export function makeQaLoopTools(deps: QaLoopToolDeps) {
           .filter(([, sc]) => sc.reason?.startsWith("mutation-guard"))
           .map(([id, sc]) => ({ id, reason: sc.reason })),
         // Scenarios that mutate but run by DEFAULT because they declared a reversal on a local
-        // target (§8). Perun tells the operator these seed-then-revert, and MUST run the teardown
-        // wave (qa_loop_finalize hands back the SQL) so the loop leaves the DB clean.
-        auto_reverting: teardowns.map((t) => t.scenario),
+        // target (§8) — the TRUE auto-reverting set (excludes consent-run non-local seeds that
+        // also carry a teardown). Perun tells the operator these seed-then-revert, and MUST run
+        // the teardown wave (qa_loop_finalize hands back the SQL) so the loop leaves the DB clean.
+        auto_reverting: autoRevertingIds,
         dirty,
         dirty_files,
         ...(qaIdStartAt !== undefined ? { qa_id_start_at: qaIdStartAt } : {}),
