@@ -3,6 +3,7 @@ import path from "node:path"
 import { fileURLToPath } from "node:url"
 import { describe, expect, it } from "vitest"
 import { PERUN_TOOLS } from "../../../src/modules/coordinator/index.js"
+import { QA_LOOP_TOOL_NAMES } from "../../../src/modules/qa-loop/index.js"
 
 const here = path.dirname(fileURLToPath(import.meta.url))
 const PERUN_MD = path.resolve(here, "../../../src/agents/perun.md")
@@ -23,6 +24,12 @@ describe("Perun tool sync", () => {
         "poll_background",
         "wait_background",
       ]),
+    )
+  })
+
+  it("includes all six qa-loop tool names", () => {
+    expect(PERUN_TOOLS).toEqual(
+      expect.arrayContaining([...QA_LOOP_TOOL_NAMES]),
     )
   })
 })

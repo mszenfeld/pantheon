@@ -17,6 +17,17 @@ export interface ParsedBinding {
   inputs: string[]
   egress: string
   recipe: string
+  /**
+   * Non-null when the binding's recipe PROVISIONS a principal — i.e. it CREATES
+   * an account / fixture / tenant (a write to the target system) rather than
+   * minting a token for an already-existing one (a login read). Parsed from an
+   * optional `- Provisions: <principal>` field on the binding; the value is the
+   * human-readable principal description surfaced in the provisioning-consent
+   * gate. A provisioning recipe runs only under recorded `allow_provisioning`
+   * consent (execute-recipe.ts) — the sanctioned, auditable account-creation
+   * path. `null` = an ordinary token-minting recipe, which needs no consent.
+   */
+  provisions: string | null
 }
 
 export type ParseResult =
@@ -29,6 +40,9 @@ const HEADER_RE =
 const INPUTS_RE = /^\s+- Inputs:\s+(.+)$/
 const EGRESS_RE = /^\s+- Egress:\s+`([^`]+)`\s*$/
 const RECIPE_HEADER_RE = /^\s+- Recipe:\s*$/
+// Optional. Its presence marks the binding as a PROVISIONING recipe (creates a
+// principal) — the capture is the human-readable principal, echoed in the consent gate.
+const PROVISIONS_RE = /^\s+- Provisions:\s+(.+)$/
 
 /**
  * Parses the `## Setup → **Bindings:**` subsection of a QA plan markdown,
@@ -97,6 +111,7 @@ export function parseBindings(planText: string): ParseResult {
     let inputs: string[] | null = null
     let egress: string | null = null
     let recipe: string | null = null
+    let provisions: string | null = null
 
     let j = i + 1
     while (j < lines.length) {
@@ -120,6 +135,32 @@ export function parseBindings(planText: string): ParseResult {
         egress = egressMatch[1]!
         j++
         continue
+      }
+
+      const provisionsMatch = sub.match(PROVISIONS_RE)
+      if (provisionsMatch !== null) {
+        const principal = provisionsMatch[1]!.trim()
+        // A valueless `- Provisions:` (nothing, or whitespace only, after the colon) would
+        // leave `provisions` null and silently DISABLE the consent gate for a recipe the author
+        // flagged as provisioning. Reject it: the marker MUST name the principal (it is also
+        // what the consent gate echoes to the operator).
+        if (principal.length === 0) {
+          return {
+            status: "error",
+            reason: `binding '${name}': '- Provisions:' requires a principal description (name what the recipe creates, e.g. '- Provisions: a confirmed auth user')`,
+          }
+        }
+        provisions = principal
+        j++
+        continue
+      }
+      // The empty-value form `- Provisions:` (no trailing text) does not match PROVISIONS_RE
+      // (which requires a value) — catch it here so it errors rather than being ignored.
+      if (/^\s+- Provisions:\s*$/.test(sub)) {
+        return {
+          status: "error",
+          reason: `binding '${name}': '- Provisions:' requires a principal description (name what the recipe creates, e.g. '- Provisions: a confirmed auth user')`,
+        }
       }
 
       if (RECIPE_HEADER_RE.test(sub)) {
@@ -197,6 +238,7 @@ export function parseBindings(planText: string): ParseResult {
       inputs,
       egress,
       recipe,
+      provisions,
     })
     i = j
   }

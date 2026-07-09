@@ -25,8 +25,7 @@ A correct, thorough answer should mention:
   - `{USE_AVOID:<agent>}`
 - The metadata-contributing files:
   `src/modules/explore/triglav.metadata.ts`,
-  `src/modules/qa/zmora.metadata.ts`,
-  `src/modules/agent-registry/fix-auto.metadata.ts`
+  `src/modules/qa/zmora.metadata.ts`
 - The cache: `cachedPerunPrompt` (template loaded + rendered once per
   process)
 

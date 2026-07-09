@@ -11,7 +11,12 @@ interface BindingEntry {
 type WriteResult = {
     status: "ok";
 } | {
+    status: "updated";
+} | {
     status: "duplicate";
+} | {
+    status: "immutable";
+    reason: string;
 } | {
     status: "error";
     reason: string;

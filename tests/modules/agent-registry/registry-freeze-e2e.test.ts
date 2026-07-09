@@ -37,9 +37,9 @@ describe("late registration after Perun prompt snapshot fails loud", () => {
     } as never
     // Mirror the real defaultPluginFactories ORDER: every agent-registering
     // module constructs BEFORE the coordinator. explore (triglav) + qa (zmora)
-    // back the {USE_AVOID:triglav} and specialist rows perun.md references; the
-    // coordinator factory itself registers fix-auto. svarog registers itself and
-    // backs the {WORKFLOW:svarog} placeholder in perun.md.
+    // back the {USE_AVOID:triglav} and specialist rows perun.md references.
+    // svarog registers itself and backs the {WORKFLOW:svarog} placeholder in
+    // perun.md.
     await AppVerkExplorePlugin(toastClient)
     await AppVerkQAPlugin({ client: fakeClient } as never)
     await AppVerkSvarogPlugin({ client: fakeClient } as never)
@@ -47,8 +47,8 @@ describe("late registration after Perun prompt snapshot fails loud", () => {
       client: fakeClient,
     } as never)
 
-    // Run the coordinator's config hook — registers fix-auto + installs the
-    // Perun agent def with the lazy `get prompt()` getter.
+    // Run the coordinator's config hook — installs the Perun agent def with
+    // the lazy `get prompt()` getter.
     const config: Config = { agent: {} }
     await coord.config?.(config as never)
 
@@ -57,9 +57,9 @@ describe("late registration after Perun prompt snapshot fails loud", () => {
     expect(perunDef).toBeDefined()
     const prompt = (perunDef as { prompt: string }).prompt
     expect(prompt.length).toBeGreaterThan(0)
-    // fix-auto was registered by the coordinator factory BEFORE the snapshot, so
-    // it is in the rendered prompt — the registry was non-empty at snapshot time.
-    expect(prompt).toContain("`fix-auto`")
+    // svarog was registered by its own factory BEFORE the snapshot, so it is in
+    // the rendered prompt — the registry was non-empty at snapshot time.
+    expect(prompt).toContain("`svarog`")
 
     // A module mis-ordered AFTER the coordinator would register here, post-snapshot.
     expect(() => registerAgentMetadata(info("late-agent"))).toThrow(

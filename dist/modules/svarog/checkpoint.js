@@ -28,7 +28,10 @@ function createCheckpoint(cwd, sessionId) {
       "svarog checkpoint"
     ]);
     const ref = `refs/svarog/ckpt/${sessionId}`;
-    git(cwd, ["update-ref", ref, commit]);
+    try {
+      git(cwd, ["update-ref", ref, commit, "0000000000000000000000000000000000000000"]);
+    } catch {
+    }
     return ref;
   } finally {
     rmSync(dir, { recursive: true, force: true });

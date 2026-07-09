@@ -16,6 +16,8 @@ interface RecordInputArgs {
 type RecordInputResult = {
     status: "ok";
 } | {
+    status: "updated";
+} | {
     status: "rejected";
     reason: string;
 };

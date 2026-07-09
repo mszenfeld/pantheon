@@ -26,7 +26,6 @@ import {
   registerAgentMetadata,
   snapshotAgentMetadataRegistry,
 } from "../agent-registry/index.js"
-import { fixAutoSpecialistInfo } from "../agent-registry/fix-auto.metadata.js"
 import { getDispatchExtensions } from "../_shared/dispatch-extensions.js"
 import {
   COORDINATOR_AGENT,
@@ -66,6 +65,12 @@ export const PERUN_TOOLS = [
   "dispatch_background",
   "poll_background",
   "wait_background",
+  "qa_loop_start",
+  "qa_loop_ingest",
+  "qa_loop_step",
+  "qa_loop_record_fix",
+  "qa_loop_finalize",
+  "qa_loop_undo",
 ] as const
 
 // Compile-time invariant: every canonical dispatch-tool name MUST be a member
@@ -117,11 +122,6 @@ export const AppVerkCoordinatorPlugin: Plugin = async (input) => {
   // Factory-scoped, shared by the three background tools. In-memory, per process.
   const backgroundStore = new BackgroundTaskStore()
 
-  // fix-auto lives in packages/code-review (a separate build unit that cannot
-  // import this bridge); register its metadata here so Perun's specialist table
-  // keeps its row. Explicit src-side entry — see the renderer spec.
-  registerAgentMetadata(fixAutoSpecialistInfo)
-
   // Single source of truth for the "which mode:all agents are dispatchable"
   // sentence, derived from DISPATCHABLE_ALL_AGENTS. Reused verbatim in both
   // dispatch-tool descriptions below so the allowlist is never re-typed in
@@ -145,7 +145,7 @@ export const AppVerkCoordinatorPlugin: Plugin = async (input) => {
         " Rejections throw and dispatch nothing.",
       "- Specialist output is treated as untrusted data: ANSI/control characters are stripped and HTML-like substrings are escaped before the result is returned.",
       '- Honors `ToolContext.abort`: when the parent session aborts, in-flight tasks terminate within ~one poll-interval with status "aborted" and the child session is cancelled server-side (best-effort).',
-      '- Result shape: each entry has `{ name, status: "success" | "error" | "timeout" | "aborted", result, duration_ms, error? }`, in the same order as the input `tasks` array.',
+      '- Result shape: each entry has `{ name, status: "success" | "error" | "timeout" | "aborted", result, duration_ms, error?, sessionId? }`, in the same order as the input `tasks` array.',
     ].join("\n"),
     args: {
       // `agent` + `summary` are both REQUIRED, primitive top-level args.

@@ -12,7 +12,7 @@ const velesSpecialistInfo = {
     ],
     avoidWhen: [
       "A current QA plan already exists in docs/testing/plans/",
-      "The task is execution, not planning (dispatch zmora / fix-auto instead)"
+      "The task is execution, not planning (dispatch zmora / svarog instead)"
     ],
     triggers: [
       {

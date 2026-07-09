@@ -42,10 +42,10 @@ describe("buildSpecialistsTable", () => {
   it("renders rows in name-sorted order", () => {
     const out = buildSpecialistsTable([
       info({ name: "zmora", description: "z" }),
-      info({ name: "fix-auto", description: "f" }),
+      info({ name: "stribog", description: "s" }),
     ])
     const lines = out.split("\n")
-    expect(lines[2]).toBe("| `fix-auto` | subagent | f |")
+    expect(lines[2]).toBe("| `stribog` | subagent | s |")
     expect(lines[3]).toBe("| `zmora` | subagent | z |")
   })
 

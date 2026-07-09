@@ -229,7 +229,8 @@ ${task.context}` : task.prompt;
       name: task.name,
       status: "success",
       result,
-      duration_ms: Date.now() - startTime
+      duration_ms: Date.now() - startTime,
+      sessionId
     };
   } catch (err) {
     const status = classifyError(err);
@@ -243,7 +244,8 @@ ${task.context}` : task.prompt;
       duration_ms: Date.now() - startTime,
       error: neutralizeUntrustedOutput(
         err instanceof Error ? err.message : String(err)
-      )
+      ),
+      sessionId
     };
   }
 }

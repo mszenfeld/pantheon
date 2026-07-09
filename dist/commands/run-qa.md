@@ -20,6 +20,15 @@ You execute QA test plans by handing the plan to **@perun**, the Pantheon coordi
 |----------|---------------|
 | (empty) | Find the most recent test plan in `docs/testing/plans/` |
 | `<path>` | Use the specified test plan file |
+| `--mode <approve\|auto\|step>` | Gate policy (default `approve`; `auto` is headless) |
+| `--max-iterations <N>` | Loop iteration ceiling (default `3`) |
+| `--max-dispatches <N>` | Svarog dispatch ceiling — the true MAXD gate (default `50`) |
+| `--time-budget <seconds>` | Wall-clock budget checked at iteration boundaries (default `1800`) |
+| `--severity-floor <LOW\|MEDIUM\|HIGH\|CRITICAL>` | Minimum severity that enters the loop (default `LOW`) |
+| `--allow-mutations` | Also run IRREVERSIBLE or NON-LOCAL mutations — a `**Seed (psql/sqlite3):**` / mutating-expected-success scenario with no paired `**Teardown (psql/sqlite3):**`, or one whose `base-url` is not localhost (default off — those stay stripped by the mutation guard / seed-consent gate). An AUTO-REVERTING seed (paired Teardown on a local `base-url`) already runs by default and is un-seeded by the teardown wave at finalize, so it needs no flag. |
+| `--allow-provisioning` | Arm plan-declared **provisioning recipes** (bindings with a `- Provisions:` marker that CREATE an account/principal) for the run — Perun passes `allow_provisioning: true` to `parse_plan` (default off — `execute_recipe` returns `provisioning_blocked` and the coordinator otherwise surfaces the provisioning-consent gate first) |
+
+Flags may also be given in natural language ("run QA autonomously" → `--mode auto`; "only fix highs" → `--severity-floor HIGH`). Forward whatever you parse to Perun verbatim.
 
 **Finding the most recent plan:**
 
@@ -68,17 +77,13 @@ Use `todowrite` to create:
 
 **Task Update:** Mark task 2 as `in_progress` using `todowrite`.
 
-Compose a single message that hands the plan path to `@perun`. Use this exact format (substitute the resolved plan path):
+Compose a single message that hands the plan path and any parsed flags to `@perun`. Use this exact format (substitute the resolved plan path and flags):
 
 ```
-@perun uruchom QA dla <resolved-plan-path>
+@perun run the QA loop for <resolved-plan-path> <parsed flags, e.g. --mode auto --severity-floor HIGH>
 ```
 
-Or, in English:
-
-```
-@perun run QA for <resolved-plan-path>
-```
+Perun runs the closed test→fix→retest loop: baseline → (gated) Svarog fixes one issue at a time → re-test → authoritative final pass → report. The `qa_loop_*` tools own the budgets, idempotency, regression/progress guards, and the report (the single writer).
 
 Perun will then:
 
@@ -90,8 +95,8 @@ Perun will then:
 6. **Dispatch each wave** through `dispatch_parallel({ agent, summary, tasks })` — one task per scenario, with a 4-wide worker pool. Each wave waits for completion before the next begins. `dispatch_parallel` accepts max 4 tasks per call; Perun chunks larger waves into multiple sequential calls of ≤4 tasks.
 7. **Merge findings** across waves in scenario-source order (the original markdown order, NOT wave order).
 8. **Assign QA-XXX IDs** via `assign_issue_ids` and sort by severity (CRITICAL → HIGH → MEDIUM → LOW).
-9. **Write the report** to `docs/testing/reports/YYYY-MM-DD-<topic>-report.md` where `<topic>` is the plan filename minus the leading date prefix and the trailing `-test-plan` suffix.
-10. **Display a summary** with totals, top issues, and an offer to fix them via `fix-auto`.
+9. **Write the report** to `docs/testing/reports/YYYY-MM-DD-<topic>.md` where `<topic>` is the plan filename minus the leading date prefix and the trailing `-test-plan` suffix.
+10. **Run the loop to completion**, then — if the run seeded any auto-reverting fixtures — run the **teardown wave** that un-seeds them (the DB counterpart of the file-only `qa_loop_undo`), and display the final summary (Result, Loop History, Coverage, seeds-reverted, and the `qa_loop_undo` recovery hint). There is no separate fix follow-up — fixing IS the loop.
 
 **Task Update:** Mark task 2 as `completed` using `todowrite` once you have handed off to `@perun`. Do not wait for Perun's response — the handoff completes your part of the workflow.
 

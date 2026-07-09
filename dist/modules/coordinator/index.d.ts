@@ -13,7 +13,7 @@ import './poller.js';
  * is otherwise manual (there is no programmatic link between tool registration
  * and the agent frontmatter).
  */
-declare const PERUN_TOOLS: readonly ["dispatch_parallel", "assign_issue_ids", "compute_waves", "dispatch_background", "poll_background", "wait_background"];
+declare const PERUN_TOOLS: readonly ["dispatch_parallel", "assign_issue_ids", "compute_waves", "dispatch_background", "poll_background", "wait_background", "qa_loop_start", "qa_loop_ingest", "qa_loop_step", "qa_loop_record_fix", "qa_loop_finalize", "qa_loop_undo"];
 declare const AppVerkCoordinatorPlugin: Plugin;
 
 export { AppVerkCoordinatorPlugin, PERUN_TOOLS };

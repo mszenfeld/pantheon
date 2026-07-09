@@ -9,7 +9,7 @@ activation: Load when generating or formatting QA test reports
 ## File Conventions
 
 - **Location:** `docs/testing/reports/`
-- **Naming:** `YYYY-MM-DD-<topic>-report.md` where `<topic>` matches the test plan topic
+- **Naming:** `YYYY-MM-DD-<topic>.md` where `<topic>` matches the test plan topic
 - **Screenshots:** `docs/testing/reports/screenshots/` (referenced from report)
 - **Create directories if needed:** `mkdir -p docs/testing/reports/screenshots`
 

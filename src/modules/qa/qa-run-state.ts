@@ -31,6 +31,16 @@ interface RunRecord {
    * See `record-input.ts` and `preflight.ts`.
    */
   declaredEnv: Set<string>
+  /**
+   * Operator consent to run PROVISIONING recipes for this run (bindings whose
+   * `- Provisions:` field marks them as creating a principal). Default false:
+   * without it, `execute_recipe` refuses a provisioning binding (an account is
+   * never created without explicit consent). Set by `parse_plan({ allow_provisioning })`
+   * once the user has confirmed the provisioning-consent gate. Token-minting
+   * recipes (the common case) are unaffected — they carry no `provisions` marker.
+   * Mirrors the qa-loop seed-consent flag (`allow_mutations`) for the recipe path.
+   */
+  allowProvisioning: boolean
 }
 
 /** Shared empty result for `getDeclaredEnv` on an uninitialised parent — avoids
@@ -44,6 +54,7 @@ function makeEmptyRecord(plan: ParsedBinding[] = []): RunRecord {
     dialogRoundInProgress: false,
     recipeAttempts: new Map(),
     declaredEnv: new Set(),
+    allowProvisioning: false,
   }
 }
 
@@ -86,6 +97,28 @@ export class QaRunState {
    */
   getDeclaredEnv(parentID: string): ReadonlySet<string> {
     return this.#map.get(parentID)?.declaredEnv ?? EMPTY_DECLARED_ENV
+  }
+
+  /**
+   * Record operator consent to run provisioning recipes for this run. Set from
+   * `parse_plan({ allow_provisioning })` after the user confirms the gate.
+   * Materialises the run record if absent so consent survives an early call.
+   */
+  setAllowProvisioning(parentID: string, allow: boolean): void {
+    let r = this.#map.get(parentID)
+    if (r === undefined) {
+      r = makeEmptyRecord()
+      this.#map.set(parentID, r)
+    }
+    r.allowProvisioning = allow
+  }
+
+  /**
+   * Whether provisioning recipes are consented for this run (false when the
+   * parent has no record). Read by `execute_recipe` to gate a `provisions` binding.
+   */
+  getAllowProvisioning(parentID: string): boolean {
+    return this.#map.get(parentID)?.allowProvisioning ?? false
   }
 
   getDialogRound(parentID: string): number {

@@ -215,14 +215,19 @@ const AppVerkQAPlugin = async ({ client }) => {
           "The plan text is parsed in-process \u2014 the binding values themselves are NEVER produced here, only the recipe AST. Value materialisation happens later in `execute_recipe`.",
           "",
           "Result shape (JSON-stringified):",
-          '- `{ status: "ok", bindings: string[] }` \u2014 bindings stored; `bindings` lists the names parsed (e.g. `["QA_BIND_TOKEN"]`). Empty array means the plan has no `## Setup` / `**Bindings:**` subsection \u2014 Perun should proceed to dispatch without any zmora-setup tasks.',
+          '- `{ status: "ok", bindings: string[], provisioning: {name, provisions}[], allow_provisioning: boolean }` \u2014 bindings stored; `bindings` lists the names parsed (e.g. `["QA_BIND_TOKEN"]`). Empty array means the plan has no `## Setup` / `**Bindings:**` subsection \u2014 Perun should proceed to dispatch without any zmora-setup tasks.',
           '- `{ status: "error", reason }` \u2014 parse/validation failed (invalid binding name, recipe AST rejection, etc.). Surface `reason` to the user verbatim and abort the QA run.',
           "",
-          "Idempotent: calling twice with the same plan replaces the stored plan (later wins). Safe to call again on resume."
+          '`provisioning` names the bindings whose recipe CREATES a principal (they carry a `- Provisions:` field \u2014 an account/fixture WRITE, not a token-minting login). Each runs only when `allow_provisioning` is true; otherwise `execute_recipe` returns `{status:"provisioning_blocked"}`. If `provisioning` is non-empty and you have NOT yet obtained consent, surface the provisioning-consent gate (name each principal + its egress host + the privileged key) and re-call parse_plan with `allow_provisioning:true` after the user confirms.',
+          "",
+          "Idempotent: calling twice replaces the stored plan AND the consent flag (later wins) \u2014 this is exactly how you arm provisioning after the user confirms the gate. Safe to call again on resume."
         ].join("\n"),
         args: {
           plan: tool.schema.string().describe(
             "Full text of the QA plan markdown. Perun passes the contents read via `Read` \u2014 do not summarise or trim."
+          ),
+          allow_provisioning: tool.schema.boolean().optional().describe(
+            "Operator consent to run PROVISIONING recipes \u2014 bindings carrying a `- Provisions:` marker that CREATE an account/principal (a write to the target system). Default false: without it `execute_recipe` refuses those recipes and the account is never created. Pass true ONLY after surfacing the provisioning-consent gate and the user confirms. Token-minting recipes (login\u2192JWT, the common case) are unaffected."
           )
         },
         async execute(args, ctx) {
@@ -238,9 +243,14 @@ const AppVerkQAPlugin = async ({ client }) => {
             return JSON.stringify({ status: "error", reason: parsed.reason });
           }
           state.storePlan(parentID, parsed.bindings);
+          const allowProvisioning = args.allow_provisioning === true;
+          state.setAllowProvisioning(parentID, allowProvisioning);
+          const provisioning = parsed.bindings.filter((b) => b.provisions !== null).map((b) => ({ name: b.name, provisions: b.provisions }));
           return JSON.stringify({
             status: "ok",
-            bindings: parsed.bindings.map((b) => b.name)
+            bindings: parsed.bindings.map((b) => b.name),
+            provisioning,
+            allow_provisioning: allowProvisioning
           });
         }
       }),
@@ -254,7 +264,8 @@ const AppVerkQAPlugin = async ({ client }) => {
           '- `{ status: "ok" }` \u2014 binding minted and stored.',
           '- `{ status: "need_info", missing: string[] }` \u2014 recipe inputs are not yet bound; Perun must collect them first.',
           '- `{ status: "recipe_failed", reason, stderr_tail }` \u2014 bash exit non-zero, timeout, or output validation failed. `stderr_tail` is scrubbed of secrets and truncated to 200 chars.',
-          '- `{ status: "unknown_binding" }` \u2014 `binding_name` is not in the parent run\'s plan.'
+          '- `{ status: "unknown_binding" }` \u2014 `binding_name` is not in the parent run\'s plan.',
+          '- `{ status: "provisioning_blocked", reason }` \u2014 the binding is a PROVISIONING recipe (a `- Provisions:` marker: it creates a principal) and the run has no `allow_provisioning` consent. The account is NOT created; surface the provisioning-consent gate and re-run `parse_plan` with `allow_provisioning:true` once the user confirms, then re-dispatch this SETUP scenario.'
         ].join("\n"),
         args: {
           binding_name: tool.schema.string().describe(
@@ -282,12 +293,13 @@ const AppVerkQAPlugin = async ({ client }) => {
           "Available only to Perun, invoked when parsing user replies during mid-run dialog. The value is stored as type=secret, source=user-paste \u2014 it is scrubbed from any specialist stderr that propagates back through the plugin.",
           "",
           "Result shape (JSON-stringified):",
-          '- `{ status: "ok" }` \u2014 recorded (also returned for duplicates, idempotent).',
-          '- `{ status: "rejected", reason }` \u2014 name failed denylist/regex check, or value failed charset/length validation.'
+          '- `{ status: "ok" }` \u2014 recorded (a new value, or a byte-identical re-paste \u2014 idempotent).',
+          '- `{ status: "updated" }` \u2014 a re-paste of an already-recorded name REPLACED the stored value; the corrected value now takes effect. Acknowledge as "Updated <NAME> (<N> chars)". This is the recovery path for a mistyped/expired credential mid-run.',
+          '- `{ status: "rejected", reason }` \u2014 name failed the denylist/regex check, the value failed charset/length validation, OR the name holds an immutable minted/pinned value that a paste may not overwrite.'
         ].join("\n"),
         args: {
           name: tool.schema.string().describe(
-            'Env var name (regular identifier, not necessarily QA_BIND_*), e.g. "TEST_USER_EMAIL". Must match /^[A-Z_][A-Z0-9_]*$/ and never a process-control name (PATH, NODE_OPTIONS, ...). Credential-prefixed names (AWS_, SUPABASE_, DATABASE_, ...) are accepted only when the parsed plan declares them as a binding Input; otherwise rejected.'
+            'Env var name (regular identifier, not necessarily QA_BIND_*), e.g. "TEST_USER_EMAIL". Must match /^[A-Z_][A-Z0-9_]*$/ and never a process-control name (PATH, NODE_OPTIONS, ...). Credential-prefixed names (AWS_, SUPABASE_, DATABASE_, ...) are accepted only when the parsed plan declares them \u2014 as a binding Input OR a Required environment variable (registered by a prior preflight call); otherwise rejected.'
           ),
           value: tool.schema.string().describe(
             "Value pasted by the user. Stored as type=secret, source=user-paste. Max 4096 chars; restricted charset (no control bytes)."

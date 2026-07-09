@@ -27,6 +27,7 @@ export interface DispatchResult {
   result: string
   duration_ms: number
   error?: string
+  sessionId?: string // child session id captured via onSessionCreated (undefined if the child was never created)
 }
 
 export interface DispatchSpecialist {
@@ -651,6 +652,7 @@ async function runTask(
       status: "success",
       result,
       duration_ms: Date.now() - startTime,
+      sessionId,
     }
   } catch (err) {
     const status = classifyError(err)
@@ -671,6 +673,7 @@ async function runTask(
       error: neutralizeUntrustedOutput(
         err instanceof Error ? err.message : String(err),
       ),
+      sessionId,
     }
   }
 }

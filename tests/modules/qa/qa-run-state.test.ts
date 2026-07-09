@@ -9,6 +9,7 @@ const fakeBinding: ParsedBinding = {
   inputs: ["X"],
   egress: "$X",
   recipe: 'curl "$X"',
+  provisions: null,
 }
 
 describe("QaRunState", () => {
@@ -123,6 +124,26 @@ describe("QaRunState", () => {
       expect(state.getDialogRound("p1")).toBe(0)
       // Next call starts at round 1 again.
       expect(state.incrementDialogRoundOnFirstInput("p1")).toBe(1)
+    })
+  })
+
+  describe("provisioning consent", () => {
+    it("defaults to false, including for an uninitialised parent", () => {
+      expect(state.getAllowProvisioning("never-planned")).toBe(false)
+    })
+
+    it("setAllowProvisioning arms and disarms provisioning for the run", () => {
+      state.setAllowProvisioning("p1", true)
+      expect(state.getAllowProvisioning("p1")).toBe(true)
+      state.setAllowProvisioning("p1", false)
+      expect(state.getAllowProvisioning("p1")).toBe(false)
+    })
+
+    it("materialises a record when set before storePlan, and clearRun resets it", () => {
+      state.setAllowProvisioning("fresh", true)
+      expect(state.getAllowProvisioning("fresh")).toBe(true)
+      state.clearRun("fresh")
+      expect(state.getAllowProvisioning("fresh")).toBe(false)
     })
   })
 })

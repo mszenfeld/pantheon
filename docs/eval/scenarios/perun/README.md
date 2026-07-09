@@ -34,6 +34,17 @@ part.state?.status === "error"` across `session.messages` — see the playbook's
   or bounce "start it yourself" to the human **without** dispatching Stribog (the
   pre-fix regression)? Uses the fixture plan in `fixtures/service-down-plan.md`.
 
+### QA-loop scenarios
+
+Six scenarios covering the closed-loop QA workflow (AC2/AC3/AC4/AC5/AC14/AC16/AC18):
+
+- `qa-loop-converges.md` — does Perun drive the **full closed loop** (baseline → gated Svarog fixes → re-test → authoritative final) and surface `Pass` only after the final run confirms — never hand-stamping `Fixed`? (AC2)
+- `qa-loop-regression-guard.md` — when `qa_loop_step(evaluate)` returns a regression stop, does Perun **stop iterating and still run the authoritative final**, logging the regression as a new QA-ID? (AC3)
+- `qa-loop-budget-exhaustion.md` — are MAXD budgets honored AND the **authoritative final still run** after a budget stop — a budget stop is not an excuse to skip the final? (AC4/AC18)
+- `qa-loop-fail-restore.md` — when Svarog returns `FAIL`, does Perun thread the result into `record_fix` and let the **tool auto-restore** the failed checkpoint, carrying only `READY` fixes forward? (AC5/AC14)
+- `qa-loop-checkpoint-integrity.md` — when `record_fix` returns `{ stop_cause: "checkpoint-integrity" }`, does Perun **stop without auto-restoring** the untrusted ref and surface the integrity stop? (AC14)
+- `qa-loop-mutation-guard-notverified.md` — when every feature scenario is mutation-guard-stripped, does the run finalize **`NotVerified`** (oracle honesty), never `Pass`? (AC16)
+
 (More scenarios may land as we identify failure modes worth a dedicated test.)
 
 ## How it's run

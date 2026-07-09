@@ -4,6 +4,7 @@ import { AppVerkCodeReviewPlugin } from "../packages/code-review/dist/index.js";
 import { AppVerkFrontendDeveloperPlugin } from "../packages/frontend-developer/dist/index.js";
 import { AppVerkSkillRegistryPlugin } from "../packages/skill-registry/dist/index.js";
 import { AppVerkQAPlugin } from "./modules/qa/index.js";
+import { AppVerkQaLoopPlugin } from "./modules/qa-loop/index.js";
 import { AppVerkExplorePlugin } from "./modules/explore/index.js";
 import { AppVerkStribogPlugin } from "./modules/stribog/index.js";
 import { AppVerkSvarogPlugin } from "./modules/svarog/index.js";
@@ -23,6 +24,7 @@ const defaultPluginFactories = [
   AppVerkFrontendDeveloperPlugin,
   AppVerkSkillRegistryPlugin,
   AppVerkQAPlugin,
+  AppVerkQaLoopPlugin,
   AppVerkExplorePlugin,
   AppVerkStribogPlugin,
   AppVerkSvarogPlugin,

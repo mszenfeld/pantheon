@@ -7,7 +7,6 @@ import {
   buildPerunPrompt,
 } from "../../../src/modules/agent-registry/index.js"
 import { zmoraSpecialistInfo } from "../../../src/modules/qa/zmora.metadata.js"
-import { fixAutoSpecialistInfo } from "../../../src/modules/agent-registry/fix-auto.metadata.js"
 import { triglavSpecialistInfo } from "../../../src/modules/explore/triglav.metadata.js"
 import { svarogSpecialistInfo } from "../../../src/modules/svarog/svarog.metadata.js"
 import { DISPATCHABLE_ALL_AGENTS } from "../../../src/modules/coordinator/dispatch.js"
@@ -28,7 +27,7 @@ function render(): string {
   // constant (mirrors how coordinator/index.ts builds the real prompt).
   return buildPerunPrompt(
     template,
-    [fixAutoSpecialistInfo, zmoraSpecialistInfo, triglavSpecialistInfo, svarogSpecialistInfo],
+    [zmoraSpecialistInfo, triglavSpecialistInfo, svarogSpecialistInfo],
     { dispatchableAllowlist: ALLOWLIST },
   )
 }
@@ -37,7 +36,7 @@ describe("perun prompt integration", () => {
   it("renders both specialist rows", () => {
     const out = render()
     expect(out).toContain("| `zmora` | subagent |")
-    expect(out).toContain("| `fix-auto` | subagent |")
+    expect(out).not.toContain("fix-auto")
   })
 
   it("leaves no unsubstituted placeholder", () => {

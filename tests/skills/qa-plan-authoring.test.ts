@@ -199,4 +199,80 @@ describe("qa-plan-authoring skill", () => {
       "**A failed or inconclusive probe is not a license to guess:**",
     )
   })
+
+  it("Seed write-safety is marker-keyed, not verb- or disposition-keyed (SEC seed-gate)", () => {
+    // Pins the shipped tools.ts behavior: a `**Seed (psql/sqlite3):**` block strips on the
+    // marker ALONE. If this doctrine silently drifts back to "INSERT lands unguarded", the
+    // authoring skill would once again teach the opposite of the code.
+    expect(md).toContain("**Write-safety is marker-keyed, not disposition-keyed:**")
+    expect(md).toContain("strips a marked block on `!allow_mutations` alone")
+  })
+
+  it("Seed write-safety pins the Seeds fixtures consent marker (SEC seed-gate)", () => {
+    expect(md).toContain("**Seeds fixtures:** BE-NN[, …] (auto-reverts with a paired Teardown on a local base-url; else requires allow_mutations)")
+  })
+
+  it("§8 teaches the auto-reverting seed (paired Teardown) as the DEFAULT shape (autorevert)", () => {
+    // The new default: a Seed with a paired Teardown on a local base-url runs WITHOUT
+    // allow_mutations and is un-seeded at finalize. If this drifts, authoring would again
+    // teach seeding as a consent-gated exception, contradicting the shipped tools.ts default.
+    expect(md).toContain("**Auto-reverting seed (paired Teardown) — the DEFAULT shape.**")
+    expect(md).toContain("run-unique discriminator")
+    // The discriminator must scope the DELETE (never an unscoped TRUNCATE).
+    expect(md).toContain("an unscoped `DELETE`/`TRUNCATE` is a defect")
+  })
+
+  it("§8 requires the auto-reverting seed to be IDEMPOTENT (re-runs on the final pass) (autorevert-idempotent)", () => {
+    // The loop re-runs the whole plan on the authoritative final pass before the single teardown,
+    // so a fixed-PK INSERT collides on its 2nd run → false FAIL. If this rule drifts, the marquee
+    // "modify then revert" flow silently mis-fails on any non-idempotent seed.
+    expect(md).toContain("the Seed MUST be IDEMPOTENT")
+    // Substring kept within one source line (the prose is hard-wrapped at ~col 90).
+    expect(md).toContain("the authoritative final pass (and on each retest)")
+  })
+
+  it("§8 requires the seed's DSN to be the same local/throwaway instance as base-url (autorevert-dsn)", () => {
+    // Phase-0 enforces the local floor on base-url only (it can't resolve the $VAR DSN), so a seed
+    // whose DSN points at a shared/prod DB would auto-write there. Pinned so the authoring rule
+    // that closes this residual can't silently vanish.
+    expect(md).toContain("declared connection DSN MUST point at the SAME local/throwaway instance as `base-url`")
+    expect(md).toContain("it cannot resolve the `$VAR` DSN")
+  })
+
+  it("Step 6.5 makes account-existence a first-class human precondition with a sanctioned provisioning-recipe escape (provisioning-delegation)", () => {
+    // Upstream root cause of the i-need-cv auto-provision improvisation: the plan buried
+    // "create test users … if necessary" in free prose because authoring had no account-existence
+    // class. preflight verifies credential VALUE presence, never account existence. Phase 2 adds
+    // the sanctioned escape: a `- Provisions:` recipe run under the allow_provisioning consent gate,
+    // so a producible account no longer dead-ends as a human-only prerequisite.
+    expect(md).toContain(
+      "Account existence is a human prerequisite that preflight cannot verify",
+    )
+    expect(md).toContain("account existence DEFAULTS to a human precondition")
+    expect(md).toContain("credential-presence ≠ account-existence")
+    // An unproducible account demotes its scenarios to provisioning-blocked...
+    expect(md).toContain("provisioning-blocked")
+    // ...but a producible one is declared as a provisioning recipe under consent (the escape).
+    expect(md).toContain("Escape — a provisioning recipe.")
+    expect(md).toContain("- Provisions:")
+    expect(md).toContain("allow_provisioning")
+  })
+
+  it("Step 5 Setup inference declares a scenario auth credential, keyed on scenarios not the diff (undeclared-auth-credential)", () => {
+    // Root cause of the ai-score session: a BE-only diff (aiScore filter + fence-strip) added no
+    // new `os.environ[...]`, so the diff-keyed Setup bullets fired nothing — yet every scenario
+    // carried `Authorization: Bearer <token>`. preflight([]) then passed trivially and the missing
+    // credential surfaced only mid-run as NEED_INFO. This bullet keys the declaration on the
+    // authored SCENARIOS.
+    expect(md).toContain(
+      "Any scenario you write that needs an authenticated call → declare its credential",
+    )
+    expect(md).toContain("keyed on the SCENARIOS, not only the diff")
+    // preflight([]) trivially passing on the empty list is named as the failure mode
+    expect(md).toContain("`preflight([])` passes trivially on the empty list")
+    // cross-links the canonical rule in test-plan-format
+    expect(md).toContain(
+      'see `test-plan-format` Setup Rules ("A scenario auth credential MUST be declared in `## Setup`")',
+    )
+  })
 })

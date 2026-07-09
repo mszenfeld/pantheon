@@ -823,7 +823,7 @@ describe("dispatchParallel", () => {
     it("leaves non-zmora agent names untouched", async () => {
       // Regression guard: the normaliser must not touch unrelated names.
       const registry: Record<string, AgentInfo> = {
-        "fix-auto": { mode: "subagent" },
+        svarog: { mode: "subagent" },
       }
       const { specialist } = makeSpecialistRecorder({
         sessionMap: { s1: { messages: [finishedMessage("ok")] } },
@@ -831,7 +831,7 @@ describe("dispatchParallel", () => {
       })
 
       const tasks: DispatchTask[] = [
-        { name: "fix-auto", prompt: "fix something" },
+        { name: "svarog", prompt: "fix something" },
       ]
 
       const results = await dispatchParallel({
@@ -841,7 +841,7 @@ describe("dispatchParallel", () => {
         pollIntervalMs: 10,
       })
 
-      expect(results[0]?.name).toBe("fix-auto")
+      expect(results[0]?.name).toBe("svarog")
     })
   })
 

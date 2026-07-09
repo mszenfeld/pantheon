@@ -14,6 +14,7 @@ export interface RecordInputArgs {
 
 export type RecordInputResult =
   | { status: "ok" }
+  | { status: "updated" }
   | { status: "rejected"; reason: string }
 
 export interface RecordInputContext {
@@ -75,7 +76,14 @@ export function makeRecordInputHandler(
       { declaredInput },
     )
     if (write.status === "ok") return { status: "ok" }
+    // A corrected re-paste of an already-recorded name REPLACED the stale
+    // value — surfaced distinctly so Perun can confirm the fix landed instead
+    // of silently believing the first (bad) value is still live.
+    if (write.status === "updated") return { status: "updated" }
+    // A byte-identical re-paste is a true no-op; report it as ok (idempotent).
     if (write.status === "duplicate") return { status: "ok" }
+    // "immutable" (a paste may not overwrite a minted/pinned value) and "error"
+    // both carry a reason and surface as an honest rejection — never as ok.
     return { status: "rejected", reason: write.reason }
   }
 }

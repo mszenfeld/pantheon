@@ -6,7 +6,8 @@ function makeEmptyRecord(plan = []) {
     dialogRound: 0,
     dialogRoundInProgress: false,
     recipeAttempts: /* @__PURE__ */ new Map(),
-    declaredEnv: /* @__PURE__ */ new Set()
+    declaredEnv: /* @__PURE__ */ new Set(),
+    allowProvisioning: false
   };
 }
 class QaRunState {
@@ -44,6 +45,26 @@ class QaRunState {
    */
   getDeclaredEnv(parentID) {
     return this.#map.get(parentID)?.declaredEnv ?? EMPTY_DECLARED_ENV;
+  }
+  /**
+   * Record operator consent to run provisioning recipes for this run. Set from
+   * `parse_plan({ allow_provisioning })` after the user confirms the gate.
+   * Materialises the run record if absent so consent survives an early call.
+   */
+  setAllowProvisioning(parentID, allow) {
+    let r = this.#map.get(parentID);
+    if (r === void 0) {
+      r = makeEmptyRecord();
+      this.#map.set(parentID, r);
+    }
+    r.allowProvisioning = allow;
+  }
+  /**
+   * Whether provisioning recipes are consented for this run (false when the
+   * parent has no record). Read by `execute_recipe` to gate a `provisions` binding.
+   */
+  getAllowProvisioning(parentID) {
+    return this.#map.get(parentID)?.allowProvisioning ?? false;
   }
   getDialogRound(parentID) {
     return this.#map.get(parentID)?.dialogRound ?? 0;

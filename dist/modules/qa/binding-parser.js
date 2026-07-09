@@ -4,6 +4,7 @@ const HEADER_RE = /^- `(QA_BIND_[A-Z][A-Z0-9_]*|[A-Z_][A-Z0-9_]*)` \((secret|pla
 const INPUTS_RE = /^\s+- Inputs:\s+(.+)$/;
 const EGRESS_RE = /^\s+- Egress:\s+`([^`]+)`\s*$/;
 const RECIPE_HEADER_RE = /^\s+- Recipe:\s*$/;
+const PROVISIONS_RE = /^\s+- Provisions:\s+(.+)$/;
 function parseBindings(planText) {
   const lines = planText.split("\n");
   let setupStart = -1;
@@ -50,6 +51,7 @@ function parseBindings(planText) {
     let inputs = null;
     let egress = null;
     let recipe = null;
+    let provisions = null;
     let j = i + 1;
     while (j < lines.length) {
       const sub = lines[j];
@@ -70,6 +72,25 @@ function parseBindings(planText) {
         egress = egressMatch[1];
         j++;
         continue;
+      }
+      const provisionsMatch = sub.match(PROVISIONS_RE);
+      if (provisionsMatch !== null) {
+        const principal = provisionsMatch[1].trim();
+        if (principal.length === 0) {
+          return {
+            status: "error",
+            reason: `binding '${name}': '- Provisions:' requires a principal description (name what the recipe creates, e.g. '- Provisions: a confirmed auth user')`
+          };
+        }
+        provisions = principal;
+        j++;
+        continue;
+      }
+      if (/^\s+- Provisions:\s*$/.test(sub)) {
+        return {
+          status: "error",
+          reason: `binding '${name}': '- Provisions:' requires a principal description (name what the recipe creates, e.g. '- Provisions: a confirmed auth user')`
+        };
       }
       if (RECIPE_HEADER_RE.test(sub)) {
         let k = j + 1;
@@ -131,7 +152,8 @@ function parseBindings(planText) {
       description: description.trim(),
       inputs,
       egress,
-      recipe
+      recipe,
+      provisions
     });
     i = j;
   }
