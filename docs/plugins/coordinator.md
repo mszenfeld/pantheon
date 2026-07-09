@@ -347,3 +347,4 @@ Agent metadata entries also live alongside their owning module — e.g. `src/mod
 - [`docs/plugins/qa.md`](./qa.md) — QA plugin, source of the `zmora` logical agent and its FE/BE variants.
 - [`docs/plugins/code-review.md`](./code-review.md) — review plugin, source of `fix-auto` and the `/fix` workflow.
 - [`docs/plugins/qa-loop-engineering.md`](./qa-loop-engineering.md) — QA loop doctrine: scenario-kind / coverage taxonomy, oracle separation, mutation guard.
+- [`docs/agent-contracts.md`](../agent-contracts.md) — agent closing-contract (verdict) and reader-hygiene doctrine, with the roster conformance table.
