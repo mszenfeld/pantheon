@@ -42,7 +42,7 @@ For your assigned `FE-XX:` block:
 
    Expected-result text may carry `(file:line)` / `(unverified — confirm at run time)` / `(exact text — brittle)` tags — defer to the fe-testing skill's "Tag handling" rules.
 
-5. If not met → take screenshot to `docs/testing/reports/screenshots/<ID>-fail.png`, return FAIL.
+5. If not met → run the fe-testing skill's FAIL refutation battery first; a FAIL that survives it → take screenshot to `docs/testing/reports/screenshots/<ID>-fail.png`, return FAIL.
 6. Execute each edge case as a sub-test.
 
 ### Step 4: Return results
