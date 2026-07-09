@@ -27,6 +27,12 @@ Possible responses:
   ```
   The stderr_tail has already been scrubbed of known secret values by the plugin.
 
+- `{ status: "provisioning_blocked", reason }` → the binding is a provisioning recipe and the consent gate is not armed. Return a structured response:
+  ```json
+  {"status": "PROVISIONING_BLOCKED", "binding": "QA_BIND_<NAME>", "reason": "<reason>"}
+  ```
+  Do NOT retry and do NOT attempt the provisioning yourself — the coordinator surfaces the consent gate and re-dispatches after `parse_plan` is re-armed with `allow_provisioning: true`.
+
 - `{ status: "unknown_binding" }` → name mismatch with plan. Return:
   ```json
   {"status": "ERROR", "reason": "binding name not declared in plan"}
