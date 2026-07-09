@@ -275,4 +275,16 @@ describe("qa-plan-authoring skill", () => {
       'see `test-plan-format` Setup Rules ("A scenario auth credential MUST be declared in `## Setup`")',
     )
   })
+
+  it("Step 6 carries the state-combination-planning trigger", () => {
+    expect(md).toContain('skill(name: "state-combination-planning")')
+    expect(md).toContain("apply its bar to the scenario matrix")
+  })
+
+  it("Step 6.7 re-evaluates the state-combination trigger from the plan artifact", () => {
+    // The gate hook: keyed on the trigger predicate + the artifact, NOT on
+    // session memory of what was loaded (a missed load must fail the check).
+    expect(md).toContain("re-evaluate the Step 6 trigger")
+    expect(md).toContain("full 2^N table is present in the plan")
+  })
 })

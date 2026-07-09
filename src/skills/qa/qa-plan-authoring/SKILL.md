@@ -386,6 +386,11 @@ Every scenario step MUST be executable by the runner (see Step 4.5): a Playwrigh
   or the `(unverified — confirm at run time)` tag (see Step 0 and the
   `test-plan-format` "Grounding tags & assertion style" section). Citations go on
   the single most load-bearing line per assertion.
+- **State combinations (conditional):** if the change under test is driven by
+  **two or more independent boolean inputs** (feature flags, permissions,
+  connection/loading states), load `skill(name: "state-combination-planning")`
+  and apply its bar to the scenario matrix before writing the affected
+  scenarios.
 
 ## Step 6.5: Binding completeness check
 
@@ -527,7 +532,12 @@ disposition:
 
 Also confirm: every behavioral assertion carries a visible `(file:line)` OR `(unverified — confirm
 at run time)` tag; no `**Expected response:**` equals a value produced only by a recorded Blocker
-(recorded in Step 3.5 — see Step 6.8); the filename carries the `-test-plan` suffix (Step 7). A
+(recorded in Step 3.5 — see Step 6.8); the filename carries the `-test-plan` suffix (Step 7). When
+the change under test is driven by ≥2 independent boolean inputs (re-evaluate the Step 6 trigger
+here, from the plan artifact — not from memory of what was loaded), also confirm:
+`state-combination-planning` was loaded, the full 2^N table is present in the plan, every
+combination classified `real` has a scenario, and every `impossible` cites its invariant or
+confirmation. A
 Changes-Summary status OR named surface with no row, or an invalid disposition, is a defect — fix
 before saving. Finally, re-scan the changed files for the Step 3.5 hazard classes (debug/test
 artifacts, disabled guards, an identifier-policy QA/ticket ID in a comment, a leaked secret) and
