@@ -25,4 +25,27 @@ describe("be-testing skill", () => {
     // A failed teardown is surfaced but NEVER changes a scenario's pass/fail — it is cleanup.
     expect(md).toContain("NEVER changes a scenario's pass/fail")
   })
+
+  it("carries the FAIL refutation battery with mutation safety", () => {
+    expect(md).toContain("## FAIL refutation battery")
+    // The load-bearing rule: a mutating request is NEVER re-fired (double-apply
+    // lands outside the teardown accounting); re-verification re-READS state.
+    expect(md).toContain("never re-fire the request")
+    expect(md).toContain("not retry-until-pass")
+  })
+
+  it("liveness distinction routes environment gaps to NEED_INFO", () => {
+    expect(md).toContain("NEED_INFO kind=service")
+    expect(md).toContain("answered earlier in the scenario and then died")
+  })
+
+  it("gates sub-verdicts (edge-case lines + DB check) and widens the templates", () => {
+    expect(md).toContain("the `**DB check:**` field")
+    expect(md).toContain("- **Status:** PASS / FAIL / SKIP / NEED_INFO")
+    expect(md).toContain("<edge case 1>: PASS / FAIL / SKIP — <details>")
+  })
+
+  it("aligns tool detection to the core SKIP-vs-NEED_INFO rule", () => {
+    expect(md).toContain('kind: "tool"')
+  })
 })
