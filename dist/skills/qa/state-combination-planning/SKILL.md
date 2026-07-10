@@ -1,6 +1,7 @@
 ---
 name: state-combination-planning
 description: Use when authoring QA scenarios for behavior driven by two or more independent boolean inputs (feature flags, permissions, connection states) — enumerate the full 2^N product as a scenario matrix, prove any "impossible" combination, never sample just the main paths.
+activation: Load when AUTHORING or self-checking a QA test plan whose change under test is driven by two or more independent boolean inputs (feature flags, permissions, connection/loading states). Plan-authoring only — scenario executors never load it.
 ---
 
 # State Combination Planning

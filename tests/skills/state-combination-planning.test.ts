@@ -10,6 +10,9 @@ const SKILL_PATH = path.resolve(
 
 describe("state-combination-planning skill", () => {
   const md = readFileSync(SKILL_PATH, "utf8")
+  // Whitespace-normalized copy for reflow-invariant prose pins: the doctrine
+  // prose is hard-wrapped, so a benign re-wrap must not break a multi-word pin.
+  const flat = md.replace(/\s+/g, " ")
 
   it("parses with the collision-safe native name", () => {
     // NOT "state-combination-modeling": buildSkillCatalog throws on duplicate names
@@ -27,7 +30,7 @@ describe("state-combination-planning skill", () => {
     expect(md).toContain("2^N")
     expect(md).toContain("impossible")
     expect(md).toContain("invariant")
-    expect(md).toContain("Unconfirmed → treat as real")
+    expect(flat).toContain("Unconfirmed → treat as real")
   })
 
   it("carries the 4-row worked example and the checklist", () => {

@@ -415,3 +415,9 @@ tests/modules/qa/                  # Vitest tests for plugin registration, build
 ```
 
 The variant prompts are built **in memory** by `prompt-builder.ts` at plugin init and never written to `dist/agents/`. The root build copies `prompt-sections/*.md` into `dist/modules/qa/prompt-sections/` so the builder can read them at runtime.
+
+## Related documentation
+
+- [`docs/plugins/coordinator.md`](./coordinator.md) — coordinator plugin: Perun, the six `qa_loop_*` tools, and the `dispatch_parallel` worker pool that drains QA scenarios.
+- [`docs/plugins/qa-loop-engineering.md`](./qa-loop-engineering.md) — QA loop doctrine: scenario-kind / coverage taxonomy, oracle separation, mutation guard.
+- [`docs/agent-contracts.md`](../agent-contracts.md) — agent closing-contract (verdict) and reader-hygiene doctrine. Its roster table sources the `zmora` / `zmora-setup` verdict vocabularies from the agent prompts that own them (`prompt-sections/core.md`, `prompt-sections/overlay-setup.md`) and cites this doc only for Perun's consumer routing (`NEED_INFO` pauses the run).
