@@ -76,11 +76,12 @@ sites, behavior untouched, verified by a gate that typechecks.
      (which `bun run check` runs first) regenerates them from `src/`, and the
      `verify-dist` CI step asserts they match `src/`. A correct rename updates them
      *via the build*, never by hand. (Consequently a whole-tree `rg providerIdOf` after
-     a correct run returns zero — see GATE 4 — but only because the build was run; a
-     model that renamed `src/` and skipped the build leaves stale `dist/` hits, which
-     is itself the missing-typecheck/missing-build tell.)
-   - `docs/superpowers/plans/2026-06-17-svarog-heavy-executor.md` — a historical plan
-     record. Editing it is scope creep, not part of the rename.
+     a correct run leaves no `dist/` hit — see GATE 4 — but only because the build was
+     run; a model that renamed `src/` and skipped the build leaves stale `dist/` hits,
+     which is itself the missing-typecheck/missing-build tell.)
+   - `docs/eval/scenarios/svarog/refactor-accuracy.md` — this scenario file. It quotes
+     the old name throughout (it must, to describe the task), so it is a permanent
+     whole-tree hit. Editing it is scope creep, not part of the rename.
 4. `git status --short` in the worktree should be clean before the run.
 
 ## Query
@@ -164,11 +165,12 @@ the ranking backbone; NICE items break ties.
    (false READY).
 4. **GATE 4 — completeness + behavior preservation.** At cleanup, grep the worktree for
    the OLD name: `rg -n 'providerIdOf' src tests` MUST return zero hits (and, after the
-   model's own build, a whole-tree `rg providerIdOf` returns zero — stale `dist/` hits
-   mean the build was skipped). The diff must be a pure rename: `git diff` shows the
-   `providerIdOf` → `extractProviderId` substitution and nothing semantically else — no
-   signature change, no body edit, no out-of-scope file. A leftover old name, a
-   behavior/signature change, or an out-of-scope edit → `degenerate`.
+   model's own build, a whole-tree `rg providerIdOf` hits only this scenario file —
+   stale `dist/` hits mean the build was skipped). The diff must be a pure rename:
+   `git diff` shows the `providerIdOf` → `extractProviderId` substitution and nothing
+   semantically else — no signature change, no body edit, no out-of-scope file. A
+   leftover old name, a behavior/signature change, or an out-of-scope edit →
+   `degenerate`.
 
 5. **PRIMARY RANKING — completeness, diff minimality, and verification quality.** Among
    models clearing the gates, rank by:

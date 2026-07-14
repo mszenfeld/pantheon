@@ -27,7 +27,7 @@ command -v redis-cli >/dev/null 2>&1 && echo "OK: redis-cli available" || echo "
 command -v jq >/dev/null 2>&1 && echo "OK: jq available" || echo "UNAVAILABLE: jq"
 ```
 
-Use the first available tool from each category. If no HTTP client is available, mark all API scenarios as SKIP.
+Use the first available tool from each category. If no HTTP client is available, route per the core prompt's SKIP-vs-NEED_INFO rule: would-apply scenarios → `NEED_INFO` with `kind: "tool"`, `missing: ["curl"]` (matching the BE overlay's Step 2 probe); SKIP only for scenarios inapplicable to this stack/environment.
 
 ### Database Server Access
 
@@ -308,23 +308,83 @@ For each scenario, return results in this format:
 
 ```
 ### BE-XX: <scenario name>
-- **Status:** PASS / FAIL / SKIP
+- **Status:** PASS / FAIL / SKIP / NEED_INFO
 - **Request:** <METHOD> <URL>
 - **Response status:** <actual status code>
 - **Response body:** <relevant excerpt or full body if short>
 - **DB check:** <PASS/FAIL/SKIP — actual value vs expected>
-- **Details:** <what was verified / what went wrong>
+- **Details:** <what was verified / what went wrong; battery refutation trace when a FAIL was re-verified>
 - **Edge cases:**
-  - <edge case 1>: PASS / FAIL — <details>
-  - <edge case 2>: PASS / FAIL — <details>
+  - <edge case 1>: PASS / FAIL / SKIP — <details>
+  - <edge case 2>: PASS / FAIL / SKIP — <details>
 ```
+
+---
+
+## FAIL refutation battery (before returning any FAIL)
+
+A FAIL is a claim — refute it before you report it. Run these four checks
+before returning ANY `FAIL` the result carries: the scenario-level
+`**Status:**`, each edge-case sub-result line, and the `**DB check:**` field
+(an edge-case FAIL under a passing main flow still mints its own QA-XXX issue
+in the report).
+
+1. **Re-verify the observation — once, deterministically, observation-only.**
+   For a non-mutating step (GET/HEAD, a read-only `psql` check): repeat the
+   identical request exactly once. For a mutating step (POST/PUT/PATCH/DELETE,
+   an INSERT/seed): never re-fire the request — re-firing double-applies the
+   side effect outside the teardown accounting (one recorded reversal per
+   scenario) — re-verify by re-READING the resulting state once instead
+   (repeat the scenario's DB check, or GET the created resource). One re-check,
+   then disposition — this is not retry-until-pass. If the two observations
+   disagree, record BOTH in Details: identical READ requests returning
+   different results → non-determinism is itself an application defect →
+   `FAIL` with both responses recorded (this diagnosis applies to read re-fires
+   only — a re-fired write legitimately differs, e.g. 201→409 on a duplicate
+   POST, which is why writes are never re-fired).
+2. **Environment artifact?** A missing prerequisite discovered at execution
+   time (env var, service, fixture, tool) → `NEED_INFO` with the matching
+   `kind` (the Zmora core prompt's kind table), not `FAIL`. Liveness
+   distinction for the app under test at the plan's base-url: never reachable
+   in this scenario → `NEED_INFO kind=service`;
+   answered earlier in the scenario and then died → genuine `FAIL` (the app
+   crashed under test).
+   Dependency hosts (the DB behind a DB check, third-party services) stay on
+   the unconditional NEED_INFO service routing — a flaky dependency is an
+   environment problem, not this scenario's app defect. Tool routing follows
+   the core prompt's SKIP-vs-NEED_INFO rule: scenario inapplicable to this
+   stack/environment → `SKIP`; scenario would apply but the tool is missing →
+   `NEED_INFO` with `kind: "tool"` (the missing-DB-client case stays a
+   DB-check-level `SKIP` — partial execution: one sub-check blocked, not the
+   scenario).
+3. **Deliberate omission / scope mismatch?** An observed defect OUTSIDE the
+   scenario's Expected, with the Expected itself met → `PASS` with the
+   out-of-scope observation noted in Details (a follow-up scenario is the
+   coordinator's call — it is not this scenario's FAIL); an omission recorded
+   in the plan (`## Setup`, a plan note) that makes the scenario inapplicable
+   here → `SKIP` per the core prompt's inapplicability rule; a missing
+   declared prerequisite → `NEED_INFO` via check 2.
+4. **Harness error?** Tool timeout, a client crash, a query that never
+   executed → re-attempt the failed harness step at most ONCE; if it fails
+   again, return an error result naming the tool failure (core prompt's
+   error-result shape) — never an application `FAIL`. No open-ended retries.
+
+**Disposition:** a `FAIL` that survives carries a one-line refutation trace in
+Details (e.g. `re-verified: yes; env: n/a`). A refuted FAIL becomes
+`PASS`/`SKIP`/`NEED_INFO`/error per what the battery showed. Sub-verdicts: a
+refuted edge-case or DB-check FAIL flips that line to `PASS`/`SKIP` with its
+trace in the line's details clause; a prerequisite-class edge failure escalates
+to scenario-level `NEED_INFO` (exception: the upfront missing-DB-client case
+stays a DB-check-level `SKIP`); a harness-refuted edge failure (second attempt
+also failed) flips that line to `SKIP — <tool failure>` (the scenario-level
+error result is reserved for main-flow harness errors).
 
 ---
 
 ## Error Handling
 
-- If no HTTP client is available: mark ALL API scenarios as SKIP with reason
-- If DB client is unavailable: execute API scenarios but mark DB Checks as SKIP
-- If a request times out (>30s): mark as FAIL with "timeout" note
-- If a connection is refused: mark as FAIL with "connection refused — is the server running?"
+- If no HTTP client is available and the scenarios would apply here: return `NEED_INFO` with `kind: "tool"`, `missing: ["curl"]` (core prompt SKIP-vs-NEED_INFO rule; SKIP only for stack/environment inapplicability)
+- If DB client is unavailable: execute API scenarios but mark DB Checks as SKIP (partial execution — a missing DB client blocks one sub-check, not the scenario)
+- If a request times out (>30s): battery check 2 — the app answered earlier in this scenario → FAIL with "timeout" note; never reachable at all → `NEED_INFO kind=service`
+- If a connection is refused: liveness distinction (battery check 2) — the app under test answered earlier in this scenario and then died → FAIL with "connection refused mid-scenario — app crashed under test"; never reachable in this scenario → `NEED_INFO kind=service` with the base URL in `missing` (this is the connection-failure branch the BE overlay's DB-check rule cross-references)
 - If response is not valid JSON when expected: mark as FAIL, include raw response body

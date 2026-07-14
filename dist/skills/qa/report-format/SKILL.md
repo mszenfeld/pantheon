@@ -194,7 +194,7 @@ List ALL scenarios (pass, fail, skip) in order:
 ### Skip: FE-05: Mobile responsive layout (Playwright unavailable)
 ```
 
-- **Pass:** just the status and scenario name
+- **Pass:** just the status and scenario name. One allowance (mirroring Skip's parenthetical): a battery-refuted FAIL that re-verified as PASS MAY carry its one-line refutation trace in parentheses, e.g. `### Pass: FE-04: Session badge renders (re-verified: first read stale)` — the parenthetical is self-contained; the report has no per-scenario Details field to point at.
 - **Fail:** status, scenario name, reference to QA-XXX issue
 - **Skip:** status, scenario name, reason in parentheses
 

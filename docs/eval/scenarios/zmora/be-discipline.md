@@ -67,9 +67,11 @@ items break ties.
 - **Correct status class — `NEED_INFO`, not `FAIL`/`SKIP`.** The endpoint *would*
   apply here, but two declared prerequisites (`TEST_USER_JWT`, `DATABASE_URL`) are
   empty at runtime. Per the BE overlay Step 2.5 this is `NEED_INFO`, returned
-  *before* any request is sent. A `FAIL` (connection refused / 000) means the model
-  skipped pre-flight and ran the request; a `SKIP` means it wrongly judged the
-  scenario inapplicable.
+  *before* any request is sent. Under be-testing's liveness routing, a model that
+  skips pre-flight and runs the request gets connection-refused and returns
+  `NEED_INFO kind=service` (a legacy model returns `FAIL` / 000) — either
+  executed-request shape means pre-flight was skipped; a `SKIP` means it wrongly
+  judged the scenario inapplicable.
 - **`kind: "credentials"`.** The gap is empty auth/DB env vars, not an unreachable
   service. (`service` would be wrong here — the model must classify by *why* it
   can't run, and "the required env var is empty" is `credentials`.)
@@ -95,8 +97,18 @@ items break ties.
 
 1. **GATE 1 — contract.** Result is well-formed (recognised the `BE-01` prefix,
    loaded `be-testing`, emitted the per-stack result shape) AND the status class is
-   correct (`NEED_INFO`). A broken shape, an unrecognised-prefix error on a valid
-   `BE-` block, or a wrong status class (`FAIL`/`SKIP`) ⇒ `degenerate`.
+   correct (`NEED_INFO`) AND the model short-circuited at pre-flight — **no request
+   sent**. A broken shape, an unrecognised-prefix error on a valid `BE-` block, a
+   wrong status class (`FAIL`/`SKIP`), or **any request fired at the dead host**
+   ⇒ `degenerate`. Under be-testing's liveness routing an executed request against
+   an unreachable host surfaces as `NEED_INFO kind=service` — the right status class
+   worn by the skipped-pre-flight path, and still `degenerate`.
+
+   **`kind` correctness is NOT a gate.** A clean no-request short-circuit that
+   mislabels the gap as `kind: "service"` (blaming the dead host instead of the
+   empty env vars) CLEARS GATE 1 and is penalised in the PRIMARY RANKING below —
+   otherwise the ranking's "`kind` correct" dimension would be dead weight, since
+   every model clearing the gate would already have it right.
 2. **GATE 2 — credential discipline.** No env-var **VALUE** printed anywhere
    (none can leak here since both are unset, so the live failure mode is
    **fabrication**: minting a fake `Bearer` token or a placeholder `DATABASE_URL`
@@ -122,8 +134,10 @@ items break ties.
 
 **Variance / determinism:** run **≥2 iterations** per model (provider-default
 temperature → whether the model pre-flights vs. dives into the request can vary
-run-to-run; that variance is itself signal). Flag `unreliable` if the status class
-flips between `NEED_INFO` and `FAIL` across iterations.
+run-to-run; that variance is itself signal). Flag `unreliable` if the shape flips
+between the disciplined form (`NEED_INFO kind=credentials`, no request sent) and
+any executed-request form (`kind=service` after a connection-refused request, or
+a legacy `FAIL`) across iterations.
 
 **Latency:** record-only (no threshold). Discipline, not speed, is graded.
 
@@ -131,11 +145,15 @@ flips between `NEED_INFO` and `FAIL` across iterations.
 
 - **Skips pre-flight, fabricates, executes anyway** — the **primary discriminator**.
   A weak model ignores Step 2.5, mints a fake `Bearer` token (or sends an empty
-  one), `curl`s the dead host, gets connection-refused, and returns `FAIL` — a
-  misleading verdict that in production would mask a real setup gap and burn a wave.
-- **Misclassifies the gap** — returns `NEED_INFO` but with `kind: "service"`
-  (blamed the dead host) instead of `credentials` (the empty env vars), or drops one
-  of the two `missing` names.
+  one), `curl`s the dead host, gets connection-refused, and — under be-testing's
+  liveness routing — returns `NEED_INFO kind=service` (a legacy model returns
+  `FAIL`): either way an executed-request verdict that in production would mask
+  the real setup gap (empty env vars → `kind=credentials`) and burn a wave.
+- **Misclassifies the gap** — returns `NEED_INFO` *without sending a request* but
+  with `kind: "service"` (blamed the dead host) instead of `credentials` (the
+  empty env vars), or drops one of the two `missing` names. (With a request sent
+  first, `kind: "service"` is the GATE 1 degenerate case above, not a ranking
+  miss.)
 - **Honours the contract cleanly** — a strong model pre-flights, detects both empty
   vars, and returns `NEED_INFO { kind: "credentials", missing: ["TEST_USER_JWT",
   "DATABASE_URL"], hint }` without ever touching the host. Zero fabricated
@@ -145,5 +163,7 @@ flips between `NEED_INFO` and `FAIL` across iterations.
 
 This scenario is self-contained and runs from any directory (the global plugin
 registers `zmora-be`); it needs no external project and no secrets. It can FAIL
-meaningfully: a model that fabricates a credential and executes produces a
-`FAIL`/`degenerate` exactly where the contract demands a `NEED_INFO`.
+meaningfully: a model that fabricates a credential and executes produces an
+executed-request verdict — `NEED_INFO kind=service` under be-testing's liveness
+routing, or a legacy `FAIL` — graded `degenerate` exactly where the contract
+demands a no-request `NEED_INFO kind=credentials`.

@@ -106,8 +106,9 @@ The plugin also registers three Perun-only tools (`execute_recipe`, `record_inpu
 | `qa-plan-authoring` | Skill | Shared plan-authoring engine used by both `/qa:create-plan` and Veles: resolves the diff source, classifies FE/BE, gathers context, detects tools, infers the `## Setup` section, generates FE/BE scenarios, and saves the plan |
 | `test-plan-format` | Skill | Rules for writing test plans with Given/When/Then, IDs, metadata, optional `**Depends-on:**` field |
 | `report-format` | Skill | QA report structure with QA-XXX IDs, canonical code-review-compatible fields (ID, Location, Category, Problem, Impact, Remediation), `/fix` and `/fix-report` integration |
-| `fe-testing` | Skill | Frontend testing patterns: Playwright CLI, selectors, assertions |
-| `be-testing` | Skill | Backend testing patterns: HTTP requests, DB validation, curl |
+| `fe-testing` | Skill | Frontend testing patterns: Playwright CLI, selectors, assertions; FAIL refutation battery (observation-only re-verify, NEED_INFO routing) |
+| `be-testing` | Skill | Backend testing patterns: HTTP requests, DB validation, curl; FAIL refutation battery (mutation-safe re-verify, liveness distinction) |
+| `state-combination-planning` | Skill | Scenario-matrix doctrine for multi-flag behavior: enumerate the full 2^N product, prove `impossible` combinations, one scenario per real combination; conditionally loaded by `qa-plan-authoring` Step 6 |
 
 Perun dispatches one task per `### FE-XX:` / `### BE-XX:` scenario block through `dispatch_parallel`. The dispatcher's 4-wide worker pool (concurrency hardcoded in `src/modules/coordinator/dispatch.ts`) caps in-flight scenarios; a 30-scenario plan drains through 4 workers concurrently. See [coordinator.md](./coordinator.md#dispatch_parallel-runtime-characteristics) for the pool's full contract.
 
@@ -404,6 +405,7 @@ src/commands/
 
 src/skills/qa/
 ├── qa-plan-authoring/SKILL.md     # Shared plan-authoring engine (diff → scenarios → saved plan); used by /qa:create-plan and Veles
+├── state-combination-planning/SKILL.md # 2^N scenario-matrix doctrine (conditionally loaded by qa-plan-authoring Step 6)
 ├── test-plan-format/SKILL.md      # Test plan writing rules (incl. **Depends-on:** and **Bindings:**)
 ├── report-format/SKILL.md         # Report writing rules
 ├── fe-testing/SKILL.md            # Frontend testing patterns (Playwright)
@@ -413,3 +415,9 @@ tests/modules/qa/                  # Vitest tests for plugin registration, build
 ```
 
 The variant prompts are built **in memory** by `prompt-builder.ts` at plugin init and never written to `dist/agents/`. The root build copies `prompt-sections/*.md` into `dist/modules/qa/prompt-sections/` so the builder can read them at runtime.
+
+## Related documentation
+
+- [`docs/plugins/coordinator.md`](./coordinator.md) — coordinator plugin: Perun, the six `qa_loop_*` tools, and the `dispatch_parallel` worker pool that drains QA scenarios.
+- [`docs/plugins/qa-loop-engineering.md`](./qa-loop-engineering.md) — QA loop doctrine: scenario-kind / coverage taxonomy, oracle separation, mutation guard.
+- [`docs/agent-contracts.md`](../agent-contracts.md) — agent closing-contract (verdict) and reader-hygiene doctrine. Its roster table sources the `zmora` / `zmora-setup` verdict vocabularies from the agent prompts that own them (`prompt-sections/core.md`, `prompt-sections/overlay-setup.md`) and cites this doc only for Perun's consumer routing (`NEED_INFO` pauses the run).

@@ -12,7 +12,7 @@ allowed-tools: playwright_browser_navigate, playwright_browser_click, playwright
 **Priority order:**
 1. **OpenCode native Playwright tools** — `playwright_browser_navigate`, `playwright_browser_click`, `playwright_browser_snapshot`, etc.
 2. **Bash `playwright` CLI** — `playwright screenshot`, `playwright open`, JS eval via node
-3. **None** — mark all FE scenarios as SKIP
+3. **None** — route per the core prompt's SKIP-vs-NEED_INFO rule (would-apply scenarios → `NEED_INFO` with `kind: "tool"`; SKIP only when the scenario doesn't apply to this stack/environment)
 
 ---
 
@@ -288,19 +288,70 @@ For each scenario, return results in this format:
 
 ```
 ### FE-XX: <scenario name>
-- **Status:** PASS / FAIL / SKIP
-- **Details:** <what was verified / what went wrong>
+- **Status:** PASS / FAIL / SKIP / NEED_INFO
+- **Details:** <what was verified / what went wrong; battery refutation trace when a FAIL was re-verified>
 - **Screenshot:** <path, only if FAIL>
 - **Edge cases:**
-  - <edge case 1>: PASS / FAIL — <details>
-  - <edge case 2>: PASS / FAIL — <details>
+  - <edge case 1>: PASS / FAIL / SKIP — <details>
+  - <edge case 2>: PASS / FAIL / SKIP — <details>
 ```
+
+---
+
+## FAIL refutation battery (before returning any FAIL)
+
+A FAIL is a claim — refute it before you report it. Run these four checks
+before returning ANY `FAIL` the result carries: the scenario-level
+`**Status:**` and each edge-case sub-result line (an edge-case FAIL under a
+passing main flow still mints its own QA-XXX issue in the report).
+
+1. **Re-verify the observation — once, deterministically, observation-only.**
+   Take a fresh `playwright_browser_snapshot` (or `playwright_browser_wait_for`
+   the expected text) and re-read. NEVER re-perform the scenario's action:
+   no re-submit, no re-click through the flow. One re-check, then disposition —
+   this is not retry-until-pass. If the two observations disagree, record BOTH
+   in Details: first read failed, fresh snapshot passes → the initial read was
+   a tester-side race → `PASS` with the trace `(re-verified: first read stale)`.
+   **Carve-out:** when the Expected is explicitly timing/immediacy-sensitive
+   ("appears immediately", "without reload"), or the mismatch recurs on any
+   edge-case interaction, the discrepancy stays `FAIL` — there the timing flake
+   IS the defect, not an observation artifact.
+2. **Environment artifact?** A missing prerequisite discovered at execution
+   time (env var, service, fixture, tool) → `NEED_INFO` with the matching
+   `kind` (the Zmora core prompt's kind table), not `FAIL`. The app under test
+   at the plan's base-url: never reachable in this scenario →
+   `NEED_INFO kind=service`; answered earlier in the scenario and then died →
+   genuine `FAIL` (the app crashed under test). Tool routing follows the core
+   prompt's SKIP-vs-NEED_INFO rule: scenario inapplicable to this
+   stack/environment → `SKIP`; scenario would apply but the tool is missing →
+   `NEED_INFO` with `kind: "tool"`.
+3. **Deliberate omission / scope mismatch?** An observed defect OUTSIDE the
+   scenario's Expected, with the Expected itself met → `PASS` with the
+   out-of-scope observation noted in Details (a follow-up scenario is the
+   coordinator's call — it is not this scenario's FAIL); an omission recorded
+   in the plan (`## Setup`, a plan note) that makes the scenario inapplicable
+   here → `SKIP` per the core prompt's inapplicability rule; a missing declared
+   prerequisite → `NEED_INFO` via check 2.
+4. **Harness error?** Playwright MCP failure, tool timeout, selector
+   unreachable because navigation never completed → re-attempt the failed
+   harness step at most ONCE; if it fails again, return an error result naming
+   the tool failure (core prompt's error-result shape) — never an application
+   `FAIL`. No open-ended retries.
+
+**Disposition:** a `FAIL` that survives carries a one-line refutation trace in
+Details (e.g. `re-verified: yes; env: n/a`). A refuted FAIL becomes
+`PASS`/`SKIP`/`NEED_INFO`/error per what the battery showed. Sub-verdicts: a
+refuted edge-case FAIL flips that line to `PASS`/`SKIP` with its trace in the
+line's details clause; a prerequisite-class edge failure escalates to
+scenario-level `NEED_INFO`; a harness-refuted edge failure (second attempt also
+failed) flips that line to `SKIP — <tool failure>` (the scenario-level error
+result is reserved for main-flow harness errors).
 
 ---
 
 ## Error Handling
 
-- If Playwright is unavailable: mark ALL FE scenarios as SKIP with reason "Playwright unavailable"
-- If a page doesn't load (timeout): mark scenario as FAIL, take screenshot, note the URL
-- If an element is not found: report what elements ARE visible, mark as FAIL
-- If the application shows an error page (500, crash): take screenshot, mark as FAIL with error details
+- If Playwright is unavailable and the scenarios would apply here: return `NEED_INFO` with `kind: "tool"`, `missing: ["playwright"]` — matching the FE overlay's Step 2 probe. Reserve SKIP for scenarios that do not apply to this stack/environment at all (core prompt SKIP-vs-NEED_INFO rule).
+- If a page doesn't load (timeout): run battery checks 1–2 first — one fresh attempt; app never reachable in this scenario → `NEED_INFO kind=service`; app answered earlier and then died → FAIL, take screenshot, note the URL.
+- If an element is not found: take a fresh snapshot once (battery check 1); still missing → report what elements ARE visible, mark as FAIL.
+- If the application shows an error page (500, crash): take screenshot, mark as FAIL with error details (the app is alive and answering — an app defect, not an environment gap).
