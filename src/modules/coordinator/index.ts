@@ -1,8 +1,22 @@
 import { tool, type Plugin } from "@opencode-ai/plugin"
 import { DISPATCH_TOOL_NAMES } from "./dispatch-tool-names.js"
-import { dispatchParallel, DISPATCHABLE_ALL_AGENTS } from "./dispatch.js"
+import {
+  authorizeDispatchCaller,
+  dispatchParallel,
+  DISPATCHABLE_ALL_AGENTS,
+} from "./dispatch.js"
+import { sanitizeTaskMetadata } from "./task-builder.js"
 import { assignIssueIds } from "./assign-issue-ids.js"
 import { computeWaves } from "./compute-waves.js"
+import { getPlanningArtifactDigest } from "./artifact-digest.js"
+import { approvePlanningArtifact } from "./artifact-approval.js"
+import { readVerifiedPlanningArtifact } from "./artifact-read.js"
+import {
+  execFileGitRunner,
+  isGitRunner,
+  validateAndClassify,
+  type GitRunner,
+} from "./feature-manifest.js"
 import {
   neutralizeUntrustedOutput,
   deriveReportPath,
@@ -52,6 +66,17 @@ function loadAgentPrompt(name: string): string {
   return loadModuleAsset(import.meta.url, `../../agents/${name}.md`)
 }
 
+
+function getFeatureManifestGitRunner(input: unknown): GitRunner {
+  if (typeof input !== "object" || input === null) return execFileGitRunner
+  try {
+    const candidate = Reflect.get(input, "featureManifestGitRunner")
+    return isGitRunner(candidate) ? candidate : execFileGitRunner
+  } catch {
+    return execFileGitRunner
+  }
+}
+
 /**
  * Coordinator-provided tools that MUST appear in perun.md's `allowed-tools`
  * frontmatter. Kept as an exported constant so a test can enforce the sync that
@@ -62,6 +87,10 @@ export const PERUN_TOOLS = [
   "dispatch_parallel",
   "assign_issue_ids",
   "compute_waves",
+  "classify_feature_manifest",
+  "get_planning_artifact_digest",
+  "approve_planning_artifact",
+  "read_verified_planning_artifact",
   "dispatch_background",
   "poll_background",
   "wait_background",
@@ -117,6 +146,7 @@ function getPerunPrompt(): string {
 
 export const AppVerkCoordinatorPlugin: Plugin = async (input) => {
   const { client } = input
+  const featureManifestGitRunner = getFeatureManifestGitRunner(input)
   let toastShown = false
 
   // Factory-scoped, shared by the three background tools. In-memory, per process.
@@ -184,6 +214,10 @@ export const AppVerkCoordinatorPlugin: Plugin = async (input) => {
               .string()
               .optional()
               .describe("Optional extra context appended to the prompt"),
+            executionContext: tool.schema
+              .literal("perun-headless")
+              .optional()
+              .describe("Marks the dispatched child as a headless Perun session."),
           }),
         )
         .describe("Array of tasks to dispatch in parallel"),
@@ -196,9 +230,9 @@ export const AppVerkCoordinatorPlugin: Plugin = async (input) => {
       // carry the inline label there as two separate columns. Set BEFORE
       // any validation so the label survives downstream failures.
       context.metadata({
-        title: `${args.agent} — ${args.summary}`,
+        title: neutralizeUntrustedOutput(`${args.agent} — ${args.summary}`),
         metadata: {
-          tasks: args.tasks.map((t) => ({ name: t.name, prompt: t.prompt })),
+          tasks: sanitizeTaskMetadata(args.tasks),
         },
       })
 
@@ -207,6 +241,7 @@ export const AppVerkCoordinatorPlugin: Plugin = async (input) => {
           "dispatch_parallel: missing context.sessionID — cannot parent child sessions",
         )
       }
+      authorizeDispatchCaller(context.agent, args.tasks.map((task) => task.name))
       const specialist = createSDKSpecialist(client, context.sessionID)
       const agentRegistry = await loadAgentRegistry(client)
       // Caller mode gates the allowlisted-`all` relaxation (Perun→Veles).
@@ -318,6 +353,113 @@ export const AppVerkCoordinatorPlugin: Plugin = async (input) => {
     },
   })
 
+  const classifyFeatureManifestTool = tool({
+    description: [
+      "Validate a Triglav change manifest against Git's authoritative changed-file list and select Stribog, Svarog, or Veles.",
+      "Coordinator-only: callers other than Perun receive `{ status: \"forbidden\", reason }`.",
+      "Git failures, an empty diff, malformed manifests, and any uncertain or sensitive route conservatively select Veles.",
+    ].join("\n"),
+    args: {
+      result: tool.schema
+        .string()
+        .describe("Full Triglav result containing CHANGE_MANIFEST_V1 and its JSON block."),
+      base: tool.schema
+        .string()
+        .optional()
+        .describe("Optional branch name or SHA to validate with Git before diffing against HEAD."),
+      userRequestedPlanning: tool.schema
+        .boolean()
+        .optional()
+        .describe("When true, route unconditionally to Veles for planning."),
+    },
+    async execute(args, context) {
+      if (context.agent !== COORDINATOR_AGENT) {
+        return JSON.stringify({
+          status: "forbidden",
+          reason: "classify_feature_manifest is restricted to the coordinator (Perun)",
+        })
+      }
+      return JSON.stringify(
+        await validateAndClassify(args.result, {
+          gitRunner: featureManifestGitRunner,
+          base: args.base,
+          userRequestedPlanning: args.userRequestedPlanning,
+        }),
+      )
+    },
+  })
+
+  const getPlanningArtifactDigestTool = tool({
+    description: [
+      "Return the SHA-256 digest of a planning artifact's canonical representation.",
+      "The artifact must be a regular, non-symlinked file under docs/specs/ or docs/plans/. Frontmatter is parsed strictly; mutable approval fields are excluded from the digest.",
+      "Coordinator-only: callers other than Perun receive `{ status: \"forbidden\", reason }`.",
+    ].join("\n"),
+    args: {
+      path: tool.schema
+        .string()
+        .describe("Repo-relative path under docs/specs/ or docs/plans/."),
+    },
+    async execute(args, context) {
+      if (context.agent !== COORDINATOR_AGENT) {
+        return JSON.stringify({
+          status: "forbidden",
+          reason: "get_planning_artifact_digest is restricted to the coordinator (Perun)",
+        })
+      }
+      return JSON.stringify(getPlanningArtifactDigest(args.path))
+    },
+  })
+
+  const approvePlanningArtifactTool = tool({
+    description: [
+      "Approve a planning artifact and write its immutable verification sidecar.",
+      "The artifact must be a regular, non-symlinked file under docs/specs/ or docs/plans/. The pre-approval digest must match the artifact's current canonical digest; on mismatch the approval is rejected so the coordinator can re-inspect.",
+      "Coordinator-only: callers other than Perun receive `{ status: \"forbidden\", reason }`.",
+    ].join("\n"),
+    args: {
+      path: tool.schema
+        .string()
+        .describe("Repo-relative path under docs/specs/ or docs/plans/."),
+      pre_approval_digest: tool.schema
+        .string()
+        .describe("SHA-256 canonical digest the artifact must match for approval to proceed."),
+    },
+    async execute(args, context) {
+      if (context.agent !== COORDINATOR_AGENT) {
+        return JSON.stringify({
+          status: "forbidden",
+          reason: "approve_planning_artifact is restricted to the coordinator (Perun)",
+        })
+      }
+      return JSON.stringify(
+        await approvePlanningArtifact(args.path, args.pre_approval_digest, context.sessionID),
+      )
+    },
+  })
+
+  const readVerifiedPlanningArtifactTool = tool({
+    description: [
+      "Read a planning artifact only after verifying its canonical digest against its approval sidecar.",
+      "The artifact must be a regular, non-symlinked file under docs/specs/ or docs/plans/. The verified content snapshot closes the verification-to-execution TOCTOU window.",
+      "Coordinator-only: callers other than Perun receive `{ status: \"forbidden\", reason }`.",
+    ].join("\\n"),
+    args: {
+      path: tool.schema
+        .string()
+        .describe("Repo-relative path under docs/specs/ or docs/plans/."),
+    },
+    async execute(args, context) {
+      if (context.agent !== COORDINATOR_AGENT) {
+        return JSON.stringify({
+          status: "forbidden",
+          reason: "read_verified_planning_artifact is restricted to the coordinator (Perun)",
+        })
+      }
+      return JSON.stringify(readVerifiedPlanningArtifact(args.path))
+    },
+  })
+
   const dispatchBackgroundTool = tool({
     description: [
       "Start a specialist task in the BACKGROUND and return immediately with a task id (bg_...). The task runs while you do other work in THIS turn; collect it later with wait_background / poll_background.",
@@ -346,12 +488,17 @@ export const AppVerkCoordinatorPlugin: Plugin = async (input) => {
         .string()
         .optional()
         .describe("Optional extra context appended to the prompt."),
+      executionContext: tool.schema
+        .literal("perun-headless")
+        .optional()
+        .describe("Marks the dispatched child as a headless Perun session."),
     },
     async execute(args, context) {
-      context.metadata({ title: `${args.agent} — ${args.summary}` })
+      context.metadata({ title: neutralizeUntrustedOutput(`${args.agent} — ${args.summary}`) })
       if (context.sessionID.length === 0) {
         throw new Error("dispatch_background: missing context.sessionID")
       }
+      authorizeDispatchCaller(context.agent, [args.agent])
       const specialist = createSDKSpecialist(client, context.sessionID)
       const agentRegistry = await loadAgentRegistry(client)
       const callerMode = agentRegistry[context.agent]?.mode
@@ -369,6 +516,7 @@ export const AppVerkCoordinatorPlugin: Plugin = async (input) => {
         agent: args.agent,
         prompt: args.prompt,
         context: args.context,
+        executionContext: args.executionContext,
         sessionAgentRegistry: ext.sessionAgentRegistry,
       })
       return JSON.stringify(result, null, 2)
@@ -512,6 +660,10 @@ export const AppVerkCoordinatorPlugin: Plugin = async (input) => {
       dispatch_parallel: dispatchParallelTool,
       assign_issue_ids: assignIssueIdsTool,
       compute_waves: computeWavesTool,
+      classify_feature_manifest: classifyFeatureManifestTool,
+      get_planning_artifact_digest: getPlanningArtifactDigestTool,
+      approve_planning_artifact: approvePlanningArtifactTool,
+      read_verified_planning_artifact: readVerifiedPlanningArtifactTool,
       dispatch_background: dispatchBackgroundTool,
       poll_background: pollBackgroundTool,
       wait_background: waitBackgroundTool,

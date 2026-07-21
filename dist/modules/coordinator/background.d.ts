@@ -1,6 +1,7 @@
-import { DispatchSpecialist, AgentInfo } from './dispatch.js';
-import { BackgroundTaskStore } from './background-store.js';
 import { SessionAgentRegistry } from '../_shared/session-agent-registry.js';
+import { h as DispatchSpecialist } from '../../dispatch-scrubbers-CdWGxgiG.js';
+import { AgentInfo } from './task-builder.js';
+import { BackgroundTaskStore } from './background-store.js';
 import './poller.js';
 
 /** Per-parent cap on concurrent background tasks. Mirrors DISPATCH_CONCURRENCY;
@@ -14,6 +15,7 @@ interface StartBackgroundInput {
     agent: string;
     prompt: string;
     context?: string;
+    executionContext?: "perun-headless";
     /** Caller's mode — see dispatch.ts DispatchParallelInput.callerMode. */
     callerMode?: AgentInfo["mode"];
     /**

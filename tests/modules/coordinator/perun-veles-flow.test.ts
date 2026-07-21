@@ -6,6 +6,10 @@ const md = readFileSync(
   path.resolve(__dirname, "../../../src/agents/perun.md"),
   "utf8",
 )
+const velesPlanningDoc = readFileSync(
+  path.resolve(__dirname, "../../../docs/veles-planning.md"),
+  "utf8",
+)
 
 describe("perun.md Veles no-plan flow", () => {
   it("dispatches veles when no plan is found", () => {
@@ -69,5 +73,28 @@ describe("perun.md Veles no-plan flow", () => {
       expect(md).toMatch(/"timeout"/)
       expect(md).toContain("fe_count + be_count")
     })
+  })
+
+  describe("verified planning-artifact execution flow", () => {
+    it("uses the approval tool's snake_case digest argument", () => {
+      expect(md).toContain("pre_approval_digest: <pre_approval_digest>")
+      expect(md).not.toContain("preApprovalDigest")
+    })
+
+    it("passes verified artifact content to Svarog", () => {
+      expect(md).toContain("verified `content` returned by `read_verified_planning_artifact`")
+      expect(md).not.toContain("content_snapshot")
+    })
+
+    it("places the headless execution context inside the Veles task", () => {
+      expect(md).toMatch(
+        /tasks:\s*\[\s*\{[\s\S]*?name:\s*"Veles - Planner"[\s\S]*?executionContext:\s*"perun-headless"[\s\S]*?\}\s*\]/,
+      )
+    })
+  })
+
+  it("documents natural-language Veles planning without unsupported slash commands", () => {
+    expect(velesPlanningDoc).toContain("describe what you need in natural language")
+    expect(velesPlanningDoc).not.toMatch(/\/veles:(spec|plan|qa-plan)/)
   })
 })

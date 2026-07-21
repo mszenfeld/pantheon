@@ -1,3 +1,5 @@
+import path from "node:path"
+import { fileURLToPath } from "node:url"
 import { describe, expect, it } from "vitest"
 import { AppVerkSkillRegistryPlugin } from "../src/index.js"
 
@@ -15,9 +17,20 @@ describe("AppVerkSkillRegistryPlugin", () => {
     expect(plugin.config).toBeDefined()
   })
 
-  it("config hook is defined", async () => {
+  it("registers the Veles skills directory in skills.paths", async () => {
     const plugin = await AppVerkSkillRegistryPlugin({} as never)
-    expect(plugin.config).toBeDefined()
+    const config = {} as never
+
+    await plugin.config?.(config)
+
+    expect(
+      (config as { skills?: { paths?: string[] } }).skills?.paths,
+    ).toContain(
+      path.resolve(
+        path.dirname(fileURLToPath(import.meta.url)),
+        "../../../dist/skills/veles",
+      ),
+    )
   })
 
   it("system transform hook appends activation rules for a non-coordinator session", async () => {

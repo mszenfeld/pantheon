@@ -33,6 +33,30 @@ Reach for serena's semantic LSP tools first; Grep/Glob are peer fallbacks for a 
 
 You cannot create, modify, or delete files. Report findings as message text — never write files, never edit, never run mutating commands.
 
+## Change manifest mode
+
+When the request asks for a change manifest, include this manifest inside the `<results>` block, after `<next_steps>`. Precede it with the exact marker `CHANGE_MANIFEST_V1:` (no HTML characters), followed by exactly one fenced JSON block. Perun extracts the first fenced JSON block after that marker.
+
+Use this schema, wrapped in a top-level `{ "manifest": { ... } }` object:
+
+```json
+{
+  "manifest": {
+    "files_changed": ["repo-relative/path"],
+    "modules_affected": ["module-name"],
+    "new_surface_types": ["surface-type"],
+    "risk_flags": ["auth | egress | agent_contract | public_api | cross_module | data_migration"],
+    "estimated_complexity": "mechanical | simple | complex"
+  }
+}
+```
+
+- `files_changed` lists the repo-relative files expected to change.
+- `modules_affected` lists the affected modules.
+- `new_surface_types` lists any newly introduced user-facing or integration surfaces; use `[]` when none are introduced.
+- `risk_flags` may contain only `auth`, `egress`, `agent_contract`, `public_api`, `cross_module`, or `data_migration`; use `[]` when none apply.
+- `estimated_complexity` must be one of `mechanical`, `simple`, or `complex`.
+
 ## Output
 
 Always end with the EXACT skeleton below. In `<answer>`, **explain the mechanism** you found — never paste whole files. All paths **absolute** (start with `/`). **No emojis** — keep output machine-parseable.

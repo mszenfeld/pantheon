@@ -161,6 +161,7 @@ var skillDirectories = [
   path2.resolve(moduleDirectory, "../../frontend-developer/dist/skills"),
   path2.resolve(moduleDirectory, "../../code-review/dist/skills"),
   path2.resolve(moduleDirectory, "../../../dist/skills/qa"),
+  path2.resolve(moduleDirectory, "../../../dist/skills/veles"),
   path2.resolve(moduleDirectory, "../../swift-developer/dist/skills")
 ];
 var AppVerkSkillRegistryPlugin = async ({ client }) => {

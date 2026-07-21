@@ -91,4 +91,11 @@ describe("agent-contracts doctrine doc", () => {
     const qaDoc = readFileSync(qaDocPath, "utf8")
     expect(qaDoc).toMatch(/\]\(\.\.\/agent-contracts\.md\)/)
   })
+
+  it("requires implementation-plan results to identify their approved source spec", () => {
+    const doc = readFileSync(docPath, "utf8")
+    expect(doc).toMatch(
+      /type:\s*"implementation-plan"[\s\S]*?spec_path[\s\S]*?approved, normalized/i,
+    )
+  })
 })

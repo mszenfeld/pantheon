@@ -158,7 +158,11 @@ export function createSDKSpecialist(
         return false
       }
     },
-    async startBackground(agentName: string, prompt: string): Promise<string> {
+    async startBackground(
+      agentName: string,
+      prompt: string,
+      onSessionCreated?: (sessionId: string) => void,
+    ): Promise<string> {
       // NOTE: unlike `startTask`, `startBackground` takes no `onSessionCreated`
       // callback — the background turn is fire-and-forget (`promptAsync`) and
       // consults no `shell.env` bindings, so it has no before-the-turn ordering
@@ -180,6 +184,7 @@ export function createSDKSpecialist(
           `startBackground returned no session id for agent ${agentName}`,
         )
       }
+      onSessionCreated?.(sessionId)
       // Fire-and-forget: promptAsync returns 204 immediately; the server runs
       // the LLM turn autonomously. We do NOT await the turn — completion is
       // observed later by polling the child session (poll_background/wait_background).

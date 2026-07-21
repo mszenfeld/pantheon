@@ -1,7 +1,7 @@
 import {
   forgetSessionAgent,
   getSessionAgentCached
-} from "@appverk/opencode-skill-utils";
+} from "../_shared/session-identity.js";
 import { registerAgentMetadata } from "../agent-registry/index.js";
 import {
   applyModelOverride,

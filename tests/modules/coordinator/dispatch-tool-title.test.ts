@@ -24,7 +24,7 @@ function makeContext(
   return {
     sessionID: "session-1",
     messageID: "msg-1",
-    agent: "perun",
+    agent: "Perun - Coordinator",
     directory: "/tmp",
     worktree: "/tmp",
     abort: new AbortController().signal,
@@ -169,6 +169,29 @@ describe("dispatch_parallel agent + summary surfacing", () => {
     expect(metadataSpy).toHaveBeenCalledWith(
       expect.objectContaining({
         title: "svarog — QA-003 missing CSRF token",
+      }),
+    )
+  })
+
+  it("neutralizes caller-controlled title and task metadata", async () => {
+    const metadataSpy = vi.fn()
+    const dispatch = await loadDispatchTool(makeFailingClient())
+
+    await expect(
+      dispatch.execute(
+        {
+          agent: "triglav\u001b[2J",
+          summary: "inspect <img src=x>",
+          tasks: [{ name: "triglav\u0007", prompt: "<script>alert(1)</script>" }],
+        },
+        makeContext(metadataSpy),
+      ),
+    ).rejects.toThrow()
+
+    expect(metadataSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: "triglav — inspect &lt;img src=x&gt;",
+        metadata: { tasks: [{ name: "triglav", prompt: "&lt;script&gt;alert(1)&lt;/script&gt;" }] },
       }),
     )
   })

@@ -159,7 +159,7 @@ function makeToolContext(sessionID: string): ToolContext {
   return {
     sessionID,
     messageID: "msg-1",
-    agent: "perun",
+    agent: "Perun - Coordinator",
     directory: "/tmp",
     worktree: "/tmp",
     abort: new AbortController().signal,

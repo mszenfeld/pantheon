@@ -15,7 +15,7 @@ var CATEGORY_PREFIX_MAPPING = {
 var VALID_PREFIXES = Object.values(CATEGORY_PREFIX_MAPPING);
 var VALID_CATEGORIES = Object.keys(CATEGORY_PREFIX_MAPPING);
 
-// src/session-identity.ts
+// ../../src/modules/_shared/session-identity.ts
 var COORDINATOR_AGENT_NAME = "Perun - Coordinator";
 async function getSessionAgent(sessionID, client) {
   try {
@@ -76,7 +76,7 @@ async function isCoordinatorSession(sessionID, client) {
   return await getSessionAgentCached(sessionID, client) === COORDINATOR_AGENT_NAME;
 }
 
-// src/coordinator-bash-policy.ts
+// ../../src/modules/_shared/coordinator-bash-policy.ts
 function parseAllowedBashPrograms(frontmatter) {
   const out = [];
   const re = /Bash\(([^:)]+):\*\)/g;

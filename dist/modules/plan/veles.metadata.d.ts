@@ -15,7 +15,7 @@ import { SpecialistInfo } from '../agent-registry/agent-metadata.js';
  * as Perun's display key "Perun - Coordinator" pairs with `agents.perun`.
  */
 declare const VELES_AGENT_KEY: "Veles - Planner";
-declare const VELES_DESCRIPTION = "Planning specialist: authors QA test plans (and other work plans) from a diff or request. Dispatches read-only helpers (triglav) and returns a plan it saved \u2014 it does not execute the planned work.";
+declare const VELES_DESCRIPTION = "Planning specialist: authors feature specs, implementation plans, and QA test plans from a diff or request. Dispatches read-only helpers (triglav) and returns a saved artefact \u2014 it does not execute the planned work.";
 declare const velesSpecialistInfo: SpecialistInfo;
 
 export { VELES_AGENT_KEY, VELES_DESCRIPTION, velesSpecialistInfo };

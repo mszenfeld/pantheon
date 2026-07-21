@@ -1,9 +1,11 @@
 import {
   buildViolationError,
-  classifyCoordinatorBash,
+  classifyCoordinatorBash
+} from "../_shared/coordinator-bash-policy.js";
+import {
   forgetSessionAgent,
   isCoordinatorSession
-} from "@appverk/opencode-skill-utils";
+} from "../_shared/session-identity.js";
 import { readCoordinatorBashAllowlist } from "./read-allowlist.js";
 function makeBashGate(client, allowed) {
   return async (input, output) => {

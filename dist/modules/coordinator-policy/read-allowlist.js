@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { parseAllowedBashPrograms } from "@appverk/opencode-skill-utils";
+import { parseAllowedBashPrograms } from "../_shared/coordinator-bash-policy.js";
 const FALLBACK_ALLOWLIST = ["mkdir", "ls"];
 function readCoordinatorBashAllowlist() {
   try {

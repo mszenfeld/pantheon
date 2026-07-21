@@ -19,7 +19,7 @@ The harness curates the agent picker — only registered agents are shown and ne
 | Agent     | Description                                                                                                                 |
 | --------- | --------------------------------------------------------------------------------------------------------------------------- |
 | **Perun** | The coordinator. Delegates work to specialists (blocking or in the background so it can overlap exploration with its own work), computes dispatch waves with dependency awareness, and synthesizes results. |
-| **Veles** | Planning specialist. Authors QA/work plans from a diff or request and returns the saved plan; it plans the work rather than executing it. `EXPENSIVE`. |
+| **Veles** | Planning specialist. Authors feature specs, implementation plans, and QA test plans from a diff or request and returns the saved artefact; it plans the work rather than executing it. See [`docs/veles-planning.md`](docs/veles-planning.md). `EXPENSIVE`. |
 
 ## Subagents
 

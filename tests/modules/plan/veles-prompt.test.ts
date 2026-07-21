@@ -1,5 +1,13 @@
-import { describe, expect, it } from "vitest"
+import { afterEach, describe, expect, it } from "vitest"
 import { buildVelesPrompt } from "../../../src/modules/plan/prompt.js"
+import { AppVerkPlanPlugin } from "../../../src/modules/plan/index.js"
+import {
+  clearDispatchExtensions,
+  registerDispatchExtensions,
+} from "../../../src/modules/_shared/dispatch-extensions.js"
+import { SessionAgentRegistry } from "../../../src/modules/_shared/session-agent-registry.js"
+
+afterEach(() => clearDispatchExtensions())
 
 describe("buildVelesPrompt", () => {
   const prompt = buildVelesPrompt()
@@ -11,7 +19,7 @@ describe("buildVelesPrompt", () => {
     // VELES_TOOLS) so an unintended reorder or membership change fails HERE.
     // Concrete membership/absence/subset invariants live in allowed-tools.test.ts.
     expect(prompt).toContain(
-      "allowed-tools: serena_find_symbol, serena_find_referencing_symbols, serena_get_symbols_overview, serena_search_for_pattern, serena_find_file, serena_list_dir, serena_read_file, Read, Glob, Grep, Write, Bash(gh:*), Bash(git:*), Bash(command:*), Bash(date:*), Bash(mkdir:*), skill, question, sequential_thinking_sequentialthinking",
+      "allowed-tools: serena_find_symbol, serena_find_referencing_symbols, serena_get_symbols_overview, serena_search_for_pattern, serena_find_file, serena_list_dir, serena_read_file, Read, Glob, Grep, Write, Bash(gh:*), Bash(git:*), Bash(command:*), Bash(date:*), Bash(mkdir:*), skill, question, veles_reserve_planning_path, veles_write_reserved_planning_artifact, sequential_thinking_sequentialthinking",
     )
   })
   it("pins the load-bearing planner directives", () => {
@@ -73,5 +81,62 @@ describe("buildVelesPrompt", () => {
     expect(prompt).toContain(
       "a reachable changed surface (curl/psql/Playwright interface or effect) dispositioned",
     )
+  })
+
+  it("defines direct-user and Perun-headless planning contracts", () => {
+    expect(prompt).toContain("## Execution context")
+    expect(prompt).toContain("Execution context: perun-headless")
+    expect(prompt).toContain("must NOT call `question`")
+    expect(prompt).toContain('status: "needs_clarification"')
+    expect(prompt).toContain("Mode: Feature spec")
+    expect(prompt).toContain("feature-spec-authoring")
+    expect(prompt).toContain("Mode: Implementation plan")
+    expect(prompt).toContain("implementation-plan-authoring")
+    expect(prompt).toContain("Mode: QA test plan")
+    expect(prompt).toContain('type: "spec"')
+    expect(prompt).toContain('type: "implementation-plan"')
+    expect(prompt).toContain('|"qa"')
+    expect(prompt).toContain('"needs_clarification"')
+    expect(prompt).toContain('"suggested_modes"')
+    expect(prompt).toContain("approved: true")
+  })
+
+  it("requires reservation-backed writes for specs and implementation plans", () => {
+    expect(prompt).toContain("## Collision policy")
+    expect(prompt).toContain("veles_reserve_planning_path")
+    expect(prompt).toContain("veles_write_reserved_planning_artifact")
+    expect(prompt).toContain("Never overwrite an existing durable artefact")
+  })
+
+  it("rejects question calls from a headless Veles session but permits direct Veles", async () => {
+    const registry = new SessionAgentRegistry()
+    registry.registerWithMetadata("headless-veles", "Veles - Planner", {
+      headless: true,
+    })
+    registerDispatchExtensions({ sessionAgentRegistry: registry })
+    const client = {
+      session: {
+        messages: async ({ path }: { path: { id: string } }) => ({
+          data: [
+            {
+              info: {
+                role: "user",
+                agent: path.id === "headless-veles" ? "Veles - Planner" : "Veles - Planner",
+              },
+            },
+          ],
+        }),
+      },
+      tui: { showToast: async () => {} },
+    }
+    const hooks = await AppVerkPlanPlugin({ client } as never)
+    const gate = hooks["tool.execute.before"]
+
+    await expect(
+      gate?.({ tool: "question", sessionID: "headless-veles" } as never, {} as never),
+    ).rejects.toThrow("Headless Veles sessions must not call question")
+    await expect(
+      gate?.({ tool: "question", sessionID: "direct-veles" } as never, {} as never),
+    ).resolves.toBeUndefined()
   })
 })
