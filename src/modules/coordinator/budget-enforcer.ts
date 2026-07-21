@@ -3,18 +3,15 @@ import {
   truncateBytesWithMarker,
 } from "./truncate-bytes.js"
 
-import type { DispatchResult } from "./worker-pool.js"
+import type { AgentTimeout, DispatchResult } from "./dispatch-types.js"
+
+export type { AgentTimeout } from "./dispatch-types.js"
 
 export const DEFAULT_TASK_TIMEOUT_MS = 5 * 60 * 1000
 export const DEFAULT_RESULT_MAX_BYTES = 100 * 1024
 export const DEFAULT_AGGREGATE_MAX_BYTES = 128 * 1024
 export const VELES_IDLE_TIMEOUT_MS = 5 * 60 * 1000
 export const VELES_WALLCLOCK_BACKSTOP_MS = 45 * 60 * 1000
-
-export interface AgentTimeout {
-  wallClockMs: number
-  idleMs?: number
-}
 
 export const AGENT_TIMEOUT_OVERRIDES: ReadonlyMap<string, AgentTimeout> =
   new Map<string, AgentTimeout>([

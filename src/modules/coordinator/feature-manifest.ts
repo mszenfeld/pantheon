@@ -235,7 +235,7 @@ export function parseNulDelimitedPaths(chunks: readonly Buffer[]): string[] {
 
 function streamGitDiffNameOnly(base: string): Promise<string[]> {
   return new Promise<string[]>((resolve, reject) => {
-    const child = spawn("git", ["diff", "--name-only", "-z", base, "HEAD"])
+    const child = spawn("git", ["diff", "--name-only", "-z", "--end-of-options", base, "HEAD"])
     const chunks: Buffer[] = []
     let stderr = ""
     child.stdout.on("data", (chunk: Buffer): void => {
@@ -258,10 +258,10 @@ function streamGitDiffNameOnly(base: string): Promise<string[]> {
 /** Production git adapter. `diffNameOnly` uses NUL-delimited output for safe filenames. */
 export const execFileGitRunner: GitRunner = {
   async revParse(ref: string): Promise<string> {
-    return decodeGitOutput(await runGit(["rev-parse", "--verify", ref]))
+    return decodeGitOutput(await runGit(["rev-parse", "--verify", "--end-of-options", ref]))
   },
   async mergeBase(base: string, head: string): Promise<string> {
-    return decodeGitOutput(await runGit(["merge-base", base, head]))
+    return decodeGitOutput(await runGit(["merge-base", "--end-of-options", base, head]))
   },
   async diffNameOnly(base: string): Promise<string[]> {
     return streamGitDiffNameOnly(base)

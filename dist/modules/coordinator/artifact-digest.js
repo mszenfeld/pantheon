@@ -1,7 +1,11 @@
 import { createHash } from "node:crypto";
 import { lstatSync, readFileSync, realpathSync } from "node:fs";
 import path from "node:path";
-const ALLOWED_DIRECTORIES = ["docs/specs", "docs/plans"];
+import {
+  PLANNING_ARTIFACT_DIRECTORIES,
+  containsTraversalSegment,
+  isWithin
+} from "../_shared/artifact-path-safety.js";
 const MUTABLE_APPROVAL_FIELDS = /* @__PURE__ */ new Set([
   "approved",
   "approved_at",
@@ -10,15 +14,6 @@ const MUTABLE_APPROVAL_FIELDS = /* @__PURE__ */ new Set([
 ]);
 const FRONTMATTER_KEY = /^[A-Za-z_][A-Za-z0-9_-]*$/;
 const NUMBER_VALUE = /^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$/;
-function isWithin(directory, candidate) {
-  const relative = path.relative(directory, candidate);
-  return relative === "" || !relative.startsWith(`..${path.sep}`) && relative !== ".." && !path.isAbsolute(relative);
-}
-function containsTraversal(pathValue) {
-  return pathValue.split(/[\\/]/).some(
-    (segment) => segment === "" || segment === "." || segment === ".."
-  );
-}
 function parseFrontmatterValue(value) {
   if (value === "") return null;
   if (value === "true") return true;
@@ -118,12 +113,12 @@ function canonicalPlanningArtifactDigest(content) {
   return createHash("sha256").update(canonicalizePlanningArtifact(artifact), "utf8").digest("hex");
 }
 function resolvePlanningArtifactPath(pathValue) {
-  if (path.isAbsolute(pathValue) || containsTraversal(pathValue)) {
+  if (path.isAbsolute(pathValue) || containsTraversalSegment(pathValue)) {
     throw new Error("planning artifact path must be a traversal-free relative path");
   }
   const worktree = realpathSync(process.cwd());
   const absolutePath = path.resolve(worktree, pathValue);
-  const lexicalDirectory = ALLOWED_DIRECTORIES.map((directory) => path.resolve(worktree, directory)).find((directory) => isWithin(directory, absolutePath));
+  const lexicalDirectory = PLANNING_ARTIFACT_DIRECTORIES.map((directory) => path.resolve(worktree, directory)).find((directory) => isWithin(directory, absolutePath));
   if (lexicalDirectory === void 0) {
     throw new Error("planning artifacts must be under docs/specs or docs/plans");
   }

@@ -1,6 +1,6 @@
 import { COORDINATOR_AGENT_NAME } from "../_shared/session-identity.js"
 
-import type { AgentInfo } from "./task-builder.js"
+import type { AgentInfo } from "./dispatch-types.js"
 
 const READ_ONLY_DISPATCH_CALLERS: ReadonlyMap<string, ReadonlySet<string>> = new Map([
   ["Veles - Planner", new Set(["triglav"])],

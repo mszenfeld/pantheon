@@ -15,6 +15,11 @@ import {
 import path from "node:path"
 
 import {
+  PLANNING_ARTIFACT_DIRECTORIES,
+  isWithin,
+  matchesNoFollowFileDescriptor,
+} from "../_shared/artifact-path-safety.js"
+import {
   canonicalPlanningArtifactDigest,
   parsePlanningArtifactFrontmatter,
   resolvePlanningArtifactPath,
@@ -49,14 +54,6 @@ function isNotFound(error: unknown): boolean {
   return typeof error === "object" && error !== null && "code" in error && error.code === "ENOENT"
 }
 
-function isWithin(directory: string, candidate: string): boolean {
-  const relative = path.relative(directory, candidate)
-  return (
-    relative === "" ||
-    (!relative.startsWith(`..${path.sep}`) && relative !== ".." && !path.isAbsolute(relative))
-  )
-}
-
 function verifiedDirectoryDescriptor(directory: string, boundary: string): number {
   const descriptor = openSync(
     directory,
@@ -74,21 +71,13 @@ function verifiedDirectoryDescriptor(directory: string, boundary: string): numbe
 }
 
 function verifyNoFollowDescriptor(descriptor: number, target: string, directory: string): void {
-  const opened = fstatSync(descriptor)
-  const named = lstatSync(target)
-  if (
-    !opened.isFile() ||
-    named.isSymbolicLink() ||
-    opened.dev !== named.dev ||
-    opened.ino !== named.ino ||
-    realpathSync(path.dirname(target)) !== directory
-  ) {
+  if (!matchesNoFollowFileDescriptor(descriptor, target, directory)) {
     throw new Error("planning artifact changed while approval was starting")
   }
 }
 
 function artifactDirectory(worktree: string, artifactPath: string): string | undefined {
-  for (const directory of ["docs/specs", "docs/plans"]) {
+  for (const directory of PLANNING_ARTIFACT_DIRECTORIES) {
     const allowedDirectory = realpathSync(path.join(worktree, directory))
     if (isWithin(allowedDirectory, realpathSync(artifactPath))) return allowedDirectory
   }

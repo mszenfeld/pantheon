@@ -1,4 +1,4 @@
-import { AgentInfo } from './task-builder.js';
+import { AgentInfo } from './dispatch-types.js';
 
 /** Enforces the execution-time dispatch trust boundary before child creation. */
 declare function authorizeDispatchCaller(caller: string, targets: readonly string[]): void;

@@ -1,9 +1,10 @@
 import { SessionAgentRegistry } from '../_shared/session-agent-registry.js';
-import { h as DispatchSpecialist, e as DispatchScrubber, f as DispatchScrubberFactory, d as DispatchResult } from '../../dispatch-scrubbers-CdWGxgiG.js';
-export { A as AGENT_TIMEOUT_OVERRIDES, a as AgentTimeout, D as DEFAULT_AGGREGATE_MAX_BYTES, b as DEFAULT_RESULT_MAX_BYTES, c as DEFAULT_TASK_TIMEOUT_MS, g as DispatchScrubberSession, V as VELES_IDLE_TIMEOUT_MS, i as VELES_WALLCLOCK_BACKSTOP_MS, l as enforceAggregateBudget, r as resolveAgentTimeout } from '../../dispatch-scrubbers-CdWGxgiG.js';
-import { DispatchTask, AgentInfo } from './task-builder.js';
+import { DispatchTask, AgentInfo, DispatchScrubber, DispatchScrubberFactory, DispatchResult } from './dispatch-types.js';
+export { AgentTimeout, DispatchScrubberSession } from './dispatch-types.js';
 export { DISPATCH_MAX_TASKS } from './task-builder.js';
+import { DispatchSpecialist } from './worker-pool.js';
 export { DISPATCHABLE_ALL_AGENTS, authorizeDispatchCaller, validateDispatchable } from './dispatch-authorizer.js';
+export { AGENT_TIMEOUT_OVERRIDES, DEFAULT_AGGREGATE_MAX_BYTES, DEFAULT_RESULT_MAX_BYTES, DEFAULT_TASK_TIMEOUT_MS, VELES_IDLE_TIMEOUT_MS, VELES_WALLCLOCK_BACKSTOP_MS, enforceAggregateBudget, resolveAgentTimeout } from './budget-enforcer.js';
 import './poller.js';
 
 declare const DEFAULT_POLL_INTERVAL_MS = 1000;

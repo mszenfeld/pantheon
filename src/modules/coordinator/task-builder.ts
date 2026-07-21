@@ -1,16 +1,9 @@
 import { validateDispatchable } from "./dispatch-authorizer.js"
 import { neutralizeUntrustedOutput } from "../_shared/sanitize.js"
 
-export interface DispatchTask {
-  name: string
-  prompt: string
-  context?: string
-  executionContext?: "perun-headless"
-}
+import type { AgentInfo, DispatchTask } from "./dispatch-types.js"
 
-export interface AgentInfo {
-  mode: "primary" | "subagent" | "all"
-}
+export type { AgentInfo, DispatchTask } from "./dispatch-types.js"
 
 export const DISPATCH_MAX_TASKS = 4
 

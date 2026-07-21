@@ -2,25 +2,22 @@ import {
   closeSync,
   constants,
   fstatSync,
-  lstatSync,
   openSync,
   realpathSync,
   writeFileSync
 } from "node:fs";
 import path from "node:path";
+import {
+  PLANNING_ARTIFACT_DIRECTORIES,
+  containsTraversalSegment,
+  isWithin,
+  verifiesNoFollowFileDescriptor
+} from "../_shared/artifact-path-safety.js";
 import { VELES_AGENT_KEY } from "./veles.metadata.js";
-const ALLOWED_DIRECTORIES = ["docs/specs", "docs/plans"];
-const PROTECTED_DIRECTORIES = [...ALLOWED_DIRECTORIES, "docs/.veles-approvals"];
+const PROTECTED_DIRECTORIES = [...PLANNING_ARTIFACT_DIRECTORIES, "docs/.veles-approvals"];
 const MAX_SUFFIX = 1e3;
-function isWithin(directory, candidate) {
-  const relative = path.relative(directory, candidate);
-  return relative === "" || !relative.startsWith(`..${path.sep}`) && relative !== ".." && !path.isAbsolute(relative);
-}
 function normalizedRelativePath(worktree, absolutePath) {
   return path.relative(worktree, absolutePath).split(path.sep).join("/");
-}
-function hasTraversalSegment(value) {
-  return value.split(/[\\/]/).some((segment) => segment === "." || segment === "..");
 }
 function hasValidBaseName(baseName) {
   return baseName.length > 0 && !baseName.startsWith(".") && !baseName.includes("..") && !/[\\/]/.test(baseName);
@@ -28,7 +25,7 @@ function hasValidBaseName(baseName) {
 function resolveAllowedPath(worktree, candidate) {
   const absoluteWorktree = path.resolve(worktree);
   const absoluteCandidate = path.resolve(absoluteWorktree, candidate);
-  for (const directory of ALLOWED_DIRECTORIES) {
+  for (const directory of PLANNING_ARTIFACT_DIRECTORIES) {
     const lexicalDirectory = path.resolve(absoluteWorktree, directory);
     if (!isWithin(lexicalDirectory, absoluteCandidate)) continue;
     try {
@@ -43,7 +40,7 @@ function resolveAllowedPath(worktree, candidate) {
 }
 function openTrustedParentDirectory(worktree, absolutePath) {
   const absoluteWorktree = path.resolve(worktree);
-  const lexicalDirectory = ALLOWED_DIRECTORIES.map(
+  const lexicalDirectory = PLANNING_ARTIFACT_DIRECTORIES.map(
     (directory) => path.resolve(absoluteWorktree, directory)
   ).find((directory) => isWithin(directory, absolutePath));
   if (lexicalDirectory === void 0) return void 0;
@@ -67,15 +64,6 @@ function openTrustedParentDirectory(worktree, absolutePath) {
     }
   } catch {
     return void 0;
-  }
-}
-function verifiesNoFollowFileDescriptor(descriptor, absolutePath, canonicalParent) {
-  try {
-    const opened = fstatSync(descriptor);
-    const named = lstatSync(absolutePath);
-    return opened.isFile() && !named.isSymbolicLink() && opened.dev === named.dev && opened.ino === named.ino && realpathSync(path.dirname(absolutePath)) === canonicalParent;
-  } catch {
-    return false;
   }
 }
 function resolveProtectedPath(worktree, candidate) {
@@ -112,12 +100,13 @@ function createPlanningArtifactPathService(deps) {
       if (args.extension !== ".md") {
         return { status: "error", reason: "extension must be .md" };
       }
-      if (hasTraversalSegment(args.directory)) {
+      const directory = args.directory.replace(/[\\/]+$/, "");
+      if (containsTraversalSegment(directory)) {
         return { status: "error", reason: "directory must not contain traversal segments" };
       }
       for (let suffix = 1; suffix <= MAX_SUFFIX; suffix += 1) {
         const name = suffix === 1 ? args.baseName : `${args.baseName}-${suffix}`;
-        const candidate = path.join(args.directory, `${name}${args.extension}`);
+        const candidate = path.join(directory, `${name}${args.extension}`);
         const absolutePath = resolveAllowedPath(context.worktree, candidate);
         if (absolutePath === void 0) {
           return {

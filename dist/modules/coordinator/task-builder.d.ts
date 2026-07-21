@@ -1,12 +1,5 @@
-interface DispatchTask {
-    name: string;
-    prompt: string;
-    context?: string;
-    executionContext?: "perun-headless";
-}
-interface AgentInfo {
-    mode: "primary" | "subagent" | "all";
-}
+import { DispatchTask, AgentInfo } from './dispatch-types.js';
+
 declare const DISPATCH_MAX_TASKS = 4;
 /** Build the exact specialist prompt from a validated task payload. */
 declare function buildTaskPrompt(task: DispatchTask): string;
@@ -20,4 +13,4 @@ declare function chunkDispatchTasks(tasks: readonly DispatchTask[], size?: numbe
 /** Validate the complete wave before any child session can be spawned. */
 declare function validateDispatchTasks(tasks: readonly DispatchTask[], agentRegistry: Record<string, AgentInfo>, callerMode?: AgentInfo["mode"]): void;
 
-export { type AgentInfo, DISPATCH_MAX_TASKS, type DispatchTask, buildTaskPrompt, chunkDispatchTasks, sanitizeTaskMetadata, validateDispatchTasks };
+export { AgentInfo, DISPATCH_MAX_TASKS, DispatchTask, buildTaskPrompt, chunkDispatchTasks, sanitizeTaskMetadata, validateDispatchTasks };

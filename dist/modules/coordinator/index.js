@@ -313,7 +313,7 @@ const AppVerkCoordinatorPlugin = async (input) => {
       "Read a planning artifact only after verifying its canonical digest against its approval sidecar.",
       "The artifact must be a regular, non-symlinked file under docs/specs/ or docs/plans/. The verified content snapshot closes the verification-to-execution TOCTOU window.",
       'Coordinator-only: callers other than Perun receive `{ status: "forbidden", reason }`.'
-    ].join("\\n"),
+    ].join("\n"),
     args: {
       path: tool.schema.string().describe("Repo-relative path under docs/specs/ or docs/plans/.")
     },

@@ -1,6 +1,6 @@
 import { SessionAgentRegistry } from '../_shared/session-agent-registry.js';
-import { h as DispatchSpecialist } from '../../dispatch-scrubbers-CdWGxgiG.js';
-import { AgentInfo } from './task-builder.js';
+import { AgentInfo } from './dispatch-types.js';
+import { DispatchSpecialist } from './worker-pool.js';
 import { BackgroundTaskStore } from './background-store.js';
 import './poller.js';
 

@@ -49,6 +49,16 @@ describe("planning artifact path reservation", () => {
     expect(result).toEqual({ status: "ok", path: "docs/specs/feature-spec.md" })
   })
 
+  it("normalizes a trailing directory separator before the traversal check", async () => {
+    const worktree = createWorktree()
+    const result = await createService().reserve(
+      { directory: "docs/specs/", baseName: "feature-spec", extension: ".md" },
+      { sessionID: "veles-1", worktree },
+    )
+
+    expect(result).toEqual({ status: "ok", path: "docs/specs/feature-spec.md" })
+  })
+
   it("uses a suffix after a collision and for concurrent reservations", async () => {
     const worktree = createWorktree()
     writeFileSync(path.join(worktree, "docs/plans/feature-plan.md"), "existing")
@@ -91,6 +101,12 @@ describe("planning artifact path reservation", () => {
     await expect(
       service.reserve(
         { directory: "docs/specs/../plans", baseName: "artifact", extension: ".md" },
+        validContext,
+      ),
+    ).resolves.toMatchObject({ status: "error" })
+    await expect(
+      service.reserve(
+        { directory: "docs//specs", baseName: "artifact", extension: ".md" },
         validContext,
       ),
     ).resolves.toMatchObject({ status: "error" })

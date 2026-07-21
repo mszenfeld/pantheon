@@ -133,7 +133,7 @@ function parseNulDelimitedPaths(chunks) {
 }
 function streamGitDiffNameOnly(base) {
   return new Promise((resolve, reject) => {
-    const child = spawn("git", ["diff", "--name-only", "-z", base, "HEAD"]);
+    const child = spawn("git", ["diff", "--name-only", "-z", "--end-of-options", base, "HEAD"]);
     const chunks = [];
     let stderr = "";
     child.stdout.on("data", (chunk) => {
@@ -154,10 +154,10 @@ function streamGitDiffNameOnly(base) {
 }
 const execFileGitRunner = {
   async revParse(ref) {
-    return decodeGitOutput(await runGit(["rev-parse", "--verify", ref]));
+    return decodeGitOutput(await runGit(["rev-parse", "--verify", "--end-of-options", ref]));
   },
   async mergeBase(base, head) {
-    return decodeGitOutput(await runGit(["merge-base", base, head]));
+    return decodeGitOutput(await runGit(["merge-base", "--end-of-options", base, head]));
   },
   async diffNameOnly(base) {
     return streamGitDiffNameOnly(base);

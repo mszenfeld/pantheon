@@ -1,16 +1,16 @@
 import { normalizeVariantSuffix } from "../_shared/sanitize.js"
 
-import type { DispatchResult } from "./worker-pool.js"
+import type {
+  DispatchResult,
+  DispatchScrubber,
+  DispatchScrubberFactory,
+} from "./dispatch-types.js"
 
-export interface DispatchScrubberSession {
-  scrub: (text: string) => string
-  release: () => void
-}
-
-export type DispatchScrubber = (text: string, parentSessionID: string) => string
-export type DispatchScrubberFactory = (
-  parentSessionID: string,
-) => DispatchScrubberSession | undefined
+export type {
+  DispatchScrubber,
+  DispatchScrubberFactory,
+  DispatchScrubberSession,
+} from "./dispatch-types.js"
 
 export function createDispatchScrubber(
   parentSessionID: string | undefined,

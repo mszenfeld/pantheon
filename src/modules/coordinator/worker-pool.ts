@@ -1,25 +1,22 @@
 import type { SessionAgentRegistry } from "../_shared/session-agent-registry.js"
 import { neutralizeUntrustedOutput } from "../_shared/sanitize.js"
 
-import type { AgentTimeout } from "./budget-enforcer.js"
+import type {
+  AgentTimeout,
+  DispatchResult,
+  DispatchScrubber,
+  DispatchTask,
+} from "./dispatch-types.js"
 import {
   PollerAbortError,
   PollerTimeoutError,
   pollUntilIdle,
   type PollerMessage,
 } from "./poller.js"
-import type { DispatchScrubber } from "./dispatch-scrubbers.js"
-import { buildTaskPrompt, type DispatchTask } from "./task-builder.js"
+import { buildTaskPrompt } from "./task-builder.js"
 import { truncateBytes } from "./truncate-bytes.js"
 
-export interface DispatchResult {
-  name: string
-  status: "success" | "error" | "timeout" | "aborted"
-  result: string
-  duration_ms: number
-  error?: string
-  sessionId?: string
-}
+export type { DispatchResult } from "./dispatch-types.js"
 
 export interface DispatchSpecialist {
   startTask(

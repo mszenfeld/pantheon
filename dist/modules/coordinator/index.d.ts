@@ -3,10 +3,10 @@ export { deriveReportPath, neutralizeUntrustedOutput, normalizeVariantSuffix } f
 export { createSDKSpecialist, loadAgentRegistry, toPollerMessage } from './sdk-specialist.js';
 export { DISPATCH_TOOL_NAMES } from './dispatch-tool-names.js';
 import '@opencode-ai/sdk';
-import '../../dispatch-scrubbers-CdWGxgiG.js';
+import './dispatch-types.js';
+import './worker-pool.js';
 import '../_shared/session-agent-registry.js';
 import './poller.js';
-import './task-builder.js';
 
 /**
  * Coordinator-provided tools that MUST appear in perun.md's `allowed-tools`

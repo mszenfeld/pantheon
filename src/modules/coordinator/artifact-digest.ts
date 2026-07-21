@@ -2,7 +2,12 @@ import { createHash } from "node:crypto"
 import { lstatSync, readFileSync, realpathSync } from "node:fs"
 import path from "node:path"
 
-const ALLOWED_DIRECTORIES = ["docs/specs", "docs/plans"]
+import {
+  PLANNING_ARTIFACT_DIRECTORIES,
+  containsTraversalSegment,
+  isWithin,
+} from "../_shared/artifact-path-safety.js"
+
 const MUTABLE_APPROVAL_FIELDS = new Set([
   "approved",
   "approved_at",
@@ -27,20 +32,6 @@ export interface ValidatedArtifactPath {
   absolutePath: string
   canonicalPath: string
   relativePath: string
-}
-
-function isWithin(directory: string, candidate: string): boolean {
-  const relative = path.relative(directory, candidate)
-  return (
-    relative === "" ||
-    (!relative.startsWith(`..${path.sep}`) && relative !== ".." && !path.isAbsolute(relative))
-  )
-}
-
-function containsTraversal(pathValue: string): boolean {
-  return pathValue.split(/[\\/]/).some((segment: string): boolean =>
-    segment === "" || segment === "." || segment === "..",
-  )
 }
 
 function parseFrontmatterValue(value: string): FrontmatterValue {
@@ -175,13 +166,13 @@ export function canonicalPlanningArtifactDigest(content: string): string {
 }
 
 export function resolvePlanningArtifactPath(pathValue: string): ValidatedArtifactPath {
-  if (path.isAbsolute(pathValue) || containsTraversal(pathValue)) {
+  if (path.isAbsolute(pathValue) || containsTraversalSegment(pathValue)) {
     throw new Error("planning artifact path must be a traversal-free relative path")
   }
 
   const worktree = realpathSync(process.cwd())
   const absolutePath = path.resolve(worktree, pathValue)
-  const lexicalDirectory = ALLOWED_DIRECTORIES
+  const lexicalDirectory = PLANNING_ARTIFACT_DIRECTORIES
     .map((directory: string): string => path.resolve(worktree, directory))
     .find((directory: string): boolean => isWithin(directory, absolutePath))
   if (lexicalDirectory === undefined) {

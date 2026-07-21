@@ -1,6 +1,6 @@
 import { createOpencodeClient, Message } from '@opencode-ai/sdk';
-import { h as DispatchSpecialist } from '../../dispatch-scrubbers-CdWGxgiG.js';
-import { AgentInfo } from './task-builder.js';
+import { AgentInfo } from './dispatch-types.js';
+import { DispatchSpecialist } from './worker-pool.js';
 import { PollerMessage } from './poller.js';
 import '../_shared/session-agent-registry.js';
 
