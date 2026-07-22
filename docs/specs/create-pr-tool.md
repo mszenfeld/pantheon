@@ -84,8 +84,8 @@ session's current branch to `origin` (never force), then creates the PR through 
   (`src/modules/_shared/stribog-extra-tools-contract.ts:65`) denies any tool id containing
   `create` as a whole underscore-segment — `create_pr` matches, exactly as `create_branch`
   does, so **both** executor hooks need the same named carve-out
-  (Stribog `src/modules/stribog/tool-budget-hook.ts:305`, Svarog
-  `src/modules/svarog/tool-budget-hook.ts:231`).
+  (Stribog `src/modules/stribog/tool-budget-hook.ts:315`, Svarog
+  `src/modules/svarog/tool-budget-hook.ts:243`).
 - Design decisions taken with the operator in the originating session (recorded here so the
   reviewer sees they are choices, not defaults):
   1. **One tool, not two** — push + PR in a single `create_pr` call; partial success is a

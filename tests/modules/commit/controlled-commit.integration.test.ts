@@ -53,6 +53,44 @@ describe("createControlledCommit", () => {
     ).rejects.toThrow(/No changes to commit/i)
   })
 
+  it("commits only the named files even when the index was widened out-of-band", async () => {
+    // The executor staging-scope guard validates av_commit's `files`, but `git commit -m`
+    // with no pathspec captures the WHOLE index — so anything staged beforehand (the
+    // operator's own `git add`, or a bash `git add -A` from an executor session, which the
+    // mutating-git tripwire does not cover) would ride along and be published by create_pr.
+    const directory = await createRepo()
+    await writeFile(path.join(directory, "seed.txt"), "seed\n")
+    await execFileAsync("git", ["add", "-A"], { cwd: directory })
+    await execFileAsync("git", ["commit", "-m", "chore: seed"], {
+      cwd: directory,
+    })
+
+    await writeFile(path.join(directory, "mine.txt"), "mine\n")
+    await writeFile(path.join(directory, "operators.txt"), "not mine\n")
+    // out-of-band widening: everything is staged before the tool runs
+    await execFileAsync("git", ["add", "-A"], { cwd: directory })
+
+    await createControlledCommit({
+      cwd: directory,
+      files: ["mine.txt"],
+      message: "feat: only mine",
+    })
+
+    const committed = await execFileAsync(
+      "git",
+      ["show", "--name-only", "--format=", "HEAD"],
+      { cwd: directory },
+    )
+    expect(committed.stdout.trim().split("\n")).toEqual(["mine.txt"])
+    // the operator's file is untouched — still staged, never published
+    const staged = await execFileAsync(
+      "git",
+      ["diff", "--cached", "--name-only"],
+      { cwd: directory },
+    )
+    expect(staged.stdout.trim()).toBe("operators.txt")
+  })
+
   it("surfaces repository hook failures", async () => {
     const directory = await createRepo()
 

@@ -410,6 +410,26 @@ describe("stribog tool-budget hook", () => {
     )
   })
 
+  it("resolves av_commit paths against the injected worktree, not the process cwd", async () => {
+    // Discriminating pin for the shared resolution basis: with a worktree that is NOT the
+    // runner's cwd, a repo-relative `files` entry must still match the absolute path the
+    // edit budget recorded. Resolving against process.cwd() would deny this.
+    const scoped = makeStribogToolHook({
+      resolveAgent: async () => STRIBOG,
+      worktree: "/tmp/wt-elsewhere",
+    }).hook
+    await scoped(input("edit"), {
+      args: { filePath: "/tmp/wt-elsewhere/src/a.ts" },
+    })
+    await expect(
+      scoped(input("av_commit"), { args: { files: ["src/a.ts"] } }),
+    ).resolves.toBeUndefined()
+    // and a path under the runner's cwd instead is refused
+    await expect(
+      scoped(input("av_commit"), { args: { files: [resolve("src/a.ts")] } }),
+    ).rejects.toThrow(/STRIBOG_SCOPE_VIOLATION/)
+  })
+
   it("matches edited paths EXACTLY — a bare basename or shorter suffix is refused", async () => {
     // Regression: a suffix compare would let `a.ts` satisfy an edited `<repo>/src/a.ts`,
     // staging a different file at the worktree root while the edited one never gets staged.

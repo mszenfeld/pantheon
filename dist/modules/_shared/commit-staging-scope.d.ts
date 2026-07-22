@@ -9,8 +9,16 @@
  * pushes to origin, durably and past a recovery checkpoint that does not rewind commits.
  *
  * Both executor hooks refuse an unscoped `av_commit` fail-closed, mirroring how they already
- * refuse an `edit`/`write` whose `filePath` cannot be bound to the edit budget. The binding is
- * layered, and the strength of the outer layer differs by agent posture:
+ * refuse an `edit`/`write` whose `filePath` cannot be bound to the edit budget.
+ *
+ * This guard validates the `files` ARGUMENT; `createControlledCommit` is what makes the
+ * validated list bind the commit's CONTENTS, by passing the same paths as a pathspec to
+ * `git commit`. Without that, `git commit -m` would capture the whole index and anything staged
+ * out-of-band — a bash `git add -A` (not covered by the mutating-git tripwire), or work the
+ * operator staged before the dispatch — would ride along regardless of what this guard allowed.
+ * The two halves are load-bearing together; neither is sufficient alone.
+ *
+ * The binding is layered, and the strength of the outer layer differs by agent posture:
  *
  *  - **Shape gate (both):** `isScopedCommitPath` rejects whole-tree pathspecs (`.`, `./`, `/`),
  *    git pathspec magic (a leading `:`, e.g. `:/`), globs and `..` traversal. These expand to the

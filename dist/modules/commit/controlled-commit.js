@@ -40,7 +40,8 @@ async function createControlledCommit(input) {
     throw new Error("No changes to commit.");
   }
   const commitMessage = normalizeCommitMessage(input.message, input.taskId);
-  const commitResult = await runGit(input.cwd, ["commit", "-m", commitMessage]);
+  const commitArgs = input.files && input.files.length > 0 ? ["commit", "-m", commitMessage, "--", ...input.files] : ["commit", "-m", commitMessage];
+  const commitResult = await runGit(input.cwd, commitArgs);
   if (commitResult.exitCode !== 0) {
     throw new Error(
       commitResult.stderr.trim() || commitResult.stdout.trim() || "git commit failed."

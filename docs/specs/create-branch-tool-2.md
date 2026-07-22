@@ -46,8 +46,8 @@ pure TypeScript before any git invocation.
 ## 2. Background & current behaviour
 
 - The executor agents' bash is gated by `tool.execute.before` hooks that deny tree/branch-mutating
-  git via `isMutatingGitCommand` (`src/modules/stribog/tool-budget-hook.ts:244`,
-  `src/modules/svarog/tool-budget-hook.ts:152`). The deny was added after a dispatched executor ran
+  git via `isMutatingGitCommand` (`src/modules/stribog/tool-budget-hook.ts:254`,
+  `src/modules/svarog/tool-budget-hook.ts:161`). The deny was added after a dispatched executor ran
   `git checkout feature/global-skills` and silently moved the operator's worktree off `master`
   (rationale recorded in `src/modules/_shared/mutating-git.ts:1-16`). `git branch <name>` (create,
   no `-d/-D`) is *not* bash-denied, but switching to the new branch is — so today an executor
@@ -55,7 +55,7 @@ pure TypeScript before any git invocation.
 - The commit module (`src/modules/commit/`) already owns the sanctioned git-mutation surface: the
   `av_commit` plugin tool wraps an injectable `GitRunner` (`execFile`, argv array, no shell) in
   `src/modules/commit/controlled-commit.ts:13-47`, registered in
-  `src/modules/commit/index.ts:44-71`, with unit + real-repo integration tests under
+  `src/modules/commit/index.ts:47-77`, with unit + real-repo integration tests under
   `tests/modules/commit/`.
 - Plugin-tool visibility is global: any tool registered in a plugin's `tool: {}` map is callable
   by any agent unless a runtime hook denies it (per-agent `config.agent[].tools` maps are
@@ -63,8 +63,8 @@ pure TypeScript before any git invocation.
 - **Discovered constraint that shapes this design:** the shared `isImmutableDeny` floor
   (`src/modules/_shared/stribog-extra-tools-contract.ts:65`) denies any tool id containing
   `create` as a whole underscore-segment. `create_branch` matches, so the floor denies the tool
-  for **both** executors — Stribog at `src/modules/stribog/tool-budget-hook.ts:357` (step 3) and
-  Svarog at `src/modules/svarog/tool-budget-hook.ts:242` (step 4). The originating request assumed
+  for **both** executors — Stribog at `src/modules/stribog/tool-budget-hook.ts:367` (step 3) and
+  Svarog at `src/modules/svarog/tool-budget-hook.ts:254` (step 4). The originating request assumed
   "Svarog is allow-by-default for plugin tools, so no Svarog change is needed"; that assumption
   does not hold (see §5.4 and §9).
 - **Revision note (2026-07-21):** the first draft of this spec took a single `name` string. The
@@ -160,7 +160,7 @@ pure TypeScript before any git invocation.
   fail at FR-4 with git's `already exists` error. This is intentional: the tool does not
   auto-delete a created branch and never checks out a pre-existing branch.
 - **FR-8 — Working directory.** The `execute` wrapper passes `cwd: context.worktree ??
-  context.directory` (same resolution as `av_commit`, `src/modules/commit/index.ts:62`).
+  context.directory` (same resolution as `av_commit`, `src/modules/commit/index.ts:64`).
 - **FR-9 — Stribog access.** A positively-attributed Stribog session can invoke `create_branch`
   (hook allow per §5.4); the tool is not edit-budgeted (it is not an edit/write tool).
 - **FR-10 — Svarog access.** A positively-attributed Svarog session can invoke `create_branch`
@@ -473,7 +473,7 @@ Alternatives considered and rejected:
 - **Operator `agents.stribog.extraTools: ["create_branch"]`** — rejected: impossible by design.
   `validateExtraToolsPattern` rejects exact ids that are immutable-denied
   (`src/modules/_shared/stribog-extra-tools-contract.ts:101-105`), and the runtime floor wins over
-  any extraPattern anyway (`tool-budget-hook.ts:352-357`).
+  any extraPattern anyway (`tool-budget-hook.ts:362-367`).
 - **Add to `STRIBOG_TOOLS`/`SVAROG_TOOLS`** — rejected: `tools-sync.test.ts:33` pins exact
   parity between `STRIBOG_TOOLS` structured entries and `CORE_BUILTINS` minus `bash`; the
   established pattern for hook-allowed non-builtin tools is hook-only with a comment in
@@ -628,7 +628,7 @@ Real temp repo via `mkdtemp` + `git init` + user config (pattern of
 ### 7.4 Plugin-wrapper tests — registration contract (`src/modules/commit/index.ts`)
 
 - **AC-13 (wrapper & schema).** Assert against the registered `create_branch` tool (the pattern
-  mirrors `av_commit`, `src/modules/commit/index.ts:45-69`):
+  mirrors `av_commit`, `src/modules/commit/index.ts:47-77`):
   - the tool's arg schema exposes **exactly** `type`, `id`, `description`, `checkout` — no `cwd`,
     `runGit`, or other internal keys are agent-visible, and `type` is a plain string schema
     (`tool.schema.string()`), **not** a schema-level enum, so an invalid `type` reaches the
@@ -663,7 +663,7 @@ Real temp repo via `mkdtemp` + `git init` + user config (pattern of
 ## 9. Deviations from the originating request
 
 1. **Svarog *does* need a (two-line) hook change** (D2, §5.4): the shared `isImmutableDeny`
-   floor denies the `create_` verb for Svarog at `src/modules/svarog/tool-budget-hook.ts:242`.
+   floor denies the `create_` verb for Svarog at `src/modules/svarog/tool-budget-hook.ts:254`.
    The request's "no Svarog change is needed" is incorrect on the evidence; the minimal carve-out
    is specified instead of loosening anything.
 2. **Return schema gains optional `checkoutError`** on the checkout-failure path only (D3, FR-7) —

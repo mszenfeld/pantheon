@@ -20,7 +20,14 @@ function capturePreLoopRef(cwd, runId) {
     const env = { ...process.env, GIT_INDEX_FILE: idx };
     git(cwd, ["add", "-A"], env);
     const tree = git(cwd, ["write-tree"], env);
-    const commit = git(cwd, ["commit-tree", tree, "-p", "HEAD", "-m", "qa-loop pre-loop"]);
+    const commit = git(cwd, [
+      "commit-tree",
+      tree,
+      "-p",
+      "HEAD",
+      "-m",
+      "qa-loop pre-loop"
+    ]);
     const ref = `refs/qa-loop/pre/${runId}`;
     git(cwd, ["update-ref", ref, commit]);
     return ref;
@@ -47,7 +54,8 @@ function antiHardcodeDiff(cwd, ckptRef, changed, bePayloads) {
   const payloads = bePayloads.map((p) => p.trim()).filter(Boolean);
   if (payloads.length === 0 || changed.length === 0) return warnings;
   for (const file of changed) {
-    if (file.startsWith("-") || file.startsWith(":") || file.includes("..")) continue;
+    if (file.startsWith("-") || file.startsWith(":") || file.includes(".."))
+      continue;
     let diff = "";
     try {
       diff = git(cwd, ["diff", "--no-color", ckptRef, "--", file]);

@@ -69,7 +69,15 @@ describe("createControlledCommit (unit, injected git runner)", () => {
       "status",
     ])
     const commitCall = calls.find((call) => call.args[0] === "commit")
-    expect(commitCall?.args).toEqual(["commit", "-m", "feat: add note"])
+    // The commit carries the same pathspec as the add: `git commit -m` alone would capture
+    // the WHOLE index, so anything staged out-of-band would ride along.
+    expect(commitCall?.args).toEqual([
+      "commit",
+      "-m",
+      "feat: add note",
+      "--",
+      "note.txt",
+    ])
     const addCall = calls.find((call) => call.args[0] === "add")
     expect(addCall?.args).toEqual(["add", "--", "note.txt"])
   })
