@@ -1,5 +1,9 @@
+import { statSync } from "node:fs"
+import { resolve } from "node:path"
 import {
   bareCommitDenialMessage,
+  directoryCommitDenialMessage,
+  findDirectoryPath,
   hasExplicitCommitFiles,
 } from "../_shared/commit-staging-scope.js"
 import { isImmutableDeny } from "../_shared/stribog-extra-tools-contract.js"
@@ -192,8 +196,32 @@ export function makeSvarogToolHook(
       // `git add -A` (controlled-commit.ts) and would sweep the operator's unrelated changes
       // into the executor's commit — which create_pr then publishes. Refused fail-closed; the
       // executor must name the paths it edited.
-      if (norm === "av_commit" && !hasExplicitCommitFiles(output.args?.files)) {
-        throw new Error(bareCommitDenialMessage(TOOL_DENIED, "Svarog"))
+      if (norm === "av_commit") {
+        const files: unknown = output.args?.files
+        if (!hasExplicitCommitFiles(files)) {
+          throw new Error(bareCommitDenialMessage(TOOL_DENIED, "Svarog"))
+        }
+        // Svarog has no edit budget to compare against (it is the allow-by-default multi-file
+        // worker, and legitimately commits generated output it never hand-edited — this repo's
+        // committed dist/ tree, for one), so membership would deny real work. Its floor is the
+        // shape gate plus: no named path may be a DIRECTORY, which would stage everything
+        // modified or untracked beneath it.
+        const directory = findDirectoryPath(files, (path) => {
+          try {
+            return statSync(resolve(path)).isDirectory()
+          } catch {
+            return false // nonexistent path — `git add` reports it, this guard does not
+          }
+        })
+        if (directory !== undefined) {
+          throw new Error(
+            directoryCommitDenialMessage(
+              TOOL_DENIED,
+              "Svarog",
+              directory.trim(),
+            ),
+          )
+        }
       }
 
       // create_pr — the sanctioned publish path (validated, argv-only, never force;

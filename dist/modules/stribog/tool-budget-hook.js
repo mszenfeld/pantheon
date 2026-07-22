@@ -2,7 +2,6 @@ import { isAbsolute, resolve } from "node:path";
 import {
   bareCommitDenialMessage,
   hasExplicitCommitFiles,
-  matchesEditedPath,
   unbudgetedCommitPathMessage
 } from "../_shared/commit-staging-scope.js";
 import { isMutatingGitCommand } from "../_shared/mutating-git.js";
@@ -102,7 +101,7 @@ function makeStribogToolHook(deps) {
         }
         const edited = pathsFor(input.sessionID);
         for (const file of files) {
-          if (!matchesEditedPath(file, edited)) {
+          if (!edited.has(resolve(file.trim()))) {
             throw new Error(
               unbudgetedCommitPathMessage(SCOPE_VIOLATION, file.trim(), [
                 ...edited

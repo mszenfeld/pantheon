@@ -8,22 +8,38 @@
  * sweep unrelated modified/untracked paths into the executor's commit — which `create_pr` then
  * pushes to origin, durably and past a recovery checkpoint that does not rewind commits.
  *
- * Both executor hooks therefore refuse an unscoped `av_commit` fail-closed, mirroring how they
- * already refuse an `edit`/`write` whose `filePath` cannot be bound to the edit budget.
+ * Both executor hooks refuse an unscoped `av_commit` fail-closed, mirroring how they already
+ * refuse an `edit`/`write` whose `filePath` cannot be bound to the edit budget. The binding is
+ * layered, and the strength of the outer layer differs by agent posture:
  *
- * The guard binds SCOPE, not merely shape: `files: ["."]` and `files: [":/"]` stage the whole
- * tree just as `add -A` does, and `.` is the reflexive staging idiom a model reaches for after
- * being told to name paths — so root-equivalents, git pathspec magic, wildcards and traversal
- * are all rejected alongside the empty case.
+ *  - **Shape gate (both):** `isScopedCommitPath` rejects whole-tree pathspecs (`.`, `./`, `/`),
+ *    git pathspec magic (a leading `:`, e.g. `:/`), globs and `..` traversal. These expand to the
+ *    whole tree exactly like the `add -A` fallback, and `.` is the reflexive staging idiom a
+ *    model reaches for after being told to name paths.
+ *  - **Stribog — exact membership.** A deny-by-default leaf actuator bounded to
+ *    `STRIBOG_EDIT_BUDGET` files may commit only paths it actually edited this session, compared
+ *    as resolved absolute paths against the budget set. Exact comparison (never a suffix match:
+ *    `a.ts` must not satisfy `/repo/src/a.ts`) also rejects directories for free, since a
+ *    directory is never an edited file path.
+ *  - **Svarog — directory rejection.** An allow-by-default deep worker legitimately commits
+ *    files it never hand-edited (generated output such as this repo's committed `dist/` tree),
+ *    so membership would produce false denials. Its floor is therefore the shape gate plus a
+ *    filesystem check that no named path is a directory — `git add -- src` would otherwise stage
+ *    every modified and untracked file beneath it.
  */
 /**
- * True when `value` names one concrete, repo-relative-or-absolute file path that cannot expand
- * to the whole tree. Rejects: git pathspec magic (`:/`, `:(glob)**` — a leading `:` is never a
- * plain path), root-equivalents, wildcards, and any `..` traversal segment.
+ * True when `value` names one concrete path that cannot by itself expand to the whole tree.
+ * Shape only — it cannot tell a file from a directory (see `findDirectoryPath`).
  */
 declare function isScopedCommitPath(value: unknown): value is string;
-/** True when an `av_commit` call names at least one concrete, scoped path to stage. */
+/** True when an `av_commit` call names at least one concrete, non-whole-tree path. */
 declare function hasExplicitCommitFiles(files: unknown): files is string[];
+/**
+ * The first named path that is a directory on disk, or `undefined` when none is. A directory
+ * pathspec stages everything modified or untracked beneath it, which is the whole-tree sweep in
+ * miniature. A path that does not exist is not a directory — `git add` surfaces that itself.
+ */
+declare function findDirectoryPath(files: readonly string[], isDirectory: (path: string) => boolean): string | undefined;
 /**
  * Denial text for an unscoped `av_commit` on an executor session. Phrased as a redirect ("retry
  * scoped"), not an escalation signal — the capability is granted, only the unscoped shape is
@@ -31,18 +47,13 @@ declare function hasExplicitCommitFiles(files: unknown): files is string[];
  * whole-tree spelling for another.
  */
 declare function bareCommitDenialMessage(marker: string, agent: string): string;
+/** Denial text for an `av_commit` naming a directory (stages everything beneath it). */
+declare function directoryCommitDenialMessage(marker: string, agent: string, path: string): string;
 /**
- * Denial text for a Stribog `av_commit` naming a path the session never edited. Stribog's edit
- * budget is the authoritative per-session blast radius; a commit that reaches outside it would
- * publish work the budget was meant to bound.
+ * Denial text for a Stribog `av_commit` naming a path outside its edit budget. The budget set is
+ * the authoritative per-session blast radius; a commit that reaches past it would publish work
+ * the budget exists to bound.
  */
-declare function unbudgetedCommitPathMessage(marker: string, path: string, edited: string[]): string;
-/**
- * True when `candidate` (a repo-relative or absolute path from `av_commit`) refers to the same
- * file as one of the session's `edited` absolute paths. Compared by path-boundary suffix so a
- * repo-relative argument matches its absolute edited counterpart without assuming the hook's
- * cwd equals the worktree root.
- */
-declare function matchesEditedPath(candidate: string, edited: Iterable<string>): boolean;
+declare function unbudgetedCommitPathMessage(marker: string, path: string, edited: readonly string[]): string;
 
-export { bareCommitDenialMessage, hasExplicitCommitFiles, isScopedCommitPath, matchesEditedPath, unbudgetedCommitPathMessage };
+export { bareCommitDenialMessage, directoryCommitDenialMessage, findDirectoryPath, hasExplicitCommitFiles, isScopedCommitPath, unbudgetedCommitPathMessage };

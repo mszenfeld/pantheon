@@ -188,6 +188,27 @@ describe("makeSvarogToolHook", () => {
     await denies("execute_recipe") // floor regression guard
   })
 
+  it("refuses an av_commit naming a directory — it would stage everything beneath it", async () => {
+    // `git add -- src` stages every modified/untracked file under src/. Svarog has no edit
+    // budget to compare against, so the directory check is its floor.
+    for (const dir of ["src", "src/", "./src", "tests"]) {
+      const message = await svarogHook()(input("av_commit"), {
+        args: { files: [dir] },
+      })
+        .then(() => "<allowed>")
+        .catch((error: Error) => error.message)
+      expect(message).toMatch(/^SVAROG_TOOL_DENIED/)
+      expect(message).toMatch(/is a DIRECTORY/)
+      expect(message).toMatch(/Do NOT ESCALATE/)
+    }
+    // a real file in the same tree still passes
+    await allows("av_commit", {
+      args: { files: ["src/modules/svarog/tool-budget-hook.ts"] },
+    })
+    // a path that does not exist is not this guard's business — git add reports it
+    await allows("av_commit", { args: { files: ["src/does-not-exist.ts"] } })
+  })
+
   it("allows av_commit — the sanctioned commit path (executor-chain doctrine, 2026-07-22)", async () => {
     // Svarog's hook is allow-by-default and av_commit is not floor-denied; this pin documents
     // the doctrine decision so a future floor/deny change cannot silently cut the chain's

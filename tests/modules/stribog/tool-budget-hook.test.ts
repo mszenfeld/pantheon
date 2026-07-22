@@ -1,3 +1,4 @@
+import { resolve } from "node:path"
 import { describe, expect, it } from "vitest"
 import { makeStribogToolHook } from "../../../src/modules/stribog/tool-budget-hook.js"
 import { STRIBOG_EDIT_BUDGET } from "../../../src/modules/stribog/stribog.metadata.js"
@@ -383,20 +384,36 @@ describe("stribog tool-budget hook", () => {
 
   it("allows av_commit for a confirmed stribog session, scoped to files it edited", async () => {
     const h = hook(STRIBOG)
-    // the commit may only name paths this session actually edited
-    await h(input("edit"), { args: { filePath: "/repo/src/a.ts" } })
+    // the commit may only name paths this session actually edited; the budget keys on
+    // resolve(...), so the repo-relative spelling of the same file is the one that matches
+    const edited = resolve("src/a.ts")
+    await h(input("edit"), { args: { filePath: edited } })
     const scoped = { args: { files: ["src/a.ts"] } }
     await expect(h(input("av_commit"), scoped)).resolves.toBeUndefined()
     // case/hyphen normalization must not bypass the carve-out
     await expect(h(input("Av-Commit"), scoped)).resolves.toBeUndefined()
-    // an absolute spelling of the same file resolves to the same edited path
+    // the absolute spelling of the same file resolves to the same edited path
     await expect(
-      h(input("av_commit"), { args: { files: ["/repo/src/a.ts"] } }),
+      h(input("av_commit"), { args: { files: [edited] } }),
     ).resolves.toBeUndefined()
     // floor regression guard: dispatch family stays denied
     await expect(h(input("execute_recipe"), out())).rejects.toThrow(
       "STRIBOG_TOOL_DENIED",
     )
+  })
+
+  it("matches edited paths EXACTLY — a bare basename or shorter suffix is refused", async () => {
+    // Regression: a suffix compare would let `a.ts` satisfy an edited `<repo>/src/a.ts`,
+    // staging a different file at the worktree root while the edited one never gets staged.
+    const h = hook(STRIBOG)
+    await h(input("edit"), { args: { filePath: resolve("src/a.ts") } })
+    for (const file of ["a.ts", "other/a.ts", "./a.ts", "src", "src/"]) {
+      const message = await h(input("av_commit"), { args: { files: [file] } })
+        .then(() => "<allowed>")
+        .catch((error: Error) => error.message)
+      expect(message).toMatch(/^STRIBOG_SCOPE_VIOLATION/)
+      expect(message).toMatch(/did not edit this session/)
+    }
   })
 
   it("refuses an unscoped av_commit — whole-tree staging is fail-closed", async () => {
@@ -429,15 +446,16 @@ describe("stribog tool-budget hook", () => {
 
   it("refuses an av_commit naming a path the session never edited", async () => {
     const h = hook(STRIBOG)
-    await h(input("edit"), { args: { filePath: "/repo/src/a.ts" } })
+    await h(input("edit"), { args: { filePath: resolve("src/a.ts") } })
     const message = await h(input("av_commit"), {
       args: { files: ["src/a.ts", "src/unrelated.ts"] },
     })
       .then(() => "<allowed>")
       .catch((error: Error) => error.message)
     expect(message).toMatch(/^STRIBOG_SCOPE_VIOLATION/)
-    expect(message).toMatch(/never edited this session/)
-    expect(message).toMatch(/Do NOT ESCALATE/)
+    expect(message).toMatch(/did not edit this session/)
+    // a file it never touched is out of lane, so ESCALATE is the honest route here
+    expect(message).toMatch(/return the ESCALATE result/)
   })
 })
 
