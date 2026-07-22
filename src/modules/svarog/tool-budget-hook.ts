@@ -70,12 +70,13 @@ export interface SvarogToolHookHandle {
  *   (2b) bash secret-generation tripwire -> SECRET_DENIED;
  *   (2c) serena-EDITOR carve-out (allowed BEFORE the floor, which would otherwise deny them);
  *   (3) explicit `question` deny (headless leaf -> ESCALATE; no isImmutableDeny pattern covers it);
- *   (3b) publish/branch carve-out — `create_pr`/`create_branch` early-returns (the spec-mandated
+ *   (3b) network-egress deny — `webfetch`/`websearch` (leaf in-tree executor);
+ *   (3c) publish/branch carve-out — `create_pr`/`create_branch` early-returns (the spec-mandated
  *       sanctioned publish chain; 2026-07-22 executor-chain decision) allowed BEFORE the floor's
  *       `create_` verb would deny them. `av_commit` needs no carve-out here: it is not
  *       floor-denied and falls to the allow-by-default at (5);
  *   (4) the shared isImmutableDeny floor, REUSED UNCHANGED (shell / dispatch / recipe / DB-mutation /
- *       serena memory-write). The carve-outs at (2c)/(3b) are the only reasons the legit serena
+ *       serena memory-write). The carve-outs at (2c)/(3c) are the only reasons the legit serena
  *       editors and the publish tools pass;
  *   (5) everything else -> ALLOW (edit/write/multiedit, serena reads + diagnostics, skill, ...).
  * Fail-open on the attribution axis and on any internal error; only intended denials throw.
@@ -179,6 +180,7 @@ export function makeSvarogToolHook(
         )
       }
 
+      // (3c) publish/branch carve-out.
       // create_pr — the sanctioned publish path (validated, argv-only, never force;
       // docs/specs/create-pr-tool.md). The bash mutating-git tripwire is unchanged; this
       // early-return only lets the plugin tool through the `create_` verb of the

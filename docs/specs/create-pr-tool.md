@@ -84,8 +84,8 @@ session's current branch to `origin` (never force), then creates the PR through 
   (`src/modules/_shared/stribog-extra-tools-contract.ts:65`) denies any tool id containing
   `create` as a whole underscore-segment — `create_pr` matches, exactly as `create_branch`
   does, so **both** executor hooks need the same named carve-out
-  (Stribog `src/modules/stribog/tool-budget-hook.ts:295`, Svarog
-  `src/modules/svarog/tool-budget-hook.ts:186`).
+  (Stribog `src/modules/stribog/tool-budget-hook.ts:298`, Svarog
+  `src/modules/svarog/tool-budget-hook.ts:188`).
 - Design decisions taken with the operator in the originating session (recorded here so the
   reviewer sees they are choices, not defaults):
   1. **One tool, not two** — push + PR in a single `create_pr` call; partial success is a
@@ -340,11 +340,17 @@ parsing. When `input.provider` is injected, G3/G4 are skipped (FR-5 injection ru
 | G1 | `["branch", "--show-current"]` output is empty (detached HEAD). | `create_pr: HEAD is detached — check out a branch first (use create_branch).` |
 | G2 | Resolved head equals resolved base. | `create_pr: refusing to push and open a PR from the base branch '<base>' — create a feature branch first (use create_branch).` |
 | G3 | `["remote", "get-url", "origin"]` exits non-zero. | `create_pr: no 'origin' remote is configured.` |
-| G4 | `detectProvider(originUrl)` returns `undefined`. | `create_pr: unsupported git host for PR creation (supported: github.com). origin: <jsonEncodedUrl>` |
+| G4 | `detectProvider(originUrl)` returns `undefined`. | `create_pr: unsupported git host for PR creation (supported: github.com). origin: <jsonEncodedRedactedUrl>` |
 | G5 | Base omitted and `refs/remotes/origin/HEAD` unresolvable. | `create_pr: cannot resolve the default branch of 'origin' — pass 'base' explicitly or run: git remote set-head origin --auto` |
 
 Guard ordering rationale: G1 and the G5→G2 pair catch the cheapest and most common agent
-mistakes before any remote-shape checks; G3/G4 close the sequence. Nothing before the FR-6
+mistakes before any remote-shape checks; G3/G4 close the sequence. **G4 redaction
+(normative, 2026-07-22 MoA round-3 SEC finding):** `<jsonEncodedRedactedUrl>` is the trimmed
+origin URL with its URL userinfo redacted before JSON-encoding —
+`originUrl.replace(/^(\w+:\/\/)[^@/]+@/, "$1<redacted>@")` — so a PAT-in-URL remote
+(`https://ghp_…@github.com/…`, which always fails detection and lands here) never reaches the
+transcript (C-5, NFR-3). scp-like `git@host:` forms carry no credential and pass through
+unchanged. Nothing before the FR-6
 push mutates anything anywhere.
 
 ### 5.4 Provider detection (normative)

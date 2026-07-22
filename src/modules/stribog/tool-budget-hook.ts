@@ -135,11 +135,13 @@ export interface StribogToolHookHandle {
  *       extraPatterns here would skip the attribution gate and leak the conditional allow to every
  *       session, since the hook fails open for non-stribog).
  *   (2) Resolves attribution and FAILS OPEN for non-stribog / unresolved sessions.
- *   (2d) (confirmed stribog only) allows the serena family (single-file editors budgeted, reads
- *       unbudgeted) and the commit-module publish chain — `create_pr`/`create_branch`/`av_commit`
- *       early-returns (attribution-gated, unbudgeted; the sanctioned executor chain
- *       create_branch → av_commit → create_pr, 2026-07-22 decision) — BEFORE steps 3-4, which
- *       would otherwise deny them (`create_` verb at step 3; allow-list at step 4).
+ *   (2c) (confirmed stribog only) serena family handling — single-file editors budgeted, reads
+ *       unbudgeted (labeled "(2c)" in the body).
+ *   (2d) (confirmed stribog only) commit-module publish-chain carve-out —
+ *       `create_pr`/`create_branch`/`av_commit` early-returns (attribution-gated, unbudgeted;
+ *       the sanctioned executor chain create_branch → av_commit → create_pr, 2026-07-22
+ *       decision) — BEFORE steps 3-4, which would otherwise deny them (`create_` verb at
+ *       step 3; allow-list at step 4).
  *   (3) THEN (confirmed stribog only) applies isImmutableDeny — gated behind attribution so a
  *       legitimate `execute_recipe` (zmora-setup) / `dispatch_*` (Perun/Veles) on a NON-stribog
  *       session, or during its own attribution-unresolved window, is never denied here.
@@ -283,6 +285,7 @@ export function makeStribogToolHook(
         return // serena read / navigation / memory — allowed, unbudgeted
       }
 
+      // (2d) commit-module publish-chain carve-out (see the factory docblock's order map).
       // create_pr — the sanctioned publish path (validated, argv-only, never force; push + PR
       // in one audited plugin tool — docs/specs/create-pr-tool.md). The bash mutating-git
       // tripwire and the commit plugin's block-push gate are unchanged; this early-return

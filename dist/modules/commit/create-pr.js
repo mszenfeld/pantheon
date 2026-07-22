@@ -104,8 +104,9 @@ async function createPr(input) {
     }
     const originUrl = originResult.stdout.trim();
     if (detectProvider(originUrl) !== "github") {
+      const redactedUrl = originUrl.replace(/^(\w+:\/\/)[^@/]+@/, "$1<redacted>@");
       throw new Error(
-        `create_pr: unsupported git host for PR creation (supported: github.com). origin: ${JSON.stringify(originUrl)}`
+        `create_pr: unsupported git host for PR creation (supported: github.com). origin: ${JSON.stringify(redactedUrl)}`
       );
     }
     provider = githubPrProvider(input.runGh ?? defaultGhRunner);

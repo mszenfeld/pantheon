@@ -383,6 +383,19 @@ describe("createPr orchestration (AC-3…AC-7)", () => {
         pattern: /unsupported git host for PR creation \(supported: github\.com\)/,
       },
       {
+        // PAT-in-URL remote: detection fails on the credentialed host, and the G4 echo
+        // must carry the REDACTED form, never the raw userinfo (C-5, NFR-3).
+        responses: {
+          ...HAPPY_GIT,
+          remote: {
+            stdout: "https://ghp_secret123@github.com/a/b.git\n",
+            stderr: "",
+            exitCode: 0,
+          },
+        },
+        pattern: /origin: "https:\/\/<redacted>@github\.com\/a\/b\.git"/,
+      },
+      {
         responses: {
           ...HAPPY_GIT,
           "symbolic-ref": { stdout: "", stderr: "fatal", exitCode: 1 },
@@ -397,6 +410,26 @@ describe("createPr orchestration (AC-3…AC-7)", () => {
       ).rejects.toThrow(testCase.pattern)
       expect(calls.map((c) => c.args[0])).not.toContain("push")
     }
+  })
+
+  it("G4 redaction: embedded credentials never reach the thrown message", async () => {
+    const { runGit } = recordingGitRunner({
+      ...HAPPY_GIT,
+      remote: {
+        stdout: "https://user:ghp_secret123@github.com/a/b.git\n",
+        stderr: "",
+        exitCode: 0,
+      },
+    })
+    let message = ""
+    try {
+      await createPr({ cwd: "/repo", title: "t", runGit })
+    } catch (error) {
+      message = (error as Error).message
+    }
+    expect(message).toContain('origin: "https://<redacted>@github.com/a/b.git"')
+    expect(message).not.toContain("ghp_secret123")
+    expect(message).not.toContain("user:")
   })
 
   it("AC-6: push failure propagates git stderr and the provider is never invoked", async () => {

@@ -162,9 +162,13 @@ export async function createPr(input: CreatePrInput): Promise<CreatePrResult> {
     }
     const originUrl = originResult.stdout.trim()
     if (detectProvider(originUrl) !== "github") {
+      // C-5/NFR-3: the raw get-url output may embed credentials (PAT-in-URL remotes, which
+      // always fail detection), so URL userinfo is redacted before the echo reaches the
+      // transcript. scp-like `git@host:` forms have no `://` and pass through unchanged.
+      const redactedUrl = originUrl.replace(/^(\w+:\/\/)[^@/]+@/, "$1<redacted>@")
       throw new Error(
         "create_pr: unsupported git host for PR creation (supported: github.com). " +
-          `origin: ${JSON.stringify(originUrl)}`,
+          `origin: ${JSON.stringify(redactedUrl)}`,
       )
     }
     provider = githubPrProvider(input.runGh ?? defaultGhRunner)
