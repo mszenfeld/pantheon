@@ -174,6 +174,12 @@ export function makeSvarogToolHook(
         )
       }
 
+      // create_pr — the sanctioned publish path (validated, argv-only, never force;
+      // docs/specs/create-pr-tool.md). The bash mutating-git tripwire is unchanged; this
+      // early-return only lets the plugin tool through the `create_` verb of the
+      // isImmutableDeny floor (step 4).
+      if (norm === "create_pr") return
+
       // (4) shared immutable floor, reused unchanged: shell-escape, dispatch/task, execute_recipe,
       // DB/DDL mutation verbs, serena `_memory` writes. (Bare `edit`/`write` are exempt by design;
       // they reach step 5 and are allowed.)

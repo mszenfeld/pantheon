@@ -168,4 +168,10 @@ describe("makeSvarogToolHook", () => {
     await hook(input("edit"), { args: { filePath: "/b" } }) // checkpoints again
     expect(created).toHaveLength(2)
   })
+
+  it("allows create_pr — the sanctioned publish path — past the immutable floor", async () => {
+    await allows("create_pr")
+    await allows("Create-PR") // case/hyphen normalization must not bypass the carve-out
+    await denies("execute_recipe") // floor regression guard (AC-15)
+  })
 })

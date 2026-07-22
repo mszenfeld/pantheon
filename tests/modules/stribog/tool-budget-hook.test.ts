@@ -354,6 +354,14 @@ describe("stribog tool-budget hook", () => {
       new RegExp(`${STRIBOG_EDIT_BUDGET} distinct files`),
     )
   })
+
+  it("allows create_pr for a confirmed stribog session (publish-path carve-out)", async () => {
+    await expect(hook(STRIBOG)(input("create_pr"), out())).resolves.toBeUndefined()
+    // floor regression guard (AC-14): dispatch family stays denied
+    await expect(hook(STRIBOG)(input("execute_recipe"), out())).rejects.toThrow(
+      "STRIBOG_TOOL_DENIED",
+    )
+  })
 })
 
 describe("stribog deny-guidance: skill/edit-alias tools redirect, not escalate", () => {

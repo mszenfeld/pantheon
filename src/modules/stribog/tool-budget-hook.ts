@@ -277,6 +277,13 @@ export function makeStribogToolHook(
         return // serena read / navigation / memory — allowed, unbudgeted
       }
 
+      // create_pr — the sanctioned publish path (validated, argv-only, never force; push + PR
+      // in one audited plugin tool — docs/specs/create-pr-tool.md). The bash mutating-git
+      // tripwire and the commit plugin's block-push gate are unchanged; this early-return only
+      // lets the tool through the `create_` verb of the isImmutableDeny floor (step 3).
+      // Unbudgeted: not an edit/write tool.
+      if (norm === "create_pr") return
+
       const denyKey = raw.toLowerCase() // lowercased copy used ONLY for deny + extraPattern match
 
       // (3) Immutable capability-deny wins over any extraPattern (incl. a permissive glob). This is
