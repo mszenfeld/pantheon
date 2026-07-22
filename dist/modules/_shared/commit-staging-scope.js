@@ -12,6 +12,7 @@ const ROOT_EQUIVALENT = /* @__PURE__ */ new Set([
 ]);
 function isScopedCommitPath(value) {
   if (typeof value !== "string") return false;
+  if (value !== value.trim()) return false;
   const path = value.trim();
   if (path === "") return false;
   if (CONTROL_BYTE.test(path)) return false;

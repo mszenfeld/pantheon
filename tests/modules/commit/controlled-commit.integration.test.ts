@@ -91,6 +91,50 @@ describe("createControlledCommit", () => {
     expect(staged.stdout.trim()).toBe("operators.txt")
   })
 
+  it("commits a conflict resolution during a real merge (unbound-shape fallback)", async () => {
+    // Real git: `commit -m msg -- <files>` is rejected mid-merge, so the pathspec fix must
+    // fall back to the unbound shape or the operator's conflict-resolution commit hard-fails.
+    const directory = await createRepo()
+    await writeFile(path.join(directory, "f.txt"), "base\n")
+    await execFileAsync("git", ["add", "-A"], { cwd: directory })
+    await execFileAsync("git", ["commit", "-m", "base"], { cwd: directory })
+    await execFileAsync("git", ["checkout", "-b", "feat"], { cwd: directory })
+    await writeFile(path.join(directory, "f.txt"), "feat\n")
+    await execFileAsync("git", ["commit", "-am", "feat"], { cwd: directory })
+    await execFileAsync("git", ["checkout", "master"], {
+      cwd: directory,
+    }).catch(() =>
+      execFileAsync("git", ["checkout", "main"], { cwd: directory }),
+    )
+    await writeFile(path.join(directory, "f.txt"), "main\n")
+    await execFileAsync("git", ["commit", "-am", "main"], { cwd: directory })
+    // conflicting merge, then resolve
+    await execFileAsync("git", ["merge", "feat"], { cwd: directory }).catch(
+      () => undefined,
+    )
+    await writeFile(path.join(directory, "f.txt"), "resolved\n")
+
+    const result = await createControlledCommit({
+      cwd: directory,
+      files: ["f.txt"],
+      message: "fix: resolve conflict",
+    })
+    expect(result.commitMessage).toBe("fix: resolve conflict")
+
+    // the merge is concluded (no MERGE_HEAD) and the commit landed
+    await expect(
+      execFileAsync("git", ["rev-parse", "-q", "--verify", "MERGE_HEAD"], {
+        cwd: directory,
+      }),
+    ).rejects.toThrow()
+    const parents = await execFileAsync(
+      "git",
+      ["show", "--no-patch", "--format=%P", "HEAD"],
+      { cwd: directory },
+    )
+    expect(parents.stdout.trim().split(" ")).toHaveLength(2) // a real merge commit
+  })
+
   it("surfaces repository hook failures", async () => {
     const directory = await createRepo()
 

@@ -19,6 +19,13 @@ const defaultGitRunner = async (cwd, args) => {
     };
   }
 };
+async function isMergeInProgress(runGit, cwd) {
+  for (const ref of ["MERGE_HEAD", "CHERRY_PICK_HEAD"]) {
+    const result = await runGit(cwd, ["rev-parse", "-q", "--verify", ref]);
+    if (result.exitCode === 0) return true;
+  }
+  return false;
+}
 async function createControlledCommit(input) {
   const runGit = input.runGit ?? defaultGitRunner;
   const repoCheck = await runGit(input.cwd, [
@@ -40,7 +47,8 @@ async function createControlledCommit(input) {
     throw new Error("No changes to commit.");
   }
   const commitMessage = normalizeCommitMessage(input.message, input.taskId);
-  const commitArgs = input.files && input.files.length > 0 ? ["commit", "-m", commitMessage, "--", ...input.files] : ["commit", "-m", commitMessage];
+  const inMerge = input.files && input.files.length > 0 && await isMergeInProgress(runGit, input.cwd);
+  const commitArgs = input.files && input.files.length > 0 && !inMerge ? ["commit", "-m", commitMessage, "--", ...input.files] : ["commit", "-m", commitMessage];
   const commitResult = await runGit(input.cwd, commitArgs);
   if (commitResult.exitCode !== 0) {
     throw new Error(

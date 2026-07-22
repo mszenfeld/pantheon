@@ -37,7 +37,6 @@
  */
 
 /** Any C0 or C1 control byte — never present in a legitimate path. */
-// eslint-disable-next-line no-control-regex
 const CONTROL_BYTE = /[\x00-\x1f\x7f-\x9f]/
 
 /** Paths that stage the entire tree (or an unbounded slice of it) regardless of cwd. */
@@ -59,6 +58,10 @@ const ROOT_EQUIVALENT = new Set([
  */
 export function isScopedCommitPath(value: unknown): value is string {
   if (typeof value !== "string") return false
+  // The hooks validate, and git stages, DIFFERENT spellings unless they coincide: the guard
+  // trims, but `git add -- "a.ts "` stages the literal edge-whitespace path. Reject any entry
+  // that is not already trimmed so the validated string and the staged string are identical.
+  if (value !== value.trim()) return false
   const path = value.trim()
   if (path === "") return false
   // No C0/C1 control bytes: a real path never carries them, and rejecting them at the gate means

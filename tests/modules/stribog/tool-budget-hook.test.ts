@@ -465,6 +465,10 @@ describe("stribog tool-budget hook", () => {
       { files: [`src/x${String.fromCharCode(10)}FORGED`] },
       { files: [`src/x${String.fromCharCode(0)}y`] },
       { files: [`src/x${String.fromCharCode(27)}]0;pwn`] },
+      // edge whitespace: the guard validates the trimmed spelling but git stages the raw one,
+      // so a whitespace-decorated twin is refused so validated and staged strings coincide
+      { files: ["src/a.ts "] },
+      { files: [" src/a.ts"] },
     ]) {
       const message = await hook(STRIBOG)(input("av_commit"), { args })
         .then(() => "<allowed>")
