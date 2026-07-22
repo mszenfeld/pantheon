@@ -26,7 +26,11 @@ import { createCheckpoint } from "./checkpoint.js"
 /** Provider id the pinned default needs (`openai` for `openai/gpt-5.5`). */
 const DEFAULT_MODEL_PROVIDER = providerIdOf(DEFAULT_SVAROG_MODEL)
 
-export const AppVerkSvarogPlugin: Plugin = async ({ client }) => {
+export const AppVerkSvarogPlugin: Plugin = async ({
+  client,
+  worktree,
+  directory,
+}) => {
   registerAgentMetadata(svarogSpecialistInfo)
 
   // The hook is the load-bearing enforcement; attribution via getSessionAgentCached resolves
@@ -36,6 +40,9 @@ export const AppVerkSvarogPlugin: Plugin = async ({ client }) => {
     // Option C: auto-create the recovery checkpoint on the first mutating tool; restore is manual.
     // Phase-1 assumes Svarog edits the repo it runs in (process.cwd()).
     createCheckpoint: (sessionID) => createCheckpoint(process.cwd(), sessionID),
+    // Same base av_commit stages against, so the staging-scope guard checks the path the
+    // commit would actually add (falls back to process.cwd() when the host supplies neither).
+    worktree: worktree ?? directory,
   })
 
   // One-time degraded-mode warning if the pinned default's provider is absent.

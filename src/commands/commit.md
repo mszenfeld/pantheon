@@ -13,9 +13,10 @@ Based on the uncommitted changes in the git repository, generate a concise and d
 Create the commit with the prepared message, but DON'T push it as part of this command (publishing is a separate, explicit `create_pr` step — see the Publishing section below).
 
 Use the `av_commit` tool to create the commit. Passing `files` stages exactly those paths;
-omitting it stages the entire worktree (`git add -A`). Executor sessions (Stribog/Svarog) must
-always pass `files` — a bare call is refused by their hooks so a dispatched agent cannot sweep
-the operator's unrelated changes into its commit.
+omitting it stages the entire worktree (`git add -A`). Executor sessions (Stribog/Svarog) must always pass
+`files` naming individual files: their hooks refuse a bare call, a whole-tree pathspec, a
+directory (Svarog), or a path the session never edited (Stribog), so a dispatched agent cannot
+sweep the operator's unrelated changes into its commit.
 
 If the task ID is empty, omit `taskId` from the tool call.
 If the task ID is present, pass it through as `taskId`.

@@ -22,6 +22,7 @@ const MUTATING_NATIVE = /* @__PURE__ */ new Set([
   "apply_patch"
 ]);
 function makeSvarogToolHook(deps) {
+  const worktree = deps.worktree ?? process.cwd();
   const checkpointed = /* @__PURE__ */ new Set();
   const hook = async (input, output) => {
     try {
@@ -70,9 +71,9 @@ function makeSvarogToolHook(deps) {
         }
         const directory = findDirectoryPath(files, (path) => {
           try {
-            return statSync(resolve(path)).isDirectory();
+            return statSync(resolve(worktree, path)).isDirectory();
           } catch {
-            return false;
+            return true;
           }
         });
         if (directory !== void 0) {

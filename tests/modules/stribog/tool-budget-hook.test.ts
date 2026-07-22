@@ -364,8 +364,12 @@ describe("stribog tool-budget hook", () => {
   })
 
   it("allows create_pr for a confirmed stribog session (publish-path carve-out)", async () => {
-    await expect(hook(STRIBOG)(input("create_pr"), out())).resolves.toBeUndefined()
-    await expect(hook(STRIBOG)(input("Create-PR"), out())).resolves.toBeUndefined()
+    await expect(
+      hook(STRIBOG)(input("create_pr"), out()),
+    ).resolves.toBeUndefined()
+    await expect(
+      hook(STRIBOG)(input("Create-PR"), out()),
+    ).resolves.toBeUndefined()
     // floor regression guard (AC-14): dispatch family stays denied
     await expect(hook(STRIBOG)(input("execute_recipe"), out())).rejects.toThrow(
       "STRIBOG_TOOL_DENIED",
@@ -373,9 +377,13 @@ describe("stribog tool-budget hook", () => {
   })
 
   it("allows create_branch for a confirmed stribog session (branch-path carve-out)", async () => {
-    await expect(hook(STRIBOG)(input("create_branch"), out())).resolves.toBeUndefined()
+    await expect(
+      hook(STRIBOG)(input("create_branch"), out()),
+    ).resolves.toBeUndefined()
     // case/hyphen normalization must not bypass the carve-out
-    await expect(hook(STRIBOG)(input("Create-Branch"), out())).resolves.toBeUndefined()
+    await expect(
+      hook(STRIBOG)(input("Create-Branch"), out()),
+    ).resolves.toBeUndefined()
     // floor regression guard: dispatch family stays denied
     await expect(hook(STRIBOG)(input("execute_recipe"), out())).rejects.toThrow(
       "STRIBOG_TOOL_DENIED",
@@ -476,7 +484,12 @@ describe("stribog deny-guidance: skill/edit-alias tools redirect, not escalate",
   }
 
   it("denies skill-activation tools but tells the model to CONTINUE (not escalate)", async () => {
-    for (const t of ["skill", "load_appverk_skill", "activate_skill", "load-appverk-skill"]) {
+    for (const t of [
+      "skill",
+      "load_appverk_skill",
+      "activate_skill",
+      "load-appverk-skill",
+    ]) {
       const msg = await denialOf(t)
       expect(msg).toMatch(/^STRIBOG_TOOL_DENIED/)
       expect(msg).toMatch(/continue/i)
@@ -594,10 +607,7 @@ describe("stribog serena toolset (accepted; single-file edits budgeted)", () => 
 
   it("does not gate serena for a non-stribog session (fail-open)", async () => {
     await expect(
-      hook("Perun - Coordinator")(
-        input("serena_execute_shell_command"),
-        out(),
-      ),
+      hook("Perun - Coordinator")(input("serena_execute_shell_command"), out()),
     ).resolves.toBeUndefined()
   })
 })
@@ -660,7 +670,10 @@ describe("stribog bash secret-generation tripwire (minter != actuator)", () => {
 
   it("does NOT gate secret-gen bash for a non-stribog session (fail-open)", async () => {
     await expect(
-      hook("Perun - Coordinator")(input("bash"), bashOut("openssl rand -hex 32")),
+      hook("Perun - Coordinator")(
+        input("bash"),
+        bashOut("openssl rand -hex 32"),
+      ),
     ).resolves.toBeUndefined()
   })
 })

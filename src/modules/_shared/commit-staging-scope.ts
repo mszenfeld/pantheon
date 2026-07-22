@@ -96,17 +96,23 @@ export function bareCommitDenialMessage(marker: string, agent: string): string {
   )
 }
 
-/** Denial text for an `av_commit` naming a directory (stages everything beneath it). */
+/**
+ * Denial text for an `av_commit` path that is a directory — or that could not be resolved to a
+ * file at all, which the guard treats the same way (fail-closed: it cannot prove the path is a
+ * single file, and for Svarog this check is the only scope binding).
+ */
 export function directoryCommitDenialMessage(
   marker: string,
   agent: string,
   path: string,
 ): string {
   return (
-    `${marker}: av_commit named '${path}', which is a DIRECTORY — staging it would add every ` +
-    `modified and untracked file beneath it, including unrelated operator changes in the shared ` +
-    `worktree, and create_pr would publish them. ${agent} must name individual file paths. ` +
-    `Retry with the concrete files you changed. Do NOT ESCALATE for this — it is a redirect.`
+    `${marker}: av_commit named '${path}', which is not a single existing file — a DIRECTORY ` +
+    `would stage every modified and untracked file beneath it (including unrelated operator ` +
+    `changes in the shared worktree, which create_pr would then publish), and a path that does ` +
+    `not resolve cannot be checked at all. ${agent} must name individual, existing file paths, ` +
+    `relative to the repo root or absolute. Retry with the concrete files you changed. Do NOT ` +
+    `ESCALATE for this — it is a redirect.`
   )
 }
 

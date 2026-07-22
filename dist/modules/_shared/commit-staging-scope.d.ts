@@ -47,7 +47,11 @@ declare function findDirectoryPath(files: readonly string[], isDirectory: (path:
  * whole-tree spelling for another.
  */
 declare function bareCommitDenialMessage(marker: string, agent: string): string;
-/** Denial text for an `av_commit` naming a directory (stages everything beneath it). */
+/**
+ * Denial text for an `av_commit` path that is a directory — or that could not be resolved to a
+ * file at all, which the guard treats the same way (fail-closed: it cannot prove the path is a
+ * single file, and for Svarog this check is the only scope binding).
+ */
 declare function directoryCommitDenialMessage(marker: string, agent: string, path: string): string;
 /**
  * Denial text for a Stribog `av_commit` naming a path outside its edit budget. The budget set is

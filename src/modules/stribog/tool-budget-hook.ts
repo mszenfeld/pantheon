@@ -85,6 +85,14 @@ export interface StribogToolHookDeps {
    * trust class as bash (no edit budget). Absent/empty ⇒ allow-list is CORE_BUILTINS only.
    */
   extraPatterns?: string[]
+  /**
+   * Root that relative paths resolve against — the session worktree, threaded from the plugin's
+   * `PluginInput` (`worktree ?? directory`), mirroring `makeVelesPlanningWriteGate`. It MUST be
+   * the same base `av_commit` stages with (`cwd: context.worktree ?? context.directory`), or the
+   * edit budget and the commit's `files` would key on different origins and the membership check
+   * would compare unrelated paths. Defaults to `process.cwd()`.
+   */
+  worktree?: string
 }
 
 export interface StribogToolHookInput {
@@ -170,6 +178,8 @@ export interface StribogToolHookHandle {
 export function makeStribogToolHook(
   deps: StribogToolHookDeps,
 ): StribogToolHookHandle {
+  /** Single resolution base for the budget keys AND the av_commit membership check. */
+  const worktree = deps.worktree ?? process.cwd()
   /** Per-session set of distinct, resolved absolute paths modified via edit/write. */
   const editedPaths = new Map<string, Set<string>>()
 
@@ -286,7 +296,7 @@ export function makeStribogToolHook(
                 "budget. This task exceeds Stribog's scope. Return the ESCALATE result now.",
             )
           }
-          consumeFileBudget(input.sessionID, resolve(rel))
+          consumeFileBudget(input.sessionID, resolve(worktree, rel))
           return // budgeted serena single-file edit — allowed
         }
         return // serena read / navigation / memory — allowed, unbudgeted
@@ -338,7 +348,7 @@ export function makeStribogToolHook(
         // rejected for free because it is never an edited file path.
         const edited = pathsFor(input.sessionID)
         for (const file of files) {
-          if (!edited.has(resolve(file.trim()))) {
+          if (!edited.has(resolve(worktree, file.trim()))) {
             throw new Error(
               unbudgetedCommitPathMessage(SCOPE_VIOLATION, file.trim(), [
                 ...edited,
@@ -432,7 +442,7 @@ export function makeStribogToolHook(
               "Stribog's scope. Return the ESCALATE result now.",
           )
         }
-        consumeFileBudget(input.sessionID, resolve(filePath))
+        consumeFileBudget(input.sessionID, resolve(worktree, filePath))
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : ""

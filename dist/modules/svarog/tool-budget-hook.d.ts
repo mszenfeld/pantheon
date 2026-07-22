@@ -6,6 +6,13 @@ interface SvarogToolHookDeps {
      *  per session. Failures are swallowed — the checkpoint is a recovery aid, never a gate. Omit in
      *  tests that do not exercise it. */
     createCheckpoint?: (sessionID: string) => void;
+    /**
+     * Root that relative paths resolve against — the session worktree, threaded from the plugin's
+     * `PluginInput` (`worktree ?? directory`), mirroring `makeVelesPlanningWriteGate`. It MUST be
+     * the same base `av_commit` stages with (`cwd: context.worktree ?? context.directory`), or the
+     * directory check would stat a path the commit never touches. Defaults to `process.cwd()`.
+     */
+    worktree?: string;
 }
 interface SvarogToolHookInput {
     tool: string;

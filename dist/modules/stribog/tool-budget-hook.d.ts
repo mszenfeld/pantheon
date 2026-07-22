@@ -8,6 +8,14 @@ interface StribogToolHookDeps {
      * trust class as bash (no edit budget). Absent/empty ⇒ allow-list is CORE_BUILTINS only.
      */
     extraPatterns?: string[];
+    /**
+     * Root that relative paths resolve against — the session worktree, threaded from the plugin's
+     * `PluginInput` (`worktree ?? directory`), mirroring `makeVelesPlanningWriteGate`. It MUST be
+     * the same base `av_commit` stages with (`cwd: context.worktree ?? context.directory`), or the
+     * edit budget and the commit's `files` would key on different origins and the membership check
+     * would compare unrelated paths. Defaults to `process.cwd()`.
+     */
+    worktree?: string;
 }
 interface StribogToolHookInput {
     tool: string;

@@ -45,6 +45,13 @@ export interface SvarogToolHookDeps {
    *  per session. Failures are swallowed — the checkpoint is a recovery aid, never a gate. Omit in
    *  tests that do not exercise it. */
   createCheckpoint?: (sessionID: string) => void
+  /**
+   * Root that relative paths resolve against — the session worktree, threaded from the plugin's
+   * `PluginInput` (`worktree ?? directory`), mirroring `makeVelesPlanningWriteGate`. It MUST be
+   * the same base `av_commit` stages with (`cwd: context.worktree ?? context.directory`), or the
+   * directory check would stat a path the commit never touches. Defaults to `process.cwd()`.
+   */
+  worktree?: string
 }
 
 export interface SvarogToolHookInput {
@@ -92,6 +99,8 @@ export interface SvarogToolHookHandle {
 export function makeSvarogToolHook(
   deps: SvarogToolHookDeps,
 ): SvarogToolHookHandle {
+  /** Resolution base for av_commit path checks — the same base the tool stages against. */
+  const worktree = deps.worktree ?? process.cwd()
   /** Sessions for which the one-time recovery checkpoint has already been created. */
   const checkpointed = new Set<string>()
 
@@ -206,11 +215,14 @@ export function makeSvarogToolHook(
         // committed dist/ tree, for one), so membership would deny real work. Its floor is the
         // shape gate plus: no named path may be a DIRECTORY, which would stage everything
         // modified or untracked beneath it.
+        // Resolved against the SAME base av_commit stages with, so the guard stats the path the
+        // commit would actually add. Fails CLOSED: a path that cannot be stat'ed cannot be
+        // proven to be a file, and this guard is the only scope binding Svarog has.
         const directory = findDirectoryPath(files, (path) => {
           try {
-            return statSync(resolve(path)).isDirectory()
+            return statSync(resolve(worktree, path)).isDirectory()
           } catch {
-            return false // nonexistent path — `git add` reports it, this guard does not
+            return true
           }
         })
         if (directory !== undefined) {
