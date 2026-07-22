@@ -103,8 +103,92 @@ export async function createPr(input: CreatePrInput): Promise<CreatePrResult> {
   // FR-3: base counts as omitted iff undefined or empty after trim (whitespace-only).
   const baseProvided = input.base !== undefined && input.base.trim() !== ""
   const providedBase = baseProvided ? validateRef("base", input.base as string) : undefined
-  void title
-  void body
-  void providedBase
-  throw new Error("create_pr: guards not implemented")
+
+  const runGit = input.runGit ?? defaultGitRunner
+  const draft = input.draft ?? false
+
+  // G1 — head resolution (FR-2): defaultGitRunner returns stdout untrimmed by contract.
+  const headResult = await runGit(input.cwd, ["branch", "--show-current"])
+  if (headResult.exitCode !== 0) {
+    throw new Error(
+      headResult.stderr.trim() ||
+        headResult.stdout.trim() ||
+        "git branch --show-current failed.",
+    )
+  }
+  const head = headResult.stdout.trim()
+  if (head === "") {
+    throw new Error(
+      "create_pr: HEAD is detached — check out a branch first (use create_branch).",
+    )
+  }
+
+  // G5 — base auto-resolution (FR-3) when omitted / empty after trim.
+  let base: string
+  if (providedBase !== undefined) {
+    base = providedBase
+  } else {
+    const baseResult = await runGit(input.cwd, [
+      "symbolic-ref",
+      "--short",
+      "refs/remotes/origin/HEAD",
+    ])
+    if (baseResult.exitCode !== 0) {
+      throw new Error(
+        "create_pr: cannot resolve the default branch of 'origin' — pass 'base' " +
+          "explicitly or run: git remote set-head origin --auto",
+      )
+    }
+    base = baseResult.stdout.trim().replace(/^origin\//, "")
+  }
+
+  // G2 — head defense-in-depth re-validation (§5.2, field 'head'), then never publish from base.
+  validateRef("head", head)
+  if (head === base) {
+    throw new Error(
+      `create_pr: refusing to push and open a PR from the base branch '${base}' — ` +
+        "create a feature branch first (use create_branch).",
+    )
+  }
+
+  // G3/G4 — provider detection (FR-5); skipped entirely when a provider is injected (test seam).
+  let provider = input.provider
+  if (provider === undefined) {
+    const originResult = await runGit(input.cwd, ["remote", "get-url", "origin"])
+    if (originResult.exitCode !== 0) {
+      throw new Error("create_pr: no 'origin' remote is configured.")
+    }
+    const originUrl = originResult.stdout.trim()
+    if (detectProvider(originUrl) !== "github") {
+      throw new Error(
+        "create_pr: unsupported git host for PR creation (supported: github.com). " +
+          `origin: ${JSON.stringify(originUrl)}`,
+      )
+    }
+    provider = githubPrProvider(input.runGh ?? defaultGhRunner)
+  }
+
+  // FR-6 — the first and only mutation. Never --force, never a refspec (C-6).
+  const pushResult = await runGit(input.cwd, ["push", "-u", "origin", head])
+  if (pushResult.exitCode !== 0) {
+    throw new Error(
+      pushResult.stderr.trim() || pushResult.stdout.trim() || "git push failed.",
+    )
+  }
+
+  // FR-7/FR-8 — PR creation; failure after the durable push is a partial result, never a throw.
+  try {
+    const { url } = await provider.createPullRequest({
+      cwd: input.cwd,
+      head,
+      base,
+      title,
+      body,
+      draft,
+    })
+    return { head, base, pushed: true, prCreated: true, draft, url }
+  } catch (error) {
+    const prError = error instanceof Error ? error.message : String(error)
+    return { head, base, pushed: true, prCreated: false, draft, prError }
+  }
 }
