@@ -66,5 +66,5 @@ None (the single fix batch was approved in full).
 ## Recovery
 
 - Loop-touched files: `docs/specs/create-branch-tool-2.md` (one approved fix batch applied; **the file is untracked in git — changes are uncommitted and the snapshot is the only rollback path**), `docs/specs/reviews/create-branch-tool-2-review.state.json`, `docs/specs/reviews/create-branch-tool-2-review.md`. Post-loop, the operator session additionally applied the SR-006/SR-007/SR-008 fixes (outside loop accounting; the SR-008 fix also repaired a NUL byte that was physically missing from the `fix\u0000alert` vector — as committed, the row had asserted a valid ASCII input to be S3-invalid).
-- Pre-loop snapshot: `docs/specs/reviews/create-branch-tool-2.pre-loop.bak`. To roll back, copy the snapshot over the spec — never `git restore` on the spec.
+- Pre-loop snapshot: `docs/specs/reviews/create-branch-tool-2.pre-loop.bak` — an uncommitted local working file, never checked into git; it exists only in the originating working tree, not in the repository's tracked tree. To roll back (from that same working tree), copy the snapshot over the spec — never `git restore` on the spec.
 - Nothing was committed by the loop.

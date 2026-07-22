@@ -39,7 +39,7 @@ const svarogSpecialistInfo = {
         trigger: "Carry out a designed multi-file / cross-symbol refactor and verify it"
       }
     ],
-    workflowContribution: "For multi-file feature/refactor work that needs the full toolset (edit many files, run the suite), dispatch `svarog` (the heavy/main executor). For a trivial 1-2 file mechanical change or environment bring-up, use `stribog`; if the design is unsettled, plan with `veles` first. Svarog stops at READY with a verified diff and does not commit -- review the diff, then the user runs `/commit`."
+    workflowContribution: "For multi-file feature/refactor work that needs the full toolset (edit many files, run the suite), dispatch `svarog` (the heavy/main executor). For a trivial 1-2 file mechanical change or environment bring-up, use `stribog`; if the design is unsettled, plan with `veles` first. Svarog finishes at READY with a verified diff; commits go only through the sanctioned `av_commit` tool (executor publish chain create_branch -> av_commit -> create_pr; 2026-07-22 decision), never bash `git commit` -- review the diff, then commit via `av_commit` or `/commit`."
   }
 };
 export {

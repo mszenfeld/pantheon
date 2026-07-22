@@ -390,8 +390,8 @@ describe("createPr parameter validation (AC-1: zero spawns, normative template)"
     await rejectsWith({ taskId: "INC 212" }, /field 'taskId' violates rule K1 \(invalid-characters\): "INC 212"/)
     await rejectsWith({ taskId: "-x" }, /field 'taskId' violates rule K2 \(leading-dash\): "-x"/)
     await rejectsWith({ body: "x".repeat(64_001) }, /field 'body' violates rule B1 \(max-length-64000-bytes\)/)
-    await rejectsWith({ body: "nul byte" }, /field 'body' violates rule B2 \(control-characters\)/)
-    await rejectsWith({ body: "escbyte" }, /rule B2 \(control-characters\)/)
+    await rejectsWith({ body: "nul\x00byte" }, /field 'body' violates rule B2 \(control-characters\)/)
+    await rejectsWith({ body: "esc\x1Bbyte" }, /rule B2 \(control-characters\)/)
     await rejectsWith({ base: "a b" }, /field 'base' violates rule R1 \(invalid-characters\): "a b"/)
     await rejectsWith({ base: "-d" }, /field 'base' violates rule R2 \(leading-dash\): "-d"/)
     await rejectsWith({ base: "a..b" }, /field 'base' violates rule R3 \(dot-dot\): "a\.\.b"/)
@@ -485,9 +485,9 @@ function ruleError(field: string, ruleId: string, slug: string, value: string): 
   )
 }
 
-const TITLE_CONTROL = /[ --]/
+const TITLE_CONTROL = /[\x00-\x1F\x7F-\x9F]/
 // Body allows \t (U+0009), \n (U+000A), \r (U+000D); bans all other C0/C1 controls.
-const BODY_CONTROL = /[ ---]/
+const BODY_CONTROL = /[\x00-\x08\x0B\x0C\x0E-\x1F\x7F-\x9F]/
 
 function validateTitle(rawTitle: string): string {
   const title = rawTitle.trim()

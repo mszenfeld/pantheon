@@ -180,4 +180,11 @@ describe("makeSvarogToolHook", () => {
     await allows("Create-Branch") // normalization must not bypass the carve-out
     await denies("execute_recipe") // floor regression guard
   })
+
+  it("allows av_commit — the sanctioned commit path (executor-chain doctrine, 2026-07-22)", async () => {
+    // Svarog's hook is allow-by-default and av_commit is not floor-denied; this pin documents
+    // the doctrine decision so a future floor/deny change cannot silently cut the chain's
+    // commit link (create_branch → av_commit → create_pr).
+    await allows("av_commit")
+  })
 })

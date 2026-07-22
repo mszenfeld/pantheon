@@ -1,12 +1,14 @@
 import { execFile } from "node:child_process"
-import { mkdtemp, writeFile } from "node:fs/promises"
+import { mkdtemp, rm, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import path from "node:path"
 import { promisify } from "node:util"
-import { describe, expect, it } from "vitest"
+import { afterEach, describe, expect, it } from "vitest"
 import { createBranch } from "../../../src/modules/commit/create-branch.js"
 
 const execFileAsync = promisify(execFile)
+
+const createdDirs: string[] = []
 
 /**
  * §7.2 mandatory fixture: init + user config + an INITIAL COMMIT (git
@@ -15,6 +17,7 @@ const execFileAsync = promisify(execFile)
  */
 async function createRepoWithCommit(): Promise<{ cwd: string; initialHead: string }> {
   const cwd = await mkdtemp(path.join(tmpdir(), "av-opencode-create-branch-"))
+  createdDirs.push(cwd)
   await execFileAsync("git", ["init"], { cwd })
   await execFileAsync("git", ["config", "user.email", "dev@example.com"], { cwd })
   await execFileAsync("git", ["config", "user.name", "Dev User"], { cwd })
@@ -36,6 +39,13 @@ async function branchList(cwd: string, pattern: string): Promise<string> {
 }
 
 describe("createBranch integration (real git)", () => {
+  afterEach(async () => {
+    for (const dir of createdDirs) {
+      await rm(dir, { recursive: true, force: true })
+    }
+    createdDirs.length = 0
+  })
+
   it("AC-7: creates and switches to the composed branch", async () => {
     const { cwd } = await createRepoWithCommit()
     const result = await createBranch({

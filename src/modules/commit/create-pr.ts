@@ -101,8 +101,10 @@ export async function createPr(input: CreatePrInput): Promise<CreatePrResult> {
   const taskId = validateTaskId(input.taskId)
   const body = validateBody(resolveBody(input.body, taskId))
   // FR-3: base counts as omitted iff undefined or empty after trim (whitespace-only).
-  const baseProvided = input.base !== undefined && input.base.trim() !== ""
-  const providedBase = baseProvided ? validateRef("base", input.base as string) : undefined
+  const providedBase =
+    input.base !== undefined && input.base.trim() !== ""
+      ? validateRef("base", input.base)
+      : undefined
 
   const runGit = input.runGit ?? defaultGitRunner
   const draft = input.draft ?? false

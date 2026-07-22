@@ -26,8 +26,9 @@ Unlike Stribog's closed deny-by-default allow-list, Svarog is a **broad-access m
 4. **Bash secret-generation tripwire:** if a `bash` call matches known secret-generation patterns (`openssl rand/genrsa`, `uuidgen`, `/dev/urandom`, `randomBytes`, `secrets.token`, `os.urandom`, `uuid4`, `gpg --gen-key`, `ssh-keygen`, …), it is refused with `SVAROG_SECRET_DENIED`. Every other bash command passes (host-shell trust boundary — Svarog is not containment). This is defense-in-depth behind the hardened `svarog.md` refusal; the real boundary is that secrets are minted by `zmora-setup` and never injected into a Svarog session.
 5. **Serena-editor carve-out:** the named serena refactor editors (`create_text_file`, `replace_content`, `replace_regex`, `replace_symbol_body`, `insert_after_symbol`, `insert_before_symbol`, `rename_symbol`, `safe_delete_symbol`) are **allowed before the immutable floor** — which would otherwise deny them via its mutation-verb / `_symbol` / `_content` / `_text_file` patterns. Memory writes (`_write_memory`, `_delete_memory`) and the shell escape (`execute_shell_command`) are NOT in this carve-out and fall through to the floor.
 6. **`question` deny:** Svarog runs headless and has no `question` tool. A task that needs a decision is an `ESCALATE` — not a question. No `isImmutableDeny` pattern covers `question`, so this is an explicit step.
-7. **Shared `isImmutableDeny` floor** (reused from the stribog contract, unchanged): denies secret-minting (`execute_recipe`), dispatch/leaf (`task`, `dispatch_parallel`, `dispatch_background`, `poll_background`, `wait_background`, the `dispatch_*` / `*_task` patterns), shell/exec (`*_execute_shell`, `*_shell_command`), and DB/DDL mutation verbs and serena memory writes (`serena_write_memory`, `serena_replace_symbol_body`, `serena_replace_content`, `serena_create_text_file` — the floor's version of these; the carve-out at step 5 allows the legitimate refactor subset BEFORE the floor reaches them). **No config can re-enable these.**
-8. **Allow-by-default:** everything else — `edit`, `write`, `multiedit`, serena reads and diagnostics (`read_file`, `find_symbol`, `get_diagnostics_for_file`, …), `skill` / `load_appverk_skill`, and so on.
+7. **Publish/branch carve-out (executor-chain doctrine, 2026-07-22):** `create_pr` (validated push + PR — `docs/specs/create-pr-tool.md` §5.5) and `create_branch` (convention-validated branch creation — `docs/specs/create-branch-tool-2.md` §5.4) are **allowed before the immutable floor** — which would otherwise deny them via its `create_` verb pattern. `av_commit` needs no such carve-out: under the allow-by-default design it is not floor-denied to begin with, and its access is sanctioned by the same 2026-07-22 executor-chain decision (`docs/specs/create-pr-tool.md` §9 item 5, MoA finding ARCH-001) that authorizes the self-serve publish chain `create_branch` → `av_commit` → `create_pr`.
+8. **Shared `isImmutableDeny` floor** (reused from the stribog contract, unchanged): denies secret-minting (`execute_recipe`), dispatch/leaf (`task`, `dispatch_parallel`, `dispatch_background`, `poll_background`, `wait_background`, the `dispatch_*` / `*_task` patterns), shell/exec (`*_execute_shell`, `*_shell_command`), and DB/DDL mutation verbs and serena memory writes (`serena_write_memory`, `serena_replace_symbol_body`, `serena_replace_content`, `serena_create_text_file` — the floor's version of these; the carve-out at step 5 allows the legitimate refactor subset BEFORE the floor reaches them). **No config can re-enable these.**
+9. **Allow-by-default:** everything else — `edit`, `write`, `multiedit`, serena reads and diagnostics (`read_file`, `find_symbol`, `get_diagnostics_for_file`, …), `skill` / `load_appverk_skill`, and so on.
 
 The declared tool list (`src/modules/svarog/allowed-tools.ts`) is a **declaration** — the source the prompt frontmatter is rendered from. As with Stribog, opencode 1.17.3 honors `config.agent.svarog.tools` but operates **default-allow**, so the hook remains the authoritative gate.
 
@@ -110,7 +111,7 @@ Svarog **always** ends its turn with exactly one fenced ` ```json ` block and no
 
 | `status` | Meaning |
 |---|---|
-| `READY` | The task is done and the full suite/build ran green. Does **not** mean "committed" — Svarog stops at READY and never commits. |
+| `READY` | The task is done and the full suite/build ran green. Does **not** mean "committed" — Svarog never commits via bash; commits go only through the sanctioned `av_commit` tool. |
 | `FAIL` | Svarog tried and the tests/build do not pass. The auto-created checkpoint (`refs/svarog/ckpt/<session>`) lets the operator restore the tree. |
 | `ESCALATE` | Out of scope or needs a decision (open question in `reason`). |
 
@@ -119,7 +120,7 @@ Svarog **always** ends its turn with exactly one fenced ` ```json ` block and no
 - `verification` — the suite/build command and its pass/fail result.
 - `checkpoint` — the deterministic `refs/svarog/ckpt/<session>` namespace where the recovery ref was auto-created before the first edit. Svarog cannot resolve its own session id, so it reports this template, not a concrete `ses_…` value; the operator enumerates the real ref via `git for-each-ref refs/svarog/ckpt/`.
 
-**Svarog stops at READY and never commits.** Review the diff, then run `/commit`.
+**Svarog never commits via bash — commits go only through the `av_commit` tool.** Review the diff, then commit via `av_commit` (or `/commit`).
 
 ## Model selection
 

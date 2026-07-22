@@ -59,8 +59,7 @@ async function createPr(input) {
   const title = validateTitle(input.title);
   const taskId = validateTaskId(input.taskId);
   const body = validateBody(resolveBody(input.body, taskId));
-  const baseProvided = input.base !== void 0 && input.base.trim() !== "";
-  const providedBase = baseProvided ? validateRef("base", input.base) : void 0;
+  const providedBase = input.base !== void 0 && input.base.trim() !== "" ? validateRef("base", input.base) : void 0;
   const runGit = input.runGit ?? defaultGitRunner;
   const draft = input.draft ?? false;
   const headResult = await runGit(input.cwd, ["branch", "--show-current"]);

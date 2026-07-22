@@ -279,17 +279,29 @@ export function makeStribogToolHook(
 
       // create_pr — the sanctioned publish path (validated, argv-only, never force; push + PR
       // in one audited plugin tool — docs/specs/create-pr-tool.md). The bash mutating-git
-      // tripwire and the commit plugin's block-push gate are unchanged; this early-return only
-      // lets the tool through the `create_` verb of the isImmutableDeny floor (step 3).
+      // tripwire and the commit plugin's block-push gate are unchanged; this early-return
+      // exempts the tool from BOTH the `create_` verb of the isImmutableDeny floor (step 3)
+      // AND the step-4 allow-list gate — which no extraTools config could grant instead
+      // (validateExtraToolsPattern statically rejects `create_`-verb ids and covering globs).
       // Unbudgeted: not an edit/write tool.
       if (norm === "create_pr") return
 
       // create_branch — the sanctioned branch path (convention-validated, argv-only, no
       // shell; same-commit checkout — docs/specs/create-branch-tool-2.md §5.3). The bash
-      // mutating-git tripwire (git checkout denial) is unchanged; this early-return only
-      // lets the plugin tool through the `create_` verb of the isImmutableDeny floor
-      // (step 3). Unbudgeted: not an edit/write tool.
+      // mutating-git tripwire (git checkout denial) is unchanged; this early-return exempts
+      // the plugin tool from both the `create_` verb of the isImmutableDeny floor (step 3)
+      // and the step-4 allow-list gate (extraTools cannot grant `create_`-verb ids).
+      // Unbudgeted: not an edit/write tool.
       if (norm === "create_branch") return
+
+      // av_commit — the sanctioned commit path (controlled-commit: validated, staged-scope,
+      // argv-only — src/modules/commit/). Executor-chain doctrine decision (2026-07-22, MoA
+      // ARCH-001): attributed executors complete the full self-serve publish chain
+      // create_branch → av_commit → create_pr. av_commit is NOT floor-denied (no `create_`
+      // verb; `commit` is not a deny capability) — without this return it would fall only to
+      // the step-4 allow-list denial (not in CORE_BUILTINS). Bash `git commit` stays blocked
+      // by the commit plugin. Unbudgeted: not an edit/write tool.
+      if (norm === "av_commit") return
 
       const denyKey = raw.toLowerCase() // lowercased copy used ONLY for deny + extraPattern match
 

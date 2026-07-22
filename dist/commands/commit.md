@@ -112,5 +112,6 @@ never with bash `git checkout -b` (blocked for executors) or hand-typed `git bra
   Invalid: `feat/x` (type not in list), `feature/fix--alert` (double hyphen),
   `feature/.hidden` (leading dot), an `id` with spaces (`INC 212` — pass `INC-212`).
 - A failed checkout after a successful create returns `checkedOut: false` plus
-  `checkoutError` — the branch exists; resolve the blocker and check out manually. Re-running
-  the tool with the same segments fails with git's `already exists`.
+  `checkoutError` — the branch exists; resolve the blocker and check out manually where the
+  session permits `git checkout` (executor bash denies it — ask the operator instead).
+  Re-running the tool with the same segments fails with git's `already exists`.

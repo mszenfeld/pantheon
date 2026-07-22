@@ -78,9 +78,11 @@ function validateSegmentRules(segment: "id" | "description", value: string): str
 /**
  * §5.2.4 composed-name validation, N1–N11 in listed order, first failure
  * thrown. Defense-in-depth over composition and the exported direct-test
- * contract. N3 is unreachable as a first failure whenever expectedType is
- * a valid BranchType (a leading-dash name always fails N2 first); it is
- * kept for non-TypeScript callers and ordering fidelity.
+ * contract. N3 is unreachable for any caller: a leading-dash name's type
+ * part can never appear in BRANCH_TYPES, so N2's allow-list clause always
+ * fires first regardless of expectedType — including a non-TypeScript
+ * caller passing an arbitrary expectedType. N3 is retained solely for
+ * spec §5.2.4 rule-ordering fidelity.
  */
 export function validateBranchName(name: string, expectedType: BranchType): string {
   if (name.split("/").length - 1 !== 1)

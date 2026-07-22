@@ -27,10 +27,14 @@ The commit plugin is an **absorbed module** — its source, tests, and command a
 
 | Path | Role |
 |------|------|
-| `src/modules/commit/index.ts` | Plugin factory (`AppVerkCommitPlugin`); registers the `av_commit` tool and the `/commit` command. |
+| `src/modules/commit/index.ts` | Plugin factory (`AppVerkCommitPlugin`); registers the `av_commit`, `create_pr`, and `create_branch` tools and the `/commit` command. |
 | `src/modules/commit/bash-policy.ts` | `classifyBashCommand` workflow rail — blocks raw `git commit` / `git push` through the bash tool. |
 | `src/modules/commit/controlled-commit.ts` | Implements the `av_commit` tool (stage selected files, run `git commit` with the supplied message). |
 | `src/modules/commit/message-policy.ts` | Validates commit messages (Conventional Commits, rejects `Co-Authored-By` footers). |
+| `src/modules/commit/create-pr.ts` | Implements the `create_pr` tool: validates title/body/base/taskId, pushes the current branch (`git push -u origin <branch>`, never force), then delegates PR creation to a `PrProvider`; returns a partial-success result when the push lands but PR creation fails. |
+| `src/modules/commit/pr-provider.ts` | Defines the `PrProvider` interface and `detectProvider(originUrl)` — pure origin-URL parsing that recognizes `github.com` SSH/HTTPS remotes. |
+| `src/modules/commit/github-pr-provider.ts` | `githubPrProvider`: the GitHub `PrProvider` implementation, shelling out to `gh pr create` via `execFile` (never a shell string) and surfacing a distinct error when `gh` is missing. |
+| `src/modules/commit/create-branch.ts` | Implements the `create_branch` tool: normalizes/validates the `type`/`id`/`description` segments and the composed name, then creates (and by default checks out) the branch via argv-only git calls. |
 | `src/commands/commit.md` | The `/commit` prompt template. Copied to `dist/commands/commit.md` by `scripts/copy-root-assets.mjs`. |
 | `dist/modules/commit/*.js` | Build output produced by `tsup --config tsup.root.config.ts`. |
 | `tests/modules/commit/*.ts` | Unit and integration tests, run via the root `bun run test`. |
@@ -49,9 +53,11 @@ Because there is no per-workspace build script, the commit module builds and tes
 - Overwrites any existing `commit` command definition with the AppVerk workflow.
 - Loads the command template from the packaged markdown asset when available, with a source fallback in development.
 - Blocks direct `git commit` through the `bash` tool.
-- Blocks `git push` through the `bash` tool.
+- Blocks `git push` through the `bash` tool — the block message now redirects the caller to the `create_pr` tool.
 - Rejects `Co-Authored-By` footers.
 - Stages the selected files passed to `av_commit`, or all changes when no file list is provided.
+- Registers the `create_pr` tool: pushes the current branch (`git push -u origin <branch>`, never force) and opens a pull request via `gh`, guarding against publishing from the base branch and unsupported git hosts. A push that lands but a PR that fails to create returns a partial-success result (`pushed: true, prCreated: false` plus `prError`). See [`src/commands/commit.md`](../../src/commands/commit.md) for full usage.
+- Registers the `create_branch` tool: normalizes and validates the `type`/`id`/`description` segments and the composed name before running any git command, then creates (and by default checks out — `checkout` defaults to `true`) a convention-valid branch. A checkout failure after a successful create returns a partial-success result (`checkedOut: false` plus `checkoutError`) without deleting the branch. See [`src/commands/commit.md`](../../src/commands/commit.md) for full usage.
 
 ## Limitations
 

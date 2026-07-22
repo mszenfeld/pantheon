@@ -89,6 +89,7 @@ function makeStribogToolHook(deps) {
       }
       if (norm === "create_pr") return;
       if (norm === "create_branch") return;
+      if (norm === "av_commit") return;
       const denyKey = raw.toLowerCase();
       if (isImmutableDeny(denyKey)) {
         if (EDIT_EQUIVALENT_TOOL.test(denyKey.replace(/-/g, "_"))) {

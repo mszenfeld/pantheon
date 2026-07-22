@@ -373,6 +373,16 @@ describe("stribog tool-budget hook", () => {
       "STRIBOG_TOOL_DENIED",
     )
   })
+
+  it("allows av_commit for a confirmed stribog session (executor-chain carve-out)", async () => {
+    await expect(hook(STRIBOG)(input("av_commit"), out())).resolves.toBeUndefined()
+    // case/hyphen normalization must not bypass the carve-out
+    await expect(hook(STRIBOG)(input("Av-Commit"), out())).resolves.toBeUndefined()
+    // floor regression guard: dispatch family stays denied
+    await expect(hook(STRIBOG)(input("execute_recipe"), out())).rejects.toThrow(
+      "STRIBOG_TOOL_DENIED",
+    )
+  })
 })
 
 describe("stribog deny-guidance: skill/edit-alias tools redirect, not escalate", () => {

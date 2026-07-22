@@ -84,8 +84,8 @@ session's current branch to `origin` (never force), then creates the PR through 
   (`src/modules/_shared/stribog-extra-tools-contract.ts:65`) denies any tool id containing
   `create` as a whole underscore-segment — `create_pr` matches, exactly as `create_branch`
   does, so **both** executor hooks need the same named carve-out
-  (Stribog `src/modules/stribog/tool-budget-hook.ts:285`, Svarog
-  `src/modules/svarog/tool-budget-hook.ts:180`).
+  (Stribog `src/modules/stribog/tool-budget-hook.ts:287`, Svarog
+  `src/modules/svarog/tool-budget-hook.ts:181`).
 - Design decisions taken with the operator in the originating session (recorded here so the
   reviewer sees they are choices, not defaults):
   1. **One tool, not two** — push + PR in a single `create_pr` call; partial success is a
@@ -552,3 +552,12 @@ detection — so the real-git push path is exercised without `gh` or network.
    proceed in parallel; only the hook carve-out placement references the `create_branch`
    carve-out as its neighbor, which degrades gracefully to "same position, first carve-out"
    if this ships first.
+5. **Executor-chain doctrine (recorded decision, 2026-07-22, MoA review ARCH-001).** The §2
+   premise that `av_commit` supplies the chain's commit step is now enforced harness-side for
+   both executors: the operator resolved the prior "executors never commit / stop at READY"
+   doctrine in favor of the full self-serve chain `create_branch` → `av_commit` → `create_pr`.
+   Stribog gained an attribution-gated `av_commit` early-return beside this spec's §5.5
+   carve-outs (av_commit is not floor-denied; the carve-out exempts it from the step-4
+   allow-list); Svarog's allow-by-default hook passes `av_commit` without a carve-out, and its
+   prompt/doctrine texts ("Never commit.", "stops at READY (no commit)") were reworded to
+   "commits only via `av_commit`". Bash `git commit`/`git push` remain blocked for everyone.

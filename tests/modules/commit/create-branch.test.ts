@@ -268,8 +268,10 @@ describe("validateBranchName — direct composed-name vectors (§5.2.5 second ta
     { name: "feature/INC-212", expectedType: "fix", ruleId: "N2", slug: "type-mismatch" },
     { name: "feature/INC-212/", expectedType: "feature", ruleId: "N1", slug: "single-slash" },
     { name: "feature/../main", expectedType: "feature", ruleId: "N1", slug: "single-slash" },
-    // N3 is unreachable as a FIRST failure for any valid expectedType: a leading-dash name
-    // always fails N2 first ("-feature" is never the expected type). The row asserts N2.
+    // N3 is unreachable for any caller: a leading-dash name's type part can never be in
+    // BRANCH_TYPES, so N2's allow-list clause always fires first regardless of expectedType
+    // (even for a JS caller passing an arbitrary value). The row asserts N2; N3 is retained
+    // solely for spec §5.2.4 rule-ordering fidelity.
     { name: "-feature/INC-212", expectedType: "feature", ruleId: "N2", slug: "type-mismatch" },
     { name: "feature/.hidden", expectedType: "feature", ruleId: "N6", slug: "leading-dash-or-dot" },
     { name: "feature/x..y", expectedType: "feature", ruleId: "N8", slug: "consecutive-dots" },

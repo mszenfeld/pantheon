@@ -2,7 +2,7 @@
 title: "create_branch — convention-enforced git branch creation tool for executor agents"
 date: 2026-07-21
 source: "Headless Perun dispatch (Mode: spec), request: safe branch creation for Svarog/Stribog/commit flow — revised same day to a segmented-argument interface (type/id/description) with in-tool name composition; revised again the same day against MoA review findings (see §2 revision note 2)"
-supersedes: "docs/specs/create-branch-tool.md"
+supersedes: "docs/specs/create-branch-tool.md (uncommitted working draft — superseded before it was ever checked in; the path is not present in the repository tree)"
 approved: false
 ---
 
@@ -63,8 +63,8 @@ pure TypeScript before any git invocation.
 - **Discovered constraint that shapes this design:** the shared `isImmutableDeny` floor
   (`src/modules/_shared/stribog-extra-tools-contract.ts:65`) denies any tool id containing
   `create` as a whole underscore-segment. `create_branch` matches, so the floor denies the tool
-  for **both** executors — Stribog at `src/modules/stribog/tool-budget-hook.ts:292` (step 3) and
-  Svarog at `src/modules/svarog/tool-budget-hook.ts:186` (step 4). The originating request assumed
+  for **both** executors — Stribog at `src/modules/stribog/tool-budget-hook.ts:311` (step 3) and
+  Svarog at `src/modules/svarog/tool-budget-hook.ts:192` (step 4). The originating request assumed
   "Svarog is allow-by-default for plugin tools, so no Svarog change is needed"; that assumption
   does not hold (see §5.4 and §9).
 - **Revision note (2026-07-21):** the first draft of this spec took a single `name` string. The
@@ -86,6 +86,14 @@ pure TypeScript before any git invocation.
   vectors (§5.2.5); (7) added wrapper-level acceptance tests (§7.4 AC-13; the invariants AC moved
   to AC-14); (8) made the error-message template normative (§5.2, NFR-4); (9) made `checkedOut`
   unconditional in the result contract (FR-6/FR-7, §5.5).
+- **Revision note 3 (2026-07-22, post-implementation MoA review, ARCH-001):** the operator
+  resolved the executor-chain doctrine in favor of the full self-serve chain
+  `create_branch` → `av_commit` → `create_pr`: Stribog's hook gained an attribution-gated
+  `av_commit` early-return beside this spec's §5.4 carve-outs, and Svarog's "Never commit." /
+  "stops at READY (no commit)" doctrine texts were reworded to "commits only via `av_commit`".
+  This spec's own contract is unchanged; the note records the decision that makes the chain
+  this tool opens completable by the executors it is carved out for. Full record:
+  docs/specs/create-pr-tool.md §9 item 5.
 
 ## 3. Constraints
 
@@ -463,7 +471,7 @@ Alternatives considered and rejected:
 - **Operator `agents.stribog.extraTools: ["create_branch"]`** — rejected: impossible by design.
   `validateExtraToolsPattern` rejects exact ids that are immutable-denied
   (`src/modules/_shared/stribog-extra-tools-contract.ts:101-105`), and the runtime floor wins over
-  any extraPattern anyway (`tool-budget-hook.ts:289-292`).
+  any extraPattern anyway (`tool-budget-hook.ts:306-311`).
 - **Add to `STRIBOG_TOOLS`/`SVAROG_TOOLS`** — rejected: `tools-sync.test.ts:33` pins exact
   parity between `STRIBOG_TOOLS` structured entries and `CORE_BUILTINS` minus `bash`; the
   established pattern for hook-allowed non-builtin tools is hook-only with a comment in
@@ -650,7 +658,7 @@ Real temp repo via `mkdtemp` + `git init` + user config (pattern of
 ## 9. Deviations from the originating request
 
 1. **Svarog *does* need a (two-line) hook change** (D2, §5.4): the shared `isImmutableDeny`
-   floor denies the `create_` verb for Svarog at `src/modules/svarog/tool-budget-hook.ts:186`.
+   floor denies the `create_` verb for Svarog at `src/modules/svarog/tool-budget-hook.ts:192`.
    The request's "no Svarog change is needed" is incorrect on the evidence; the minimal carve-out
    is specified instead of loosening anything.
 2. **Return schema gains optional `checkoutError`** on the checkout-failure path only (D3, FR-7) —

@@ -146,6 +146,20 @@ function recordingGitRunner(
 }
 
 describe("createPr parameter validation (AC-1: zero spawns, normative template)", () => {
+  /** Byte-exact §5.2 normative template. */
+  function prRuleMessage(field: string, ruleId: string, slug: string, value: string): string {
+    return `create_pr: field '${field}' violates rule ${ruleId} (${slug}): ${JSON.stringify(value)}`
+  }
+
+  async function captureRejectMessage(promise: Promise<unknown>): Promise<string> {
+    try {
+      await promise
+    } catch (error) {
+      return (error as Error).message
+    }
+    return "<no throw>"
+  }
+
   async function rejectsWith(
     args: Partial<Parameters<typeof createPr>[0]>,
     pattern: RegExp,
@@ -157,21 +171,52 @@ describe("createPr parameter validation (AC-1: zero spawns, normative template)"
     expect(calls).toHaveLength(0)
   }
 
+  /** Same as rejectsWith, but pins the COMPLETE message byte-exactly (no regex). */
+  async function rejectsWithMessage(
+    args: Partial<Parameters<typeof createPr>[0]>,
+    message: string,
+  ) {
+    const { runGit, calls } = recordingGitRunner()
+    const actual = await captureRejectMessage(
+      createPr({ cwd: "/tmp/fake", title: "ok", runGit, ...args }),
+    )
+    expect(actual).toBe(message)
+    expect(calls).toHaveLength(0)
+  }
+
   it("rejects every rule with the exact template (field, ruleId, slug, JSON value)", async () => {
     await rejectsWith({ title: "   " }, /^create_pr: field 'title' violates rule T1 \(empty-title\): ""$/)
-    await rejectsWith({ title: "a".repeat(257) }, /rule T2 \(max-length-256-chars\)/)
-    await rejectsWith({ title: "two\nlines" }, /rule T3 \(control-characters\)/)
+    await rejectsWithMessage(
+      { title: "a".repeat(257) },
+      prRuleMessage("title", "T2", "max-length-256-chars", "a".repeat(257)),
+    )
+    await rejectsWithMessage(
+      { title: "two\nlines" },
+      prRuleMessage("title", "T3", "control-characters", "two\nlines"),
+    )
     await rejectsWith(
       { taskId: "INC 212" },
       /^create_pr: field 'taskId' violates rule K1 \(invalid-characters\): "INC 212"$/,
     )
     await rejectsWith({ taskId: "-x" }, /field 'taskId' violates rule K2 \(leading-dash\): "-x"/)
-    await rejectsWith({ body: "x".repeat(64_001) }, /field 'body' violates rule B1 \(max-length-64000-bytes\)/)
+    await rejectsWithMessage(
+      { body: "x".repeat(64_001) },
+      prRuleMessage("body", "B1", "max-length-64000-bytes", "x".repeat(64_001)),
+    )
     await rejectsWith({ body: "nul\x00byte" }, /rule B2 \(control-characters\)/)
     await rejectsWith({ body: "esc\x1Bbyte" }, /rule B2 \(control-characters\)/)
-    await rejectsWith({ base: "a b" }, /field 'base' violates rule R1 \(invalid-characters\): "a b"/)
-    await rejectsWith({ base: "-d" }, /field 'base' violates rule R2 \(leading-dash\): "-d"/)
-    await rejectsWith({ base: "a..b" }, /field 'base' violates rule R3 \(dot-dot\): "a\.\.b"/)
+    await rejectsWithMessage(
+      { base: "a b" },
+      prRuleMessage("base", "R1", "invalid-characters", "a b"),
+    )
+    await rejectsWithMessage(
+      { base: "-d" },
+      prRuleMessage("base", "R2", "leading-dash", "-d"),
+    )
+    await rejectsWithMessage(
+      { base: "a..b" },
+      prRuleMessage("base", "R3", "dot-dot", "a..b"),
+    )
     await rejectsWith(
       { base: "a//b" },
       /^create_pr: field 'base' violates rule R4 \(component-rules\): "a\/\/b"$/,
@@ -181,7 +226,10 @@ describe("createPr parameter validation (AC-1: zero spawns, normative template)"
     await rejectsWith({ base: "a/.h" }, /rule R4 \(component-rules\)/)
     await rejectsWith({ base: "x.lock" }, /rule R4 \(component-rules\)/)
     await rejectsWith({ base: "x." }, /rule R4 \(component-rules\)/)
-    await rejectsWith({ base: "a".repeat(241) }, /rule R5 \(max-length-240-bytes\)/)
+    await rejectsWithMessage(
+      { base: "a".repeat(241) },
+      prRuleMessage("base", "R5", "max-length-240-bytes", "a".repeat(241)),
+    )
   })
 
   it("evaluation order is title → taskId → body → base; first failing rule reported", async () => {
