@@ -461,6 +461,10 @@ describe("stribog tool-budget hook", () => {
       { files: ["src/*.ts"] },
       { files: ["../outside.ts"] },
       { files: ["src/a.ts", "."] },
+      // C0/C1 control bytes: a forged path is refused at the gate, never echoed raw (CWE-117)
+      { files: [`src/x${String.fromCharCode(10)}FORGED`] },
+      { files: [`src/x${String.fromCharCode(0)}y`] },
+      { files: [`src/x${String.fromCharCode(27)}]0;pwn`] },
     ]) {
       const message = await hook(STRIBOG)(input("av_commit"), { args })
         .then(() => "<allowed>")

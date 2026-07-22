@@ -343,9 +343,9 @@ export function makeStribogToolHook(
           throw new Error(bareCommitDenialMessage(SCOPE_VIOLATION, "Stribog"))
         }
         // EXACT membership, resolved on the same basis the budget itself uses
-        // (`resolve(...)` against the process cwd — the repo Stribog runs in). Never a suffix
-        // compare: `a.ts` must not satisfy an edited `/repo/src/a.ts`, and a directory is
-        // rejected for free because it is never an edited file path.
+        // (`resolve(worktree, ...)` — the injected worktree, the same base av_commit stages
+        // with). Never a suffix compare: `a.ts` must not satisfy an edited `/repo/src/a.ts`,
+        // and a directory is rejected for free because it is never an edited file path.
         const edited = pathsFor(input.sessionID)
         for (const file of files) {
           if (!edited.has(resolve(worktree, file.trim()))) {

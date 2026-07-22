@@ -36,6 +36,10 @@
  *    every modified and untracked file beneath it.
  */
 
+/** Any C0 or C1 control byte — never present in a legitimate path. */
+// eslint-disable-next-line no-control-regex
+const CONTROL_BYTE = /[\x00-\x1f\x7f-\x9f]/
+
 /** Paths that stage the entire tree (or an unbounded slice of it) regardless of cwd. */
 const ROOT_EQUIVALENT = new Set([
   ".",
@@ -57,6 +61,11 @@ export function isScopedCommitPath(value: unknown): value is string {
   if (typeof value !== "string") return false
   const path = value.trim()
   if (path === "") return false
+  // No C0/C1 control bytes: a real path never carries them, and rejecting them at the gate means
+  // a forged path (a newline log-injection, a NUL, an OSC/BEL terminal escape) is refused here
+  // rather than echoed raw into a denial message — the module's own CWE-117 discipline, matching
+  // the JSON-encoded create_pr/create_branch error templates.
+  if (CONTROL_BYTE.test(path)) return false
   if (path.startsWith(":")) return false // pathspec magic — not a plain path
   if (path.includes("*") || path.includes("?") || path.includes("["))
     return false // glob
@@ -115,12 +124,12 @@ export function directoryCommitDenialMessage(
   path: string,
 ): string {
   return (
-    `${marker}: av_commit named '${path}', which is not a single existing file — a DIRECTORY ` +
-    `would stage every modified and untracked file beneath it (including unrelated operator ` +
-    `changes in the shared worktree, which create_pr would then publish), and a path that does ` +
-    `not resolve cannot be checked at all. ${agent} must name individual, existing file paths, ` +
-    `relative to the repo root or absolute. Retry with the concrete files you changed. Do NOT ` +
-    `ESCALATE for this — it is a redirect.`
+    `${marker}: av_commit named ${JSON.stringify(path)}, which is not a single existing file — a ` +
+    `DIRECTORY would stage every modified and untracked file beneath it (including unrelated ` +
+    `operator changes in the shared worktree, which create_pr would then publish), and a path ` +
+    `that does not resolve cannot be checked at all. ${agent} must name individual, existing ` +
+    `file paths, relative to the repo root or absolute. Retry with the concrete files you ` +
+    `changed. Do NOT ESCALATE for this — it is a redirect.`
   )
 }
 
@@ -135,8 +144,8 @@ export function unbudgetedCommitPathMessage(
   edited: readonly string[],
 ): string {
   return (
-    `${marker}: av_commit named '${path}', which Stribog did not edit this session ` +
-    `(edited: ${edited.length > 0 ? edited.join(", ") : "nothing yet"}). A leaf actuator ` +
+    `${marker}: av_commit named ${JSON.stringify(path)}, which Stribog did not edit this session ` +
+    `(edited: ${edited.length > 0 ? edited.map((p) => JSON.stringify(p)).join(", ") : "nothing yet"}). A leaf actuator ` +
     `commits only the files it changed — staging anything else would publish unrelated work ` +
     `past the edit budget. Retry naming exactly those paths (the same spelling works: an ` +
     `absolute path, or one relative to the repo root). If the task genuinely requires ` +
