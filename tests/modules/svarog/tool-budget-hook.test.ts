@@ -174,4 +174,10 @@ describe("makeSvarogToolHook", () => {
     await allows("Create-PR") // case/hyphen normalization must not bypass the carve-out
     await denies("execute_recipe") // floor regression guard (AC-15)
   })
+
+  it("allows create_branch — the sanctioned branch path — past the immutable floor", async () => {
+    await allows("create_branch")
+    await allows("Create-Branch") // normalization must not bypass the carve-out
+    await denies("execute_recipe") // floor regression guard
+  })
 })

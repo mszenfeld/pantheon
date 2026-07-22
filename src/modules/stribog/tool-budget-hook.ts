@@ -284,6 +284,13 @@ export function makeStribogToolHook(
       // Unbudgeted: not an edit/write tool.
       if (norm === "create_pr") return
 
+      // create_branch — the sanctioned branch path (convention-validated, argv-only, no
+      // shell; same-commit checkout — docs/specs/create-branch-tool-2.md §5.3). The bash
+      // mutating-git tripwire (git checkout denial) is unchanged; this early-return only
+      // lets the plugin tool through the `create_` verb of the isImmutableDeny floor
+      // (step 3). Unbudgeted: not an edit/write tool.
+      if (norm === "create_branch") return
+
       const denyKey = raw.toLowerCase() // lowercased copy used ONLY for deny + extraPattern match
 
       // (3) Immutable capability-deny wins over any extraPattern (incl. a permissive glob). This is

@@ -180,6 +180,12 @@ export function makeSvarogToolHook(
       // isImmutableDeny floor (step 4).
       if (norm === "create_pr") return
 
+      // create_branch — the sanctioned branch path (convention-validated, argv-only, no
+      // shell; same-commit checkout — docs/specs/create-branch-tool-2.md §5.3). The bash
+      // mutating-git tripwire is unchanged; this early-return only lets the plugin tool
+      // through the `create_` verb of the isImmutableDeny floor (step 4).
+      if (norm === "create_branch") return
+
       // (4) shared immutable floor, reused unchanged: shell-escape, dispatch/task, execute_recipe,
       // DB/DDL mutation verbs, serena `_memory` writes. (Bare `edit`/`write` are exempt by design;
       // they reach step 5 and are allowed.)

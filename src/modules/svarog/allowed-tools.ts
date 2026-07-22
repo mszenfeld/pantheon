@@ -6,6 +6,7 @@
 // deliberately NOT listed here (mirrors Stribog keeping serena hook-only). Bash `git commit`/`push`
 // are globally blocked by the commit plugin; Svarog stops at READY and never commits.
 // create_pr is HOOK-allowed (publish-path carve-out in tool-budget-hook.ts), not listed here.
+// create_branch is HOOK-allowed (branch-path carve-out in tool-budget-hook.ts), not listed here.
 
 const STRUCTURED_TOOLS = ["Read", "Glob", "Grep", "Edit", "Write", "MultiEdit"]
 
