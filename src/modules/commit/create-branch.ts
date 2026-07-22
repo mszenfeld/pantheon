@@ -46,7 +46,7 @@ const SEGMENT_CHARSET = /^[A-Za-z0-9._-]+$/
  * §5.2.1 description normalization, in this exact order:
  * trim → collapse every whitespace run to a single "-" → strip edge dashes.
  * JS \s covers tab, newline, CR, VT, FF, NBSP (U+00A0), and the Unicode
- * space separators, so "fix\talert", "fix\nalert", "fix alert" all
+ * space separators, so "fix\talert", "fix\nalert", "fix alert" all
  * normalize to "fix-alert"; "---" strips to "" (failing S2).
  */
 function normalizeDescription(raw: string): string {
@@ -139,4 +139,52 @@ export function composeBranchName(input: {
 
   const name = id !== "" ? `${type}/${id}-${description}` : `${type}/${description}`
   return validateBranchName(name, type as BranchType)
+}
+
+/**
+ * §5.3 git invocation contract: at most two argv invocations through the
+ * injected runner — ["branch", name], then ["checkout", name] when
+ * checkout resolves true. No existence pre-check (git is the single
+ * source of truth; a pre-check would be TOCTOU anyway). FR-4: create
+ * failure throws stderr (or stdout when stderr is empty), mirroring
+ * controlled-commit.ts. FR-7/D3: checkout failure is a partial-success
+ * result — the branch is never auto-deleted.
+ */
+export async function createBranch(
+  input: CreateBranchInput,
+): Promise<CreateBranchResult> {
+  const name = composeBranchName(input) // FR-2: throws before any git on invalid input
+  const runGit = input.runGit ?? defaultGitRunner
+  const checkout = input.checkout ?? true
+
+  const createResult = await runGit(input.cwd, ["branch", name])
+  if (createResult.exitCode !== 0) {
+    throw new Error(
+      createResult.stderr.trim() ||
+        createResult.stdout.trim() ||
+        "git branch failed.",
+    )
+  }
+
+  if (!checkout) {
+    return { name, created: true, checkedOut: false }
+  }
+
+  const checkoutResult = await runGit(input.cwd, ["checkout", name])
+  if (checkoutResult.exitCode !== 0) {
+    return {
+      name,
+      created: true,
+      checkedOut: false,
+      // FR-7 capture rule: stderr → stdout → fixed string; never empty on
+      // this path, so checkedOut:false + checkoutError stays distinguishable
+      // from the checkout:false path (FR-6).
+      checkoutError:
+        checkoutResult.stderr.trim() ||
+        checkoutResult.stdout.trim() ||
+        "git checkout failed.",
+    }
+  }
+
+  return { name, created: true, checkedOut: true }
 }

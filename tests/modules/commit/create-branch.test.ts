@@ -3,7 +3,9 @@ import {
   BRANCH_TYPES,
   composeBranchName,
   validateBranchName,
+  createBranch,
 } from "../../../src/modules/commit/create-branch.js"
+import type { GitResult, GitRunner } from "../../../src/modules/commit/controlled-commit.js"
 
 /** Byte-exact §5.2 normative template. */
 function segmentMessage(
@@ -285,5 +287,146 @@ describe("validateBranchName — direct composed-name vectors (§5.2.5 second ta
     expect(captureMessage(() => validateBranchName(name, expectedType))).toBe(
       segmentMessage("name", ruleId, slug, name),
     )
+  })
+})
+
+function recordingRunner(results: GitResult[]): {
+  calls: string[][]
+  runGit: GitRunner
+} {
+  const calls: string[][] = []
+  const queue = [...results]
+  return {
+    calls,
+    runGit: async (_cwd, args) => {
+      calls.push(args)
+      return queue.shift() ?? { stdout: "", stderr: "", exitCode: 0 }
+    },
+  }
+}
+
+const ok: GitResult = { stdout: "", stderr: "", exitCode: 0 }
+
+describe("createBranch — orchestration (§5.3, FR-4..FR-7)", () => {
+  it("AC-2: happy path, default checkout — branch then checkout, exact result", async () => {
+    const { calls, runGit } = recordingRunner([ok, ok])
+    const result = await createBranch({
+      cwd: "/repo",
+      type: "feature",
+      id: "INC-212",
+      description: "fix alert dialog",
+      runGit,
+    })
+    expect(calls).toEqual([
+      ["branch", "feature/INC-212-fix-alert-dialog"],
+      ["checkout", "feature/INC-212-fix-alert-dialog"],
+    ])
+    // toEqual pins the exact shape: no checkoutError key on success
+    expect(result).toEqual({
+      name: "feature/INC-212-fix-alert-dialog",
+      created: true,
+      checkedOut: true,
+    })
+  })
+
+  it("AC-3: id omitted, empty, and whitespace-only all compose the same name", async () => {
+    for (const id of [undefined, "", "  "]) {
+      const { runGit } = recordingRunner([ok, ok])
+      const result = await createBranch({
+        cwd: "/repo",
+        type: "feature",
+        id,
+        description: "fix alert dialog",
+        runGit,
+      })
+      expect(result.name).toBe("feature/fix-alert-dialog")
+      expect(result.checkedOut).toBe(true)
+    }
+  })
+
+  it("AC-4: checkout:false makes only the branch call; checkedOut always emitted", async () => {
+    const { calls, runGit } = recordingRunner([ok])
+    const result = await createBranch({
+      cwd: "/repo",
+      type: "feature",
+      description: "x",
+      checkout: false,
+      runGit,
+    })
+    expect(calls).toEqual([["branch", "feature/x"]])
+    expect(result).toEqual({ name: "feature/x", created: true, checkedOut: false })
+  })
+
+  it("AC-5: create failure rejects with git stderr; no checkout follows", async () => {
+    const { calls, runGit } = recordingRunner([
+      {
+        stdout: "",
+        stderr: "fatal: a branch named 'feature/x' already exists.\n",
+        exitCode: 128,
+      },
+    ])
+    await expect(
+      createBranch({ cwd: "/repo", type: "feature", description: "x", runGit }),
+    ).rejects.toThrow("fatal: a branch named 'feature/x' already exists.")
+    expect(calls).toEqual([["branch", "feature/x"]])
+  })
+
+  it("AC-6: checkout failure returns the partial result — never a throw, never a delete", async () => {
+    const { calls, runGit } = recordingRunner([
+      ok,
+      { stdout: "", stderr: "error: you need to resolve your current index first\n", exitCode: 1 },
+    ])
+    const result = await createBranch({
+      cwd: "/repo",
+      type: "feature",
+      description: "x",
+      runGit,
+    })
+    expect(result).toEqual({
+      name: "feature/x",
+      created: true,
+      checkedOut: false,
+      checkoutError: "error: you need to resolve your current index first",
+    })
+    expect(calls).toHaveLength(2) // no delete / third call
+  })
+
+  it("AC-6 (FR-7 capture rule): empty stderr falls back to stdout, then to the fixed string", async () => {
+    const stdoutOnly = recordingRunner([
+      ok,
+      { stdout: "detail on stdout\n", stderr: "", exitCode: 1 },
+    ])
+    const withStdout = await createBranch({
+      cwd: "/repo",
+      type: "feature",
+      description: "x",
+      runGit: stdoutOnly.runGit,
+    })
+    expect(withStdout.checkoutError).toBe("detail on stdout")
+
+    const silent = recordingRunner([ok, { stdout: "", stderr: "", exitCode: 1 }])
+    const bothEmpty = await createBranch({
+      cwd: "/repo",
+      type: "feature",
+      description: "x",
+      runGit: silent.runGit,
+    })
+    expect(bothEmpty.checkoutError).toBe("git checkout failed.")
+  })
+
+  it("AC-1 (zero-git property): invalid input records zero runner calls", async () => {
+    const vectors: Array<{ type: string; id?: string; description: string }> = [
+      { type: "feat", description: "x" },
+      { type: "feature", description: "" },
+      { type: "feature", id: "-INC-1", description: "x" },
+      { type: "feature", description: "a".repeat(233) },
+    ]
+    for (const vector of vectors) {
+      const { calls, runGit } = recordingRunner([])
+      await expect(
+        createBranch({ cwd: "/repo", ...vector, runGit }),
+      ).rejects.toThrow("create_branch: segment ")
+      expect(calls).toHaveLength(0)
+    }
   })
 })
