@@ -37,10 +37,12 @@ describe("create_branch wrapper registration (AC-13)", () => {
 
   it("type is a plain string schema, not a schema-level enum (FR-1/NFR-4)", async () => {
     const plugin = await AppVerkCommitPlugin({} as never)
-    const toolDef = plugin.tool?.create_branch as { args: Record<string, SchemaLike> }
+    const toolDef = plugin.tool?.create_branch as unknown as { args: Record<string, SchemaLike> }
     // An out-of-enum value must PASS the schema so it reaches the S1
     // TypeScript error (the normative template) instead of a schema reject.
-    expect(toolDef.args.type.safeParse("feat").success).toBe(true)
+    const typeSchema = toolDef.args.type
+    expect(typeSchema).toBeDefined()
+    expect(typeSchema?.safeParse("feat").success).toBe(true)
   })
 
   it("resolves cwd as worktree ?? directory, defaults checkout to true, returns pretty JSON", async () => {
