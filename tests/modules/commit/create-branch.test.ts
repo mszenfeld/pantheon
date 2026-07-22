@@ -5,7 +5,10 @@ import {
   validateBranchName,
   createBranch,
 } from "../../../src/modules/commit/create-branch.js"
-import type { GitResult, GitRunner } from "../../../src/modules/commit/controlled-commit.js"
+import type {
+  GitResult,
+  GitRunner,
+} from "../../../src/modules/commit/controlled-commit.js"
 
 /** Byte-exact §5.2 normative template. */
 function segmentMessage(
@@ -63,10 +66,19 @@ describe("composeBranchName — valid vectors (§5.2.5 segment table)", () => {
     },
     // empty / whitespace-only id is omitted (FR-3)
     { input: { type: "feature", id: "", description: "x" }, name: "feature/x" },
-    { input: { type: "feature", id: "  ", description: "x" }, name: "feature/x" },
-    { input: { type: "docs", description: "readme update" }, name: "docs/readme-update" },
+    {
+      input: { type: "feature", id: "  ", description: "x" },
+      name: "feature/x",
+    },
+    {
+      input: { type: "docs", description: "readme update" },
+      name: "docs/readme-update",
+    },
     // dots allowed; not `..`, not `.lock`, not trailing `.`
-    { input: { type: "release", description: "2026.07.21" }, name: "release/2026.07.21" },
+    {
+      input: { type: "release", description: "2026.07.21" },
+      name: "release/2026.07.21",
+    },
     {
       input: { type: "chore", description: "update dependencies" },
       name: "chore/update-dependencies",
@@ -80,14 +92,23 @@ describe("composeBranchName — valid vectors (§5.2.5 segment table)", () => {
       input: { type: "hotfix", description: "fix  alert   dialog" },
       name: "hotfix/fix-alert-dialog",
     },
-    { input: { type: "feature", description: "fix\talert" }, name: "feature/fix-alert" },
-    { input: { type: "feature", description: "fix\nalert" }, name: "feature/fix-alert" },
+    {
+      input: { type: "feature", description: "fix\talert" },
+      name: "feature/fix-alert",
+    },
+    {
+      input: { type: "feature", description: "fix\nalert" },
+      name: "feature/fix-alert",
+    },
     // NBSP U+00A0 is Unicode whitespace: collapsed by \s+
     {
       input: { type: "feature", description: "fix\u00A0alert" },
       name: "feature/fix-alert",
     },
-    { input: { type: "feature", description: "3rd retry" }, name: "feature/3rd-retry" },
+    {
+      input: { type: "feature", description: "3rd retry" },
+      name: "feature/3rd-retry",
+    },
     // type is trimmed before the S1 enum match
     {
       input: { type: "  fix  ", description: "auth login error" },
@@ -154,12 +175,22 @@ describe("composeBranchName — invalid vectors (§5.2.5 segment table, exact te
     {
       label: "S3 non-ASCII description",
       input: { type: "feature", description: "café" },
-      message: segmentMessage("description", "S3", "invalid-characters", "café"),
+      message: segmentMessage(
+        "description",
+        "S3",
+        "invalid-characters",
+        "café",
+      ),
     },
     {
       label: "S3 NUL control byte",
       input: { type: "feature", description: "fix\u0000alert" },
-      message: segmentMessage("description", "S3", "invalid-characters", "fix\u0000alert"),
+      message: segmentMessage(
+        "description",
+        "S3",
+        "invalid-characters",
+        "fix\u0000alert",
+      ),
     },
     {
       label: "S4 leading-dash id",
@@ -179,12 +210,23 @@ describe("composeBranchName — invalid vectors (§5.2.5 segment table, exact te
     {
       label: "S6 double hyphen",
       input: { type: "feature", description: "fix--alert" },
-      message: segmentMessage("description", "S6", "double-hyphen", "fix--alert"),
+      message: segmentMessage(
+        "description",
+        "S6",
+        "double-hyphen",
+        "fix--alert",
+      ),
     },
     {
-      label: "S6 normalization-produced double hyphen (post-normalization value echoed)",
+      label:
+        "S6 normalization-produced double hyphen (post-normalization value echoed)",
       input: { type: "feature", description: "fix - alert" },
-      message: segmentMessage("description", "S6", "double-hyphen", "fix---alert"),
+      message: segmentMessage(
+        "description",
+        "S6",
+        "double-hyphen",
+        "fix---alert",
+      ),
     },
     {
       label: "S6 double-hyphen id",
@@ -199,12 +241,22 @@ describe("composeBranchName — invalid vectors (§5.2.5 segment table, exact te
     {
       label: "S8 lock suffix",
       input: { type: "feature", description: "x.lock" },
-      message: segmentMessage("description", "S8", "lock-suffix-or-trailing-dot", "x.lock"),
+      message: segmentMessage(
+        "description",
+        "S8",
+        "lock-suffix-or-trailing-dot",
+        "x.lock",
+      ),
     },
     {
       label: "S8 trailing dot",
       input: { type: "feature", description: "x." },
-      message: segmentMessage("description", "S8", "lock-suffix-or-trailing-dot", "x."),
+      message: segmentMessage(
+        "description",
+        "S8",
+        "lock-suffix-or-trailing-dot",
+        "x.",
+      ),
     },
     {
       label: "composed N7 via id ending in dash (segments individually pass)",
@@ -242,12 +294,17 @@ describe("composeBranchName — invalid vectors (§5.2.5 segment table, exact te
 describe("validateBranchName — direct composed-name vectors (§5.2.5 second table)", () => {
   it("returns the name on success", () => {
     expect(
-      validateBranchName("feature/INC-212-fix-alert-dialog-slide-animation", "feature"),
+      validateBranchName(
+        "feature/INC-212-fix-alert-dialog-slide-animation",
+        "feature",
+      ),
     ).toBe("feature/INC-212-fix-alert-dialog-slide-animation")
-    expect(validateBranchName("feature/fix-alert-dialog-slide-animation", "feature")).toBe(
-      "feature/fix-alert-dialog-slide-animation",
+    expect(
+      validateBranchName("feature/fix-alert-dialog-slide-animation", "feature"),
+    ).toBe("feature/fix-alert-dialog-slide-animation")
+    expect(validateBranchName("release/2026.07.21", "release")).toBe(
+      "release/2026.07.21",
     )
-    expect(validateBranchName("release/2026.07.21", "release")).toBe("release/2026.07.21")
     // N11 boundary: exactly 240 bytes
     expect(validateBranchName(`feature/${"a".repeat(232)}`, "feature")).toBe(
       `feature/${"a".repeat(232)}`,
@@ -260,23 +317,88 @@ describe("validateBranchName — direct composed-name vectors (§5.2.5 second ta
     ruleId: string
     slug: string
   }> = [
-    { name: "feature/", expectedType: "feature", ruleId: "N4", slug: "empty-description-part" },
-    { name: "feature/INC 212", expectedType: "feature", ruleId: "N5", slug: "invalid-characters" },
-    { name: "feature/INC--212", expectedType: "feature", ruleId: "N7", slug: "double-hyphen" },
-    { name: "feat/INC-212", expectedType: "feature", ruleId: "N2", slug: "type-mismatch" },
-    { name: "fix/INC-212", expectedType: "feature", ruleId: "N2", slug: "type-mismatch" },
-    { name: "feature/INC-212", expectedType: "fix", ruleId: "N2", slug: "type-mismatch" },
-    { name: "feature/INC-212/", expectedType: "feature", ruleId: "N1", slug: "single-slash" },
-    { name: "feature/../main", expectedType: "feature", ruleId: "N1", slug: "single-slash" },
+    {
+      name: "feature/",
+      expectedType: "feature",
+      ruleId: "N4",
+      slug: "empty-description-part",
+    },
+    {
+      name: "feature/INC 212",
+      expectedType: "feature",
+      ruleId: "N5",
+      slug: "invalid-characters",
+    },
+    {
+      name: "feature/INC--212",
+      expectedType: "feature",
+      ruleId: "N7",
+      slug: "double-hyphen",
+    },
+    {
+      name: "feat/INC-212",
+      expectedType: "feature",
+      ruleId: "N2",
+      slug: "type-mismatch",
+    },
+    {
+      name: "fix/INC-212",
+      expectedType: "feature",
+      ruleId: "N2",
+      slug: "type-mismatch",
+    },
+    {
+      name: "feature/INC-212",
+      expectedType: "fix",
+      ruleId: "N2",
+      slug: "type-mismatch",
+    },
+    {
+      name: "feature/INC-212/",
+      expectedType: "feature",
+      ruleId: "N1",
+      slug: "single-slash",
+    },
+    {
+      name: "feature/../main",
+      expectedType: "feature",
+      ruleId: "N1",
+      slug: "single-slash",
+    },
     // N3 is unreachable for any caller: a leading-dash name's type part can never be in
     // BRANCH_TYPES, so N2's allow-list clause always fires first regardless of expectedType
     // (even for a JS caller passing an arbitrary value). The row asserts N2; N3 is retained
     // solely for spec §5.2.4 rule-ordering fidelity.
-    { name: "-feature/INC-212", expectedType: "feature", ruleId: "N2", slug: "type-mismatch" },
-    { name: "feature/.hidden", expectedType: "feature", ruleId: "N6", slug: "leading-dash-or-dot" },
-    { name: "feature/x..y", expectedType: "feature", ruleId: "N8", slug: "consecutive-dots" },
-    { name: "feature/x.lock", expectedType: "feature", ruleId: "N9", slug: "lock-suffix" },
-    { name: "feature/x.", expectedType: "feature", ruleId: "N10", slug: "trailing-dot" },
+    {
+      name: "-feature/INC-212",
+      expectedType: "feature",
+      ruleId: "N2",
+      slug: "type-mismatch",
+    },
+    {
+      name: "feature/.hidden",
+      expectedType: "feature",
+      ruleId: "N6",
+      slug: "leading-dash-or-dot",
+    },
+    {
+      name: "feature/x..y",
+      expectedType: "feature",
+      ruleId: "N8",
+      slug: "consecutive-dots",
+    },
+    {
+      name: "feature/x.lock",
+      expectedType: "feature",
+      ruleId: "N9",
+      slug: "lock-suffix",
+    },
+    {
+      name: "feature/x.",
+      expectedType: "feature",
+      ruleId: "N10",
+      slug: "trailing-dot",
+    },
     {
       name: `feature/${"a".repeat(233)}`,
       expectedType: "feature",
@@ -285,11 +407,14 @@ describe("validateBranchName — direct composed-name vectors (§5.2.5 second ta
     },
   ]
 
-  it.each(invalid)("$name → $ruleId", ({ name, expectedType, ruleId, slug }) => {
-    expect(captureMessage(() => validateBranchName(name, expectedType))).toBe(
-      segmentMessage("name", ruleId, slug, name),
-    )
-  })
+  it.each(invalid)(
+    "$name → $ruleId",
+    ({ name, expectedType, ruleId, slug }) => {
+      expect(captureMessage(() => validateBranchName(name, expectedType))).toBe(
+        segmentMessage("name", ruleId, slug, name),
+      )
+    },
+  )
 })
 
 function recordingRunner(results: GitResult[]): {
@@ -356,7 +481,11 @@ describe("createBranch — orchestration (§5.3, FR-4..FR-7)", () => {
       runGit,
     })
     expect(calls).toEqual([["branch", "feature/x"]])
-    expect(result).toEqual({ name: "feature/x", created: true, checkedOut: false })
+    expect(result).toEqual({
+      name: "feature/x",
+      created: true,
+      checkedOut: false,
+    })
   })
 
   it("AC-5: create failure rejects with git stderr; no checkout follows", async () => {
@@ -376,7 +505,11 @@ describe("createBranch — orchestration (§5.3, FR-4..FR-7)", () => {
   it("AC-6: checkout failure returns the partial result — never a throw, never a delete", async () => {
     const { calls, runGit } = recordingRunner([
       ok,
-      { stdout: "", stderr: "error: you need to resolve your current index first\n", exitCode: 1 },
+      {
+        stdout: "",
+        stderr: "error: you need to resolve your current index first\n",
+        exitCode: 1,
+      },
     ])
     const result = await createBranch({
       cwd: "/repo",
@@ -406,7 +539,10 @@ describe("createBranch — orchestration (§5.3, FR-4..FR-7)", () => {
     })
     expect(withStdout.checkoutError).toBe("detail on stdout")
 
-    const silent = recordingRunner([ok, { stdout: "", stderr: "", exitCode: 1 }])
+    const silent = recordingRunner([
+      ok,
+      { stdout: "", stderr: "", exitCode: 1 },
+    ])
     const bothEmpty = await createBranch({
       cwd: "/repo",
       type: "feature",

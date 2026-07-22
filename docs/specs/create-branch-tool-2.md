@@ -512,7 +512,10 @@ precisely because a bare denial makes models ESCALATE (documented in
 `stribog/tool-budget-hook.ts:31-47`). This edits only the *message* of a denial, never its
 behavior, so it does not loosen the bash policy (C-2); it is flagged here because the request
 said "do not modify the executor bash hooks" — the approver may defer this line to a follow-up
-without affecting FR-1…FR-11.
+without affecting FR-1…FR-11. **Status: implemented 2026-07-22** (initially deferred, then
+landed in the post-implementation review): both `GIT_DENIED` messages now redirect branch
+creation to `create_branch` and keep the ESCALATE guidance for every other branch/tree
+operation; `isMutatingGitCommand` and the deny decision are byte-identical (C-2 upheld).
 
 ### 5.5 Data flow
 

@@ -8,13 +8,20 @@ import {
   GH_MISSING_MESSAGE,
   githubPrProvider,
 } from "../../../src/modules/commit/github-pr-provider.js"
-import type { GitResult, GitRunner } from "../../../src/modules/commit/controlled-commit.js"
+import type {
+  GitResult,
+  GitRunner,
+} from "../../../src/modules/commit/controlled-commit.js"
 import { createPr } from "../../../src/modules/commit/create-pr.js"
 
 describe("detectProvider (§5.4 normative vectors)", () => {
   it("recognizes github.com in all three URL shapes, case-insensitively", () => {
-    expect(detectProvider("git@github.com:AppVerk/av-opencode-plugins.git")).toBe("github")
-    expect(detectProvider("https://github.com/AppVerk/av-opencode-plugins")).toBe("github")
+    expect(
+      detectProvider("git@github.com:AppVerk/av-opencode-plugins.git"),
+    ).toBe("github")
+    expect(
+      detectProvider("https://github.com/AppVerk/av-opencode-plugins"),
+    ).toBe("github")
     expect(detectProvider("ssh://git@github.com/AppVerk/x.git")).toBe("github")
     expect(detectProvider("https://GITHUB.COM/a/b.git")).toBe("github")
   })
@@ -28,7 +35,9 @@ describe("detectProvider (§5.4 normative vectors)", () => {
   })
 
   it("does NOT trim: the raw-trailing-newline vector is a caller-path row (AC-2)", () => {
-    expect(detectProvider("git@github.com:AppVerk/av-opencode-plugins.git\n")).toBeUndefined()
+    expect(
+      detectProvider("git@github.com:AppVerk/av-opencode-plugins.git\n"),
+    ).toBeUndefined()
   })
 })
 
@@ -37,7 +46,10 @@ interface FakeCall {
   args: string[]
 }
 
-function fakeGhRunner(result: GitResult): { runGh: GitRunner; calls: FakeCall[] } {
+function fakeGhRunner(result: GitResult): {
+  runGh: GitRunner
+  calls: FakeCall[]
+} {
   const calls: FakeCall[] = []
   const runGh: GitRunner = async (cwd, args) => {
     calls.push({ cwd, args: [...args] })
@@ -81,13 +93,17 @@ describe("githubPrProvider (gh argv contract, AC-9/AC-10)", () => {
       stderr: "",
       exitCode: 0,
     })
-    await githubPrProvider(runGh).createPullRequest({ ...PR_INPUT, draft: true })
+    await githubPrProvider(runGh).createPullRequest({
+      ...PR_INPUT,
+      draft: true,
+    })
     expect(calls[0]?.args.at(-1)).toBe("--draft")
   })
 
   it("keeps the last URL when several lines match (scan all lines, keep last match)", async () => {
     const { runGh } = fakeGhRunner({
-      stdout: "https://github.com/first\nsome text\nhttps://github.com/AppVerk/x/pull/9\ntrailing note\n",
+      stdout:
+        "https://github.com/first\nsome text\nhttps://github.com/AppVerk/x/pull/9\ntrailing note\n",
       stderr: "",
       exitCode: 0,
     })
@@ -96,31 +112,38 @@ describe("githubPrProvider (gh argv contract, AC-9/AC-10)", () => {
   })
 
   it("treats a no-URL stdout as a provider failure (FR-7 → FR-8 path)", async () => {
-    const { runGh } = fakeGhRunner({ stdout: "done\n", stderr: "", exitCode: 0 })
-    await expect(githubPrProvider(runGh).createPullRequest(PR_INPUT)).rejects.toThrow(
-      /returned no PR URL/,
-    )
+    const { runGh } = fakeGhRunner({
+      stdout: "done\n",
+      stderr: "",
+      exitCode: 0,
+    })
+    await expect(
+      githubPrProvider(runGh).createPullRequest(PR_INPUT),
+    ).rejects.toThrow(/returned no PR URL/)
   })
 
   it("propagates gh's stderr on non-zero exit", async () => {
     const { runGh } = fakeGhRunner({
       stdout: "",
-      stderr: "a pull request for branch already exists: https://github.com/AppVerk/x/pull/7\n",
+      stderr:
+        "a pull request for branch already exists: https://github.com/AppVerk/x/pull/7\n",
       exitCode: 1,
     })
-    await expect(githubPrProvider(runGh).createPullRequest(PR_INPUT)).rejects.toThrow(
-      /already exists/,
-    )
+    await expect(
+      githubPrProvider(runGh).createPullRequest(PR_INPUT),
+    ).rejects.toThrow(/already exists/)
   })
 
   it("maps a thrown spawn ENOENT to the FR-9 install message (AC-8)", async () => {
-    const enoent = Object.assign(new Error("spawn gh ENOENT"), { code: "ENOENT" })
+    const enoent = Object.assign(new Error("spawn gh ENOENT"), {
+      code: "ENOENT",
+    })
     const runGh: GitRunner = async () => {
       throw enoent
     }
-    await expect(githubPrProvider(runGh).createPullRequest(PR_INPUT)).rejects.toThrow(
-      GH_MISSING_MESSAGE,
-    )
+    await expect(
+      githubPrProvider(runGh).createPullRequest(PR_INPUT),
+    ).rejects.toThrow(GH_MISSING_MESSAGE)
   })
 
   it("AC-9: an empty body still emits the anti-interactive --body= token (=-joined, never omitted)", async () => {
@@ -147,11 +170,18 @@ function recordingGitRunner(
 
 describe("createPr parameter validation (AC-1: zero spawns, normative template)", () => {
   /** Byte-exact §5.2 normative template. */
-  function prRuleMessage(field: string, ruleId: string, slug: string, value: string): string {
+  function prRuleMessage(
+    field: string,
+    ruleId: string,
+    slug: string,
+    value: string,
+  ): string {
     return `create_pr: field '${field}' violates rule ${ruleId} (${slug}): ${JSON.stringify(value)}`
   }
 
-  async function captureRejectMessage(promise: Promise<unknown>): Promise<string> {
+  async function captureRejectMessage(
+    promise: Promise<unknown>,
+  ): Promise<string> {
     try {
       await promise
     } catch (error) {
@@ -185,7 +215,10 @@ describe("createPr parameter validation (AC-1: zero spawns, normative template)"
   }
 
   it("rejects every rule with the exact template (field, ruleId, slug, JSON value)", async () => {
-    await rejectsWith({ title: "   " }, /^create_pr: field 'title' violates rule T1 \(empty-title\): ""$/)
+    await rejectsWith(
+      { title: "   " },
+      /^create_pr: field 'title' violates rule T1 \(empty-title\): ""$/,
+    )
     await rejectsWithMessage(
       { title: "a".repeat(257) },
       prRuleMessage("title", "T2", "max-length-256-chars", "a".repeat(257)),
@@ -198,7 +231,10 @@ describe("createPr parameter validation (AC-1: zero spawns, normative template)"
       { taskId: "INC 212" },
       /^create_pr: field 'taskId' violates rule K1 \(invalid-characters\): "INC 212"$/,
     )
-    await rejectsWith({ taskId: "-x" }, /field 'taskId' violates rule K2 \(leading-dash\): "-x"/)
+    await rejectsWith(
+      { taskId: "-x" },
+      /field 'taskId' violates rule K2 \(leading-dash\): "-x"/,
+    )
     await rejectsWithMessage(
       { body: "x".repeat(64_001) },
       prRuleMessage("body", "B1", "max-length-64000-bytes", "x".repeat(64_001)),
@@ -234,9 +270,15 @@ describe("createPr parameter validation (AC-1: zero spawns, normative template)"
 
   it("evaluation order is title → taskId → body → base; first failing rule reported", async () => {
     // multi-violation input: bad title AND bad base — title wins
-    await rejectsWith({ title: "", base: "a b" }, /field 'title' violates rule T1/)
+    await rejectsWith(
+      { title: "", base: "a b" },
+      /field 'title' violates rule T1/,
+    )
     // bad taskId AND bad body — taskId wins (B1 validates the resolved body, taskId first)
-    await rejectsWith({ taskId: "bad id", body: "x".repeat(64_001) }, /field 'taskId' violates rule K1/)
+    await rejectsWith(
+      { taskId: "bad id", body: "x".repeat(64_001) },
+      /field 'taskId' violates rule K1/,
+    )
     // bad body AND bad base — body wins (validated before base per §5.2); anchored B2 template,
     // JSON.stringify of the embedded NUL control char renders it as a 6-char escape
     // sequence (backslash, letter u, four zero digits) -- the regex double-escapes below.
@@ -316,7 +358,12 @@ describe("createPr orchestration (AC-3…AC-7)", () => {
   it("AC-3: happy path — detection exercised, exact git sequence, exact result", async () => {
     const { runGit, calls } = recordingGitRunner(HAPPY_GIT)
     const { runGh } = happyGhRunner()
-    const result = await createPr({ cwd: "/repo", title: "feat: x", runGit, runGh })
+    const result = await createPr({
+      cwd: "/repo",
+      title: "feat: x",
+      runGit,
+      runGh,
+    })
     expect(calls.map((c) => c.args)).toEqual([
       ["branch", "--show-current"],
       ["symbolic-ref", "--short", "refs/remotes/origin/HEAD"],
@@ -335,14 +382,20 @@ describe("createPr orchestration (AC-3…AC-7)", () => {
 
   it("AC-4: explicit base skips symbolic-ref; whitespace-only base is treated as omitted", async () => {
     const explicit = recordingGitRunner(HAPPY_GIT)
-    await createPr({
+    const explicitResult = await createPr({
       cwd: "/repo",
       title: "t",
       base: "develop",
       runGit: explicit.runGit,
       runGh: happyGhRunner().runGh,
     })
-    expect(explicit.calls.map((c) => c.args[0])).toEqual(["branch", "remote", "push"])
+    expect(explicit.calls.map((c) => c.args[0])).toEqual([
+      "branch",
+      "remote",
+      "push",
+    ])
+    // the explicit base must also propagate, not merely skip resolution
+    expect(explicitResult.base).toBe("develop")
 
     const whitespace = recordingGitRunner(HAPPY_GIT)
     const result = await createPr({
@@ -363,24 +416,37 @@ describe("createPr orchestration (AC-3…AC-7)", () => {
       base?: string
     }> = [
       {
-        responses: { ...HAPPY_GIT, branch: { stdout: "\n", stderr: "", exitCode: 0 } },
-        pattern: /HEAD is detached — check out a branch first \(use create_branch\)/,
+        responses: {
+          ...HAPPY_GIT,
+          branch: { stdout: "\n", stderr: "", exitCode: 0 },
+        },
+        pattern:
+          /HEAD is detached — check out a branch first \(use create_branch\)/,
       },
       {
         responses: HAPPY_GIT,
         base: "feature/INC-212-x", // equals head
-        pattern: /refusing to push and open a PR from the base branch 'feature\/INC-212-x'/,
+        pattern:
+          /refusing to push and open a PR from the base branch 'feature\/INC-212-x'/,
       },
       {
-        responses: { ...HAPPY_GIT, remote: { stdout: "", stderr: "no origin", exitCode: 2 } },
+        responses: {
+          ...HAPPY_GIT,
+          remote: { stdout: "", stderr: "no origin", exitCode: 2 },
+        },
         pattern: /no 'origin' remote is configured/,
       },
       {
         responses: {
           ...HAPPY_GIT,
-          remote: { stdout: "git@gitlab.com:a/b.git\n", stderr: "", exitCode: 0 },
+          remote: {
+            stdout: "git@gitlab.com:a/b.git\n",
+            stderr: "",
+            exitCode: 0,
+          },
         },
-        pattern: /unsupported git host for PR creation \(supported: github\.com\)/,
+        pattern:
+          /unsupported git host for PR creation \(supported: github\.com\)/,
       },
       {
         // PAT-in-URL remote: detection fails on the credentialed host, and the G4 echo
@@ -400,7 +466,8 @@ describe("createPr orchestration (AC-3…AC-7)", () => {
           ...HAPPY_GIT,
           "symbolic-ref": { stdout: "", stderr: "fatal", exitCode: 1 },
         },
-        pattern: /cannot resolve the default branch of 'origin' — pass 'base' explicitly or run: git remote set-head origin --auto/,
+        pattern:
+          /cannot resolve the default branch of 'origin' — pass 'base' explicitly or run: git remote set-head origin --auto/,
       },
     ]
     for (const testCase of cases) {
@@ -410,6 +477,23 @@ describe("createPr orchestration (AC-3…AC-7)", () => {
       ).rejects.toThrow(testCase.pattern)
       expect(calls.map((c) => c.args[0])).not.toContain("push")
     }
+  })
+
+  it("re-validates the resolved head (§5.2 defense-in-depth) and never pushes", async () => {
+    const { runGit, calls } = recordingGitRunner({
+      ...HAPPY_GIT,
+      branch: { stdout: "a..b\n", stderr: "", exitCode: 0 },
+    })
+    let message = ""
+    try {
+      await createPr({ cwd: "/repo", title: "t", runGit })
+    } catch (error) {
+      message = (error as Error).message
+    }
+    expect(message).toBe(
+      `create_pr: field 'head' violates rule R3 (dot-dot): ${JSON.stringify("a..b")}`,
+    )
+    expect(calls.map((c) => c.args[0])).not.toContain("push")
   })
 
   it("G4 redaction: embedded credentials never reach the thrown message", async () => {
@@ -435,7 +519,11 @@ describe("createPr orchestration (AC-3…AC-7)", () => {
   it("AC-6: push failure propagates git stderr and the provider is never invoked", async () => {
     const { runGit } = recordingGitRunner({
       ...HAPPY_GIT,
-      push: { stdout: "", stderr: "remote: permission denied\n", exitCode: 128 },
+      push: {
+        stdout: "",
+        stderr: "remote: permission denied\n",
+        exitCode: 128,
+      },
     })
     const gh = happyGhRunner()
     await expect(
@@ -449,7 +537,9 @@ describe("createPr orchestration (AC-3…AC-7)", () => {
     const failingProvider: PrProvider = {
       name: "fake",
       async createPullRequest() {
-        throw new Error("a pull request already exists: https://github.com/AppVerk/x/pull/7")
+        throw new Error(
+          "a pull request already exists: https://github.com/AppVerk/x/pull/7",
+        )
       },
     }
     const result = await createPr({
@@ -464,7 +554,8 @@ describe("createPr orchestration (AC-3…AC-7)", () => {
       pushed: true,
       prCreated: false,
       draft: false,
-      prError: "a pull request already exists: https://github.com/AppVerk/x/pull/7",
+      prError:
+        "a pull request already exists: https://github.com/AppVerk/x/pull/7",
     })
     expect(calls.filter((c) => c.args[0] === "push")).toHaveLength(1)
     // FR-5 injection rule: detection (remote get-url) is skipped entirely
@@ -476,7 +567,12 @@ describe("createPr orchestration (AC-3…AC-7)", () => {
     const enoentRunGh: GitRunner = async () => {
       throw Object.assign(new Error("spawn gh ENOENT"), { code: "ENOENT" })
     }
-    const result = await createPr({ cwd: "/repo", title: "t", runGit, runGh: enoentRunGh })
+    const result = await createPr({
+      cwd: "/repo",
+      title: "t",
+      runGit,
+      runGh: enoentRunGh,
+    })
     expect(result.pushed).toBe(true)
     expect(result.prCreated).toBe(false)
     expect(result.prError).toBe(GH_MISSING_MESSAGE)

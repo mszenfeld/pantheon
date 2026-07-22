@@ -116,7 +116,9 @@ export const AppVerkCommitPlugin: Plugin = async () => {
           id: tool.schema
             .string()
             .optional()
-            .describe("Optional task/ticket id, e.g. INC-212 (never rewritten)"),
+            .describe(
+              "Optional task/ticket id, e.g. INC-212 (never rewritten)",
+            ),
           description: tool.schema
             .string()
             .describe(
@@ -125,7 +127,9 @@ export const AppVerkCommitPlugin: Plugin = async () => {
           checkout: tool.schema
             .boolean()
             .optional()
-            .describe("Switch to the new branch after creating it (default: true)"),
+            .describe(
+              "Switch to the new branch after creating it (default: true)",
+            ),
         },
         async execute(args, context) {
           const result = await createBranch({

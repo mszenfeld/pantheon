@@ -39,7 +39,7 @@ function makeSvarogToolHook(deps) {
         }
         if (isMutatingGitCommand(command)) {
           throw new Error(
-            `${GIT_DENIED}: this command mutates the git working tree/branch (checkout/switch/reset/restore/clean/stash/rebase/merge/cherry-pick/worktree or branch -d/-D), which Svarog \u2014 an in-tree leaf executor \u2014 must never do (it would move or rewrite the operator's worktree). Read-only git (status/log/diff/blame/show) is allowed. Do NOT switch branches; if the task genuinely requires a branch/tree operation, return the ESCALATE result.`
+            `${GIT_DENIED}: this command mutates the git working tree/branch (checkout/switch/reset/restore/clean/stash/rebase/merge/cherry-pick/worktree or branch -d/-D), which Svarog \u2014 an in-tree leaf executor \u2014 must never do (it would move or rewrite the operator's worktree). Read-only git (status/log/diff/blame/show) is allowed. To create and switch to a convention-valid branch, use the create_branch tool \u2014 do NOT ESCALATE for branch creation. For any other branch/tree operation, return the ESCALATE result.`
           );
         }
         return;

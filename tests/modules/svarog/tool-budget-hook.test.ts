@@ -90,6 +90,13 @@ describe("makeSvarogToolHook", () => {
         svarogHook()(input("bash"), { args: { command: cmd } }),
       ).rejects.toThrow("SVAROG_GIT_DENIED")
     }
+    // The denial redirects branch creation to the sanctioned tool instead of ESCALATE
+    // (message-only guidance; the deny decision itself is unchanged).
+    const branchDenial = await svarogHook()(input("bash"), {
+      args: { command: "git checkout -b feature/x" },
+    }).catch((error: Error) => error.message)
+    expect(branchDenial).toMatch(/use the create_branch tool/)
+    expect(branchDenial).toMatch(/do NOT ESCALATE for branch creation/)
     // read-only git stays allowed — an executor legitimately inspects state.
     await allows("bash", { args: { command: "git status" } })
     await allows("bash", { args: { command: "git --no-pager log --oneline -5" } })

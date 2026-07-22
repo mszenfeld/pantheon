@@ -11,11 +11,14 @@ const createPrMock = vi.fn(async (input: CreatePrInput) => ({
 }))
 
 vi.mock("../../../src/modules/commit/create-pr.js", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("../../../src/modules/commit/create-pr.js")>()),
+  ...(await importOriginal<
+    typeof import("../../../src/modules/commit/create-pr.js")
+  >()),
   createPr: (input: CreatePrInput) => createPrMock(input),
 }))
 
-const { AppVerkCommitPlugin } = await import("../../../src/modules/commit/index.js")
+const { AppVerkCommitPlugin } =
+  await import("../../../src/modules/commit/index.js")
 
 describe("create_pr wrapper registration (AC-16)", () => {
   beforeEach(() => {
@@ -24,7 +27,9 @@ describe("create_pr wrapper registration (AC-16)", () => {
 
   it("exposes exactly title/body/base/draft/taskId — no cwd/runGit/runGh/provider leakage", async () => {
     const plugin = await AppVerkCommitPlugin({} as never)
-    const tool = plugin.tool?.create_pr as { args: Record<string, unknown> } | undefined
+    const tool = plugin.tool?.create_pr as
+      | { args: Record<string, unknown> }
+      | undefined
     expect(tool).toBeDefined()
     expect(Object.keys(tool?.args ?? {}).sort()).toEqual([
       "base",

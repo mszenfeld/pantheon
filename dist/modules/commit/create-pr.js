@@ -26,7 +26,8 @@ function validateTaskId(rawTaskId) {
   if (taskId.length === 0) return void 0;
   if (!/^[A-Za-z0-9._-]+$/.test(taskId))
     throw ruleError("taskId", "K1", "invalid-characters", taskId);
-  if (taskId.startsWith("-")) throw ruleError("taskId", "K2", "leading-dash", taskId);
+  if (taskId.startsWith("-"))
+    throw ruleError("taskId", "K2", "leading-dash", taskId);
   return taskId;
 }
 function resolveBody(body, taskId) {
@@ -98,13 +99,20 @@ async function createPr(input) {
   }
   let provider = input.provider;
   if (provider === void 0) {
-    const originResult = await runGit(input.cwd, ["remote", "get-url", "origin"]);
+    const originResult = await runGit(input.cwd, [
+      "remote",
+      "get-url",
+      "origin"
+    ]);
     if (originResult.exitCode !== 0) {
       throw new Error("create_pr: no 'origin' remote is configured.");
     }
     const originUrl = originResult.stdout.trim();
     if (detectProvider(originUrl) !== "github") {
-      const redactedUrl = originUrl.replace(/^(\w+:\/\/)[^@/]+@/, "$1<redacted>@");
+      const redactedUrl = originUrl.replace(
+        /^(\w+:\/\/)[^@/]+@/,
+        "$1<redacted>@"
+      );
       throw new Error(
         `create_pr: unsupported git host for PR creation (supported: github.com). origin: ${JSON.stringify(redactedUrl)}`
       );

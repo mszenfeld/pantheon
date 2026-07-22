@@ -50,11 +50,7 @@ const SEGMENT_CHARSET = /^[A-Za-z0-9._-]+$/
  * normalize to "fix-alert"; "---" strips to "" (failing S2).
  */
 function normalizeDescription(raw: string): string {
-  return raw
-    .trim()
-    .replace(/\s+/g, "-")
-    .replace(/^-+/, "")
-    .replace(/-+$/, "")
+  return raw.trim().replace(/\s+/g, "-").replace(/^-+/, "").replace(/-+$/, "")
 }
 
 /**
@@ -63,13 +59,20 @@ function normalizeDescription(raw: string): string {
  * by composeBranchName before this runs. S4 cannot fire for a normalized
  * description (edge dashes are stripped) — it binds `id` in practice.
  */
-function validateSegmentRules(segment: "id" | "description", value: string): string {
+function validateSegmentRules(
+  segment: "id" | "description",
+  value: string,
+): string {
   if (!SEGMENT_CHARSET.test(value))
     throw segmentError(segment, "S3", "invalid-characters", value)
-  if (value.startsWith("-")) throw segmentError(segment, "S4", "leading-dash", value)
-  if (value.startsWith(".")) throw segmentError(segment, "S5", "leading-dot", value)
-  if (value.includes("--")) throw segmentError(segment, "S6", "double-hyphen", value)
-  if (value.includes("..")) throw segmentError(segment, "S7", "consecutive-dots", value)
+  if (value.startsWith("-"))
+    throw segmentError(segment, "S4", "leading-dash", value)
+  if (value.startsWith("."))
+    throw segmentError(segment, "S5", "leading-dot", value)
+  if (value.includes("--"))
+    throw segmentError(segment, "S6", "double-hyphen", value)
+  if (value.includes(".."))
+    throw segmentError(segment, "S7", "consecutive-dots", value)
   if (value.endsWith(".lock") || value.endsWith("."))
     throw segmentError(segment, "S8", "lock-suffix-or-trailing-dot", value)
   return value
@@ -84,7 +87,10 @@ function validateSegmentRules(segment: "id" | "description", value: string): str
  * caller passing an arbitrary expectedType. N3 is retained solely for
  * spec §5.2.4 rule-ordering fidelity.
  */
-export function validateBranchName(name: string, expectedType: BranchType): string {
+export function validateBranchName(
+  name: string,
+  expectedType: BranchType,
+): string {
   if (name.split("/").length - 1 !== 1)
     throw segmentError("name", "N1", "single-slash", name)
   const slashIndex = name.indexOf("/")
@@ -95,7 +101,8 @@ export function validateBranchName(name: string, expectedType: BranchType): stri
     !(BRANCH_TYPES as readonly string[]).includes(typePart)
   )
     throw segmentError("name", "N2", "type-mismatch", name)
-  if (name.startsWith("-")) throw segmentError("name", "N3", "leading-dash", name)
+  if (name.startsWith("-"))
+    throw segmentError("name", "N3", "leading-dash", name)
   if (descriptionPart === "")
     throw segmentError("name", "N4", "empty-description-part", name)
   if (!SEGMENT_CHARSET.test(descriptionPart))
@@ -139,7 +146,8 @@ export function composeBranchName(input: {
     throw segmentError("description", "S2", "empty-description", description)
   validateSegmentRules("description", description)
 
-  const name = id !== "" ? `${type}/${id}-${description}` : `${type}/${description}`
+  const name =
+    id !== "" ? `${type}/${id}-${description}` : `${type}/${description}`
   return validateBranchName(name, type as BranchType)
 }
 

@@ -241,8 +241,9 @@ export function makeStribogToolHook(
               `(checkout/switch/reset/restore/clean/stash/rebase/merge/cherry-pick/worktree or ` +
               `branch -d/-D), which Stribog — a leaf actuator — must never do (it would move or ` +
               `rewrite the operator's worktree). Read-only git (status/log/diff/blame/show) is ` +
-              `allowed. Do NOT switch branches; if the task genuinely requires a branch/tree ` +
-              `operation, return the ESCALATE result.`,
+              `allowed. To create and switch to a convention-valid branch, use the ` +
+              `create_branch tool — do NOT ESCALATE for branch creation. For any other ` +
+              `branch/tree operation, return the ESCALATE result.`,
           )
         }
         return // bash otherwise allowed — host-shell trust boundary unchanged
@@ -306,8 +307,8 @@ export function makeStribogToolHook(
       if (norm === "create_branch") return
 
       // av_commit — the sanctioned commit path (controlled-commit: validated, staged-scope,
-      // argv-only — src/modules/commit/). Executor-chain doctrine decision (2026-07-22, MoA
-      // ARCH-001): attributed executors complete the full self-serve publish chain
+      // argv-only — src/modules/commit/). Executor-chain doctrine decision (2026-07-22):
+      // attributed executors complete the full self-serve publish chain
       // create_branch → av_commit → create_pr. av_commit is NOT floor-denied (no `create_`
       // verb; `commit` is not a deny capability) — without this return it would fall only to
       // the step-4 allow-list denial (not in CORE_BUILTINS). Bash `git commit` stays blocked

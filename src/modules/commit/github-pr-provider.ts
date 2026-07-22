@@ -35,7 +35,9 @@ export const defaultGhRunner: GhRunner = async (cwd, args) => {
 
 const PR_URL_LINE = /^https:\/\/\S+$/
 
-export function githubPrProvider(runGh: GhRunner = defaultGhRunner): PrProvider {
+export function githubPrProvider(
+  runGh: GhRunner = defaultGhRunner,
+): PrProvider {
   return {
     name: "github",
     async createPullRequest(input) {
@@ -60,7 +62,9 @@ export function githubPrProvider(runGh: GhRunner = defaultGhRunner): PrProvider 
 
       if (result.exitCode !== 0) {
         throw new Error(
-          result.stderr.trim() || result.stdout.trim() || "gh pr create failed.",
+          result.stderr.trim() ||
+            result.stdout.trim() ||
+            "gh pr create failed.",
         )
       }
 

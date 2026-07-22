@@ -65,6 +65,13 @@ describe("stribog tool-budget hook", () => {
         h(input("bash"), { args: { command: cmd } }),
       ).rejects.toThrow("STRIBOG_GIT_DENIED")
     }
+    // The denial redirects branch creation to the sanctioned tool instead of ESCALATE
+    // (message-only guidance; the deny decision itself is unchanged).
+    const branchDenial = await h(input("bash"), {
+      args: { command: "git checkout -b feature/x" },
+    }).catch((error: Error) => error.message)
+    expect(branchDenial).toMatch(/use the create_branch tool/)
+    expect(branchDenial).toMatch(/do NOT ESCALATE for branch creation/)
     // read-only git stays allowed — an executor legitimately inspects state.
     for (const cmd of [
       "git status",

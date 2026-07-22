@@ -78,11 +78,15 @@ const AppVerkCommitPlugin = async () => {
           type: tool.schema.string().describe(
             "Branch type \u2014 one of: feature, fix, hotfix, release, docs, chore, refactor (validated in-tool)"
           ),
-          id: tool.schema.string().optional().describe("Optional task/ticket id, e.g. INC-212 (never rewritten)"),
+          id: tool.schema.string().optional().describe(
+            "Optional task/ticket id, e.g. INC-212 (never rewritten)"
+          ),
           description: tool.schema.string().describe(
             "Short plain-English or kebab-case description; whitespace becomes dashes"
           ),
-          checkout: tool.schema.boolean().optional().describe("Switch to the new branch after creating it (default: true)")
+          checkout: tool.schema.boolean().optional().describe(
+            "Switch to the new branch after creating it (default: true)"
+          )
         },
         async execute(args, context) {
           const result = await createBranch({

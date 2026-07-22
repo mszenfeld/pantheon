@@ -29,7 +29,12 @@ export interface CreatePrResult {
 }
 
 /** Normative §5.2 error template. */
-function ruleError(field: string, ruleId: string, slug: string, value: string): Error {
+function ruleError(
+  field: string,
+  ruleId: string,
+  slug: string,
+  value: string,
+): Error {
   return new Error(
     `create_pr: field '${field}' violates rule ${ruleId} (${slug}): ${JSON.stringify(value)}`,
   )
@@ -56,12 +61,16 @@ function validateTaskId(rawTaskId: string | undefined): string | undefined {
   if (taskId.length === 0) return undefined
   if (!/^[A-Za-z0-9._-]+$/.test(taskId))
     throw ruleError("taskId", "K1", "invalid-characters", taskId)
-  if (taskId.startsWith("-")) throw ruleError("taskId", "K2", "leading-dash", taskId)
+  if (taskId.startsWith("-"))
+    throw ruleError("taskId", "K2", "leading-dash", taskId)
   return taskId
 }
 
 /** §5.2 Normalization: body verbatim except the Refs footer append. */
-function resolveBody(body: string | undefined, taskId: string | undefined): string {
+function resolveBody(
+  body: string | undefined,
+  taskId: string | undefined,
+): string {
   if (taskId === undefined) return body ?? ""
   if (body === undefined || body.trim() === "") return `Refs: ${taskId}`
   return `${body.trimEnd()}\n\nRefs: ${taskId}`
@@ -87,7 +96,9 @@ function validateRef(field: "base" | "head", rawValue: string): string {
     value.startsWith("/") ||
     value.endsWith("/") ||
     value.endsWith(".") ||
-    value.split("/").some((part) => part.startsWith(".") || part.endsWith(".lock"))
+    value
+      .split("/")
+      .some((part) => part.startsWith(".") || part.endsWith(".lock"))
   if (componentViolation) throw ruleError(field, "R4", "component-rules", value)
   if (Buffer.byteLength(value, "utf8") > 240)
     throw ruleError(field, "R5", "max-length-240-bytes", value)
@@ -156,7 +167,11 @@ export async function createPr(input: CreatePrInput): Promise<CreatePrResult> {
   // G3/G4 — provider detection (FR-5); skipped entirely when a provider is injected (test seam).
   let provider = input.provider
   if (provider === undefined) {
-    const originResult = await runGit(input.cwd, ["remote", "get-url", "origin"])
+    const originResult = await runGit(input.cwd, [
+      "remote",
+      "get-url",
+      "origin",
+    ])
     if (originResult.exitCode !== 0) {
       throw new Error("create_pr: no 'origin' remote is configured.")
     }
@@ -165,7 +180,10 @@ export async function createPr(input: CreatePrInput): Promise<CreatePrResult> {
       // C-5/NFR-3: the raw get-url output may embed credentials (PAT-in-URL remotes, which
       // always fail detection), so URL userinfo is redacted before the echo reaches the
       // transcript. scp-like `git@host:` forms have no `://` and pass through unchanged.
-      const redactedUrl = originUrl.replace(/^(\w+:\/\/)[^@/]+@/, "$1<redacted>@")
+      const redactedUrl = originUrl.replace(
+        /^(\w+:\/\/)[^@/]+@/,
+        "$1<redacted>@",
+      )
       throw new Error(
         "create_pr: unsupported git host for PR creation (supported: github.com). " +
           `origin: ${JSON.stringify(redactedUrl)}`,
@@ -178,7 +196,9 @@ export async function createPr(input: CreatePrInput): Promise<CreatePrResult> {
   const pushResult = await runGit(input.cwd, ["push", "-u", "origin", head])
   if (pushResult.exitCode !== 0) {
     throw new Error(
-      pushResult.stderr.trim() || pushResult.stdout.trim() || "git push failed.",
+      pushResult.stderr.trim() ||
+        pushResult.stdout.trim() ||
+        "git push failed.",
     )
   }
 

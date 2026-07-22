@@ -7,12 +7,18 @@ const createBranchMock = vi.fn(async (input: CreateBranchInput) => ({
   checkedOut: input.checkout ?? true,
 }))
 
-vi.mock("../../../src/modules/commit/create-branch.js", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("../../../src/modules/commit/create-branch.js")>()),
-  createBranch: (input: CreateBranchInput) => createBranchMock(input),
-}))
+vi.mock(
+  "../../../src/modules/commit/create-branch.js",
+  async (importOriginal) => ({
+    ...(await importOriginal<
+      typeof import("../../../src/modules/commit/create-branch.js")
+    >()),
+    createBranch: (input: CreateBranchInput) => createBranchMock(input),
+  }),
+)
 
-const { AppVerkCommitPlugin } = await import("../../../src/modules/commit/index.js")
+const { AppVerkCommitPlugin } =
+  await import("../../../src/modules/commit/index.js")
 
 type SchemaLike = { safeParse: (value: unknown) => { success: boolean } }
 
@@ -37,7 +43,9 @@ describe("create_branch wrapper registration (AC-13)", () => {
 
   it("type is a plain string schema, not a schema-level enum (FR-1/NFR-4)", async () => {
     const plugin = await AppVerkCommitPlugin({} as never)
-    const toolDef = plugin.tool?.create_branch as unknown as { args: Record<string, SchemaLike> }
+    const toolDef = plugin.tool?.create_branch as unknown as {
+      args: Record<string, SchemaLike>
+    }
     // An out-of-enum value must PASS the schema so it reaches the S1
     // TypeScript error (the normative template) instead of a schema reject.
     const typeSchema = toolDef.args.type

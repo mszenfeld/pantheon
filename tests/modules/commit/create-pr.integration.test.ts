@@ -12,7 +12,10 @@ import type {
 
 const run = promisify(execFile)
 
-function fakeProvider(): { provider: PrProvider; calls: CreatePullRequestInput[] } {
+function fakeProvider(): {
+  provider: PrProvider
+  calls: CreatePullRequestInput[]
+} {
   const calls: CreatePullRequestInput[] = []
   return {
     calls,
@@ -36,13 +39,17 @@ describe("createPr (integration: real git, bare origin, injected provider)", () 
     bare = await mkdtemp(path.join(tmpdir(), "create-pr-origin-"))
     await run("git", ["init", "--bare"], { cwd: bare })
     await run("git", ["init"], { cwd: work })
-    await run("git", ["config", "user.email", "test@example.com"], { cwd: work })
+    await run("git", ["config", "user.email", "test@example.com"], {
+      cwd: work,
+    })
     await run("git", ["config", "user.name", "Test User"], { cwd: work })
     await writeFile(path.join(work, "README.md"), "hello\n")
     await run("git", ["add", "README.md"], { cwd: work })
     await run("git", ["commit", "-m", "chore: init"], { cwd: work })
     // Never hardcode master/main — init.defaultBranch is configurable (spec §7.2 fixture rule).
-    const { stdout } = await run("git", ["branch", "--show-current"], { cwd: work })
+    const { stdout } = await run("git", ["branch", "--show-current"], {
+      cwd: work,
+    })
     defaultBranch = stdout.trim()
     await run("git", ["remote", "add", "origin", bare], { cwd: work })
     await run("git", ["push", "-u", "origin", defaultBranch], { cwd: work })
@@ -68,9 +75,13 @@ describe("createPr (integration: real git, bare origin, injected provider)", () 
       draft: false,
       url: "https://example.invalid/pr/1",
     })
-    const remoteBranches = await run("git", ["branch", "--list", "feature/inc-1"], {
-      cwd: bare,
-    })
+    const remoteBranches = await run(
+      "git",
+      ["branch", "--list", "feature/inc-1"],
+      {
+        cwd: bare,
+      },
+    )
     expect(remoteBranches.stdout).toContain("feature/inc-1")
     const upstream = await run(
       "git",
