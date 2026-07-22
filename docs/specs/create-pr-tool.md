@@ -38,7 +38,7 @@ session's current branch to `origin` (never force), then creates the PR through 
 **Out of scope**
 
 - Changing `src/modules/_shared/mutating-git.ts`, the executor bash tripwires, or the
-  `classifyBashCommand` gate behavior (`block-push` stays; only its *message* MAY gain a
+  `classifyBashCommand` gate behavior (`block-push` stays; only its *message* SHOULD gain a
   redirect — see D6).
 - Force push, push of arbitrary refspecs, tag push, deleting remote branches.
 - PR update/merge/close/review operations; only creation.
@@ -51,8 +51,10 @@ session's current branch to `origin` (never force), then creates the PR through 
 - A Stribog or Svarog session standing on a feature branch can run
   `create_pr({ title: "..." })` and get back a PR URL, while bash `git push` remains blocked
   (`block-push`) and bash `git checkout` remains denied for executors.
-- Every invalid parameter in §5.2 is rejected with a descriptive error and **zero** process
-  spawns; every guard violation in §5.3 is rejected before the push.
+- Every invalid user-supplied parameter (`title`, `body`, `base`, `taskId`) in §5.2 is
+  rejected with a descriptive error and **zero** process spawns; the resolved-head R1–R5
+  re-validation and every guard violation in §5.3 are rejected before the push, at the cost of
+  read-only git calls only.
 - A push that succeeds followed by a PR-creation failure returns a structured partial-success
   result (never a throw, never a rollback).
 - `bun run check` (typecheck + test + build) passes.
@@ -100,7 +102,7 @@ session's current branch to `origin` (never force), then creates the PR through 
   argv arrays only, mirroring `defaultGitRunner` (`controlled-commit.ts:25-47`).
 - **C-2:** `src/modules/_shared/mutating-git.ts`, both executor bash tripwires, and the
   `classifyBashCommand` decisions MUST NOT change behavior. `git push` via bash stays blocked;
-  the `block-push` error *message* MAY gain redirect text (D6).
+  the `block-push` error *message* SHOULD gain redirect text (D6).
 - **C-3:** Reuse the existing `GitRunner`/`GitResult`/`defaultGitRunner` exports from
   `./controlled-commit.js`; do not duplicate the runner. The `gh` runner mirrors the same
   shape.
@@ -129,20 +131,31 @@ session's current branch to `origin` (never force), then creates the PR through 
 
   The head branch is **not** a parameter: it is always the session's current branch (FR-2).
 - **FR-2 — Head resolution.** Resolve the current branch via `["branch", "--show-current"]`
-  (read-only). Empty output (detached HEAD) fails with guard G1 (§5.3) and zero further
-  invocations.
+  (read-only). `defaultGitRunner` returns stdout untrimmed by contract, so the resolved head
+  is that stdout with `String.prototype.trim()` applied (stripping the trailing newline)
+  before the §5.2 R1–R5 re-validation and before any use in the FR-6 push argv and the FR-7
+  `--head=<head>` token. Empty (post-trim) output (detached HEAD) fails with guard G1 (§5.3)
+  and zero further invocations.
 - **FR-3 — Base resolution.** When `base` is omitted: resolve
-  `["symbolic-ref", "--short", "refs/remotes/origin/HEAD"]` and strip the `origin/` prefix.
-  A non-zero exit fails with guard G5, whose message names both remedies (pass `base`
-  explicitly, or run `git remote set-head origin --auto`). When `base` is provided, it is
-  trimmed and validated per §5.2 (R-rules). The resolved base is always passed explicitly to
-  the provider (`--base=<base>`) — the provider never guesses.
-- **FR-4 — Validate before any spawn.** All parameter validation (§5.2) is pure TypeScript
-  and runs before the first `runGit` invocation. On violation, throw an `Error` in the §5.2
-  normative template and execute **zero** git or provider commands. Guards G1–G5 (§5.3) run
-  next, using read-only git calls only; any guard failure throws before the push.
+  `["symbolic-ref", "--short", "refs/remotes/origin/HEAD"]`, apply `String.prototype.trim()`
+  to the command stdout (which `defaultGitRunner` returns untrimmed — the symbolic-ref output
+  also carries a trailing newline), and strip the `origin/` prefix, before the auto-resolved
+  base feeds the G2 comparison and the `--base=<base>` token. A non-zero exit fails with guard
+  G5, whose message names both remedies (pass `base` explicitly, or run
+  `git remote set-head origin --auto`). `base` counts as **omitted** iff `base === undefined`
+  or `base.trim() === ""` — a whitespace-only value trims to empty and routes to the
+  symbolic-ref auto-resolution above; otherwise `base` is provided, trimmed, and validated
+  per §5.2 (R-rules). The resolved base is always passed explicitly to the provider
+  (`--base=<base>`) — the provider never guesses.
+- **FR-4 — Validate before any spawn.** All validation of the user-supplied parameters
+  (`title`, `body`, `base`, `taskId`; §5.2) is pure TypeScript and runs before the first
+  `runGit` invocation. On violation, throw an `Error` in the §5.2 normative template and
+  execute **zero** git or provider commands. Guards G1–G5 (§5.3) run next, using read-only git
+  calls only; the resolved-head R1–R5 re-validation (§5.2) runs among them, at the G2 step, on
+  the output of G1's read-only `["branch", "--show-current"]`; any guard failure throws before
+  the push.
 - **FR-5 — Provider detection.** Resolve the `origin` URL via
-  `["remote", "get-url", "origin"]` (read-only). Non-zero exit → guard G3. Parse the URL per
+  `["remote", "get-url", "origin"]` (read-only). Non-zero exit → guard G3. Apply `String.prototype.trim()` to the command stdout (which `defaultGitRunner` returns untrimmed — the get-url output also carries a trailing newline), then parse the trimmed URL per
   §5.4; host `github.com` (case-insensitive) selects the GitHub provider, constructed with
   the injected `runGh ?? defaultGhRunner`; any other host, scheme `file://`, or a local
   path → guard G4 with a message enumerating the supported providers (`github.com`).
@@ -163,8 +176,9 @@ session's current branch to `origin` (never force), then creates the PR through 
   plus a trailing `"--draft"` when `draft` is `true`. All string options use the
   `--flag=value` single-token form (see §6 flag-injection). `--body=` is always passed — with
   the resolved body or the empty string — so `gh` never enters interactive mode. The PR URL is
-  taken from the last non-empty line of stdout matching `^https://\S+$`; absence of a match is
-  a provider failure (FR-8 path, with stdout/stderr in `prError`).
+  the last stdout line that matches `^https://\S+$`, taken by scanning every line in order and
+  keeping the last match; if no line matches, the provider call is a failure (FR-8 path, with
+  stdout/stderr in `prError`).
 - **FR-8 — Partial success on PR failure.** If the push succeeded but the provider call fails
   (non-zero exit, `gh` missing, URL not found in output), return
   `{ head, base, pushed: true, prCreated: false, draft, prError: "<detail>" }` — do **not**
@@ -176,7 +190,7 @@ session's current branch to `origin` (never force), then creates the PR through 
   existing PR.
 - **FR-9 — Missing `gh` binary.** An ENOENT spawn failure from the GitHub provider maps to a
   deterministic FR-8 partial result whose `prError` says the GitHub CLI is not installed and
-  names both remedies (`brew install gh` / platform equivalent, then `gh auth login`).
+  names both remedies (`brew install gh` / platform equivalent, then `gh auth login`). **`defaultGhRunner` MUST surface a spawn-time ENOENT distinctly** rather than reusing `defaultGitRunner`'s lossy failure conversion: it MUST detect `error.code === "ENOENT"` and re-throw it so the provider's catch maps it to the deterministic message above (matching AC-8's throwing double). Mirroring `defaultGitRunner`'s error handling verbatim is insufficient — its `Number(failure.code ?? 1)` conversion turns ENOENT into `exitCode: NaN` with empty stderr and no throw, discarding the very signal FR-9 depends on.
 - **FR-10 — Result contract.** The result **always** contains `head: string`,
   `base: string`, `pushed: boolean`, `prCreated: boolean`, and `draft: boolean` (the resolved
   values). Full success adds `url: string`; the FR-8 path adds `prError: string`. Serialized
@@ -195,7 +209,8 @@ session's current branch to `origin` (never force), then creates the PR through 
 
 - **NFR-1 — No shell.** argv-only invocation of both binaries; no string concatenation into a
   shell command.
-- **NFR-2 — Fail fast.** Invalid parameters cost zero process spawns; guard failures cost
+- **NFR-2 — Fail fast.** Invalid user-supplied parameters (`title`, `body`, `base`, `taskId`)
+  cost zero process spawns; the resolved-head R1–R5 re-validation and all guard failures cost
   only read-only git calls; nothing mutates before the push.
 - **NFR-3 — No secrets.** The plugin handles no credentials (C-5). Validation errors echo
   user input JSON-encoded only (CWE-117 hygiene, family convention).
@@ -205,9 +220,9 @@ session's current branch to `origin` (never force), then creates the PR through 
 - **NFR-5 — Testability.** All git interaction flows through the injectable `GitRunner`; all
   `gh` interaction flows through an injectable runner of the same shape; the provider itself
   is injectable into `createPr` (integration seam, §7.2). Unit tests require neither binary.
-- **NFR-6 — Auditability.** Title, body, base, and draft appear verbatim in the tool call
-  (session transcript) and in the returned JSON; every push and PR is attributable to a
-  specific call.
+- **NFR-6 — Auditability.** Title and body appear verbatim in the tool call
+  (session transcript); base and draft appear in the tool call when supplied and, as resolved
+  values, in the returned JSON (FR-10). Every push and PR is attributable to a specific call.
 
 ## 5. Architecture & design decisions
 
@@ -271,7 +286,7 @@ guidance, not a hard gate.
 
 ### 5.2 Parameter validation (normative)
 
-All rules run in pure TypeScript before any spawn (FR-4). **Error template (normative):**
+All rules for the user-supplied parameters (`title`, `body`, `base`, `taskId`) run in pure TypeScript before any spawn (FR-4); the resolved-head R1–R5 re-validation below runs later, during the guard phase (§5.3, at the G2 step), on read-only git output. **Error template (normative):**
 
 ```
 create_pr: field '<field>' violates rule <ruleId> (<shortDescription>): <jsonEncodedValue>
@@ -281,10 +296,14 @@ where `<field>` is `title` | `body` | `base` | `taskId` | `head` (the last for t
 defense-in-depth head re-validation below); `<jsonEncodedValue>` is `JSON.stringify` of the
 offending (post-trim where trimming applies) value.
 
+**Evaluation order (normative).** Rules are evaluated in a fixed order — title T1→T2→T3,
+then taskId K1→K2, then body B1→B2 (B1 validates the resolved body, so taskId is checked
+first), then base R1→R5 — and on multi-violation input the first failing rule is the one
+reported (making NFR-4's deterministic errors well-defined).
+
 **Normalization.** `title`, `base`, and `taskId` are trimmed (`String.prototype.trim()`).
 `body` is passed verbatim (markdown whitespace is meaningful) except for the `Refs:` footer
-append. When `taskId` is present and non-empty after trim, the resolved body is
-`body.trimEnd() + "\n\nRefs: " + taskId` (or `"Refs: " + taskId` when `body` is empty/absent).
+append. When `taskId` is present and non-empty after trim, the resolved body is `"Refs: " + taskId` when `body` is absent or `body.trim()` is empty (whitespace-only), and `body.trimEnd() + "\n\nRefs: " + taskId` otherwise.
 
 | ruleId | field | shortDescription | Rule |
 |---|---|---|---|
@@ -295,7 +314,7 @@ append. When `taskId` is present and non-empty after trim, the resolved body is
 | B2 | body | `control-characters` | No code points in U+0000–U+001F or U+007F–U+009F **except** `\n` (U+000A), `\r` (U+000D), and `\t` (U+0009). |
 | K1 | taskId | `invalid-characters` | When present and non-empty: matches `^[A-Za-z0-9._-]+$` (same charset as `create_branch` S3; rejects spaces and control bytes). |
 | K2 | taskId | `leading-dash` | Does not start with `-`. |
-| R1 | base | `invalid-characters` | When provided: matches `^[A-Za-z0-9._/-]+$` (`/` allowed — bases like `release/2026.07` are legal). |
+| R1 | base | `invalid-characters` | When provided and non-empty after trim: matches `^[A-Za-z0-9._/-]+$` (`/` allowed — bases like `release/2026.07` are legal). |
 | R2 | base | `leading-dash` | Does not start with `-`. |
 | R3 | base | `dot-dot` | Does not contain `..`. |
 | R4 | base | `component-rules` | No `//`; does not start or end with `/`; no path component starts with `.` or ends with `.lock`; does not end with `.`. |
@@ -304,6 +323,9 @@ append. When `taskId` is present and non-empty after trim, the resolved body is
 The resolved **head** name (FR-2) is re-validated against R1–R5 as defense-in-depth (it
 normally came from `create_branch` and passes trivially); a violation is reported with
 `<field>` = `head` and is expected only when the operator hand-created an exotic branch name.
+This re-validation is not one of the pre-spawn parameter checks above: it runs during the
+guard phase (§5.3), at the G2 step, on the trimmed head resolved by G1's read-only
+`["branch", "--show-current"]` — costing only read-only git calls, never the push.
 
 ### 5.3 Guards (normative, ordered)
 
@@ -348,6 +370,7 @@ paths — returns `undefined` (guard G4). Normative vectors:
 | `file:///tmp/bare-remote.git` | undefined |
 | `/tmp/bare-remote.git` | undefined |
 | `http://github.com/a/b` | undefined (https only) |
+| `"git@github.com:AppVerk/av-opencode-plugins.git\n"` (raw trailing newline) | github (FR-5 trims the trailing newline before calling `detectProvider`, which then parses the canonical form as in row 1; this row documents the caller path, not a direct `detectProvider` input) |
 
 ### 5.5 Executor allow-list integration
 
@@ -421,15 +444,17 @@ agent (stribog | svarog | /commit session)
 
 - **AC-1 (validation matrix).** Every §5.2 rule has at least one rejecting vector (empty
   title; 257-code-point title; title with `\n`; body over 64 000 bytes; body with U+0000 and
-  with U+001B; `taskId: "INC 212"`; `taskId: "-x"`; `base: "-d"`; `base: "a..b"`;
+  with U+001B; `taskId: "INC 212"`; `taskId: "-x"`; `base: "a b"` (space, out of the R1 charset); `base: "-d"`; `base: "a..b"`;
   `base: "a//b"`; `base: "/a"`, `base: "a/"`; `base: "a/.h"`; `base: "x.lock"`; `base: "x."`;
   241-byte base) and one accepting boundary vector (256-code-point title; exactly
   64 000-byte body; 240-byte base; `base: "release/2026.07"`). Rejections match the §5.2
   template exactly and the injected runners record **zero** calls.
-- **AC-2 (provider detection table).** Every §5.4 vector produces the stated result from
-  `detectProvider` directly.
+- **AC-2 (provider detection table).** Every §5.4 vector except the raw-trailing-newline row
+  produces the stated result from `detectProvider` directly; the raw-trailing-newline row is
+  asserted at the FR-5 caller level (trim, then `detectProvider`), and `detectProvider`
+  called on the un-trimmed string returns `undefined`.
 - **AC-3 (happy path, detection exercised).** Stubbed `runGit` (returns a branch name for
-  `--show-current`, `origin/master` for `symbolic-ref`, a `git@github.com:` URL for
+  `--show-current`, `origin/master` for `symbolic-ref`, a `git@github.com:` URL with trailing newline for
   `remote get-url`, success for `push`) and stubbed `runGh` (returns a PR URL) — no
   `provider` injection, so detection runs for real and selects the GitHub provider. Recorded
   git argv sequence is exactly `["branch","--show-current"]`,
@@ -437,7 +462,9 @@ agent (stribog | svarog | /commit session)
   `["push","-u","origin","feature/INC-212-x"]`; result is exactly
   `{ head, base: "master", pushed: true, prCreated: true, draft: false, url }`.
 - **AC-4 (explicit base skips resolution).** With `base: "develop"`, no `symbolic-ref` call
-  is recorded and the provider receives `base: "develop"`.
+  is recorded and the provider receives `base: "develop"`. Conversely, `base: "   "`
+  (whitespace-only) is treated as omitted (FR-3): the `symbolic-ref` auto-resolution runs and
+  the provider receives the resolved default base.
 - **AC-5 (guards).** G1 (empty `--show-current` output), G2 (head equals base), G3
   (`remote get-url` non-zero), G4 (gitlab origin), G5 (`symbolic-ref` non-zero, base
   omitted): each throws its §5.3 message, and no `push` call is ever recorded.
@@ -449,10 +476,10 @@ agent (stribog | svarog | /commit session)
 - **AC-8 (gh ENOENT).** GitHub provider with a runner that throws ENOENT → FR-9 partial
   result whose `prError` names installation and `gh auth login`.
 - **AC-9 (gh argv contract).** GitHub provider with a recording runner: argv is exactly
-  `["pr","create","--title=<t>","--body=<b>","--base=<b>","--head=<h>"]` (+ `"--draft"` iff
+  `["pr","create","--title=<t>","--body=<body>","--base=<base>","--head=<h>"]` (+ `"--draft"` iff
   draft); body containing newlines stays one argv token; empty body still yields `--body=`;
-  `taskId` produces a body ending `\n\nRefs: <taskId>`; the URL is extracted per FR-7 (last
-  non-empty stdout line matching `^https://\S+$`), and a no-match stdout yields the FR-8
+  `taskId` produces a body ending `\n\nRefs: <taskId>`; a whitespace-only `body` given with a `taskId` yields exactly `Refs: <taskId>` (no leading blank lines, per §5.2 Normalization); the URL is extracted per FR-7 (the last stdout line matching `^https://\S+$`, taken by
+  scanning every line and keeping the last match), and a no-match stdout yields the FR-8
   failure path.
 - **AC-10 (draft flag).** `draft: true` appends `--draft` and echoes `draft: true` in the
   result; default omits the flag and echoes `draft: false`.
