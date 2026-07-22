@@ -3,6 +3,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { tool } from "@opencode-ai/plugin";
 import { classifyBashCommand } from "./bash-policy.js";
+import { createBranch } from "./create-branch.js";
 import { createControlledCommit } from "./controlled-commit.js";
 import { createPr } from "./create-pr.js";
 const COMMIT_COMMAND_DESCRIPTION = "Create a git commit with the AppVerk commit workflow";
@@ -67,6 +68,29 @@ const AppVerkCommitPlugin = async () => {
             base: args.base,
             draft: args.draft ?? false,
             taskId: args.taskId
+          });
+          return JSON.stringify(result, null, 2);
+        }
+      }),
+      create_branch: tool({
+        description: "Create (and by default switch to) a convention-validated git branch from type/id/description segments",
+        args: {
+          type: tool.schema.string().describe(
+            "Branch type \u2014 one of: feature, fix, hotfix, release, docs, chore, refactor (validated in-tool)"
+          ),
+          id: tool.schema.string().optional().describe("Optional task/ticket id, e.g. INC-212 (never rewritten)"),
+          description: tool.schema.string().describe(
+            "Short plain-English or kebab-case description; whitespace becomes dashes"
+          ),
+          checkout: tool.schema.boolean().optional().describe("Switch to the new branch after creating it (default: true)")
+        },
+        async execute(args, context) {
+          const result = await createBranch({
+            cwd: context.worktree ?? context.directory,
+            type: args.type,
+            id: args.id,
+            description: args.description,
+            checkout: args.checkout ?? true
           });
           return JSON.stringify(result, null, 2);
         }

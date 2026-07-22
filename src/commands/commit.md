@@ -91,3 +91,26 @@ After committing with `av_commit`, publish the branch and open a pull request wi
   (`gh auth login`). Fork workflows: set the target once with `gh repo set-default`.
 - The existing prohibitions are unchanged: never push via bash, never `git commit` via
   bash, Conventional Commits, no AI co-authorship.
+
+## Branching: the `create_branch` tool
+
+Create (and by default switch to) a convention-valid branch with the `create_branch` tool —
+never with bash `git checkout -b` (blocked for executors) or hand-typed `git branch` names.
+
+- Arguments: `type` (required — one of `feature`, `fix`, `hotfix`, `release`, `docs`,
+  `chore`, `refactor`, case-sensitive), `id` (optional ticket id, e.g. `INC-212` — never
+  rewritten), `description` (required — plain English is fine), `checkout` (optional,
+  default `true`).
+- The tool composes the name itself: `<type>/<id>-<description>` (or `<type>/<description>`
+  without an id), collapsing description whitespace to dashes. `fix alert dialog` becomes
+  `feature/INC-212-fix-alert-dialog` with `type: "feature", id: "INC-212"`.
+- Validation is layered and fail-fast (zero git runs on invalid input): per-segment rules
+  (charset `A–Z a–z 0–9 . _ -`, no leading dash/dot, no `--`, no `..`, no `.lock`/trailing-dot
+  suffix), then whole-name rules including a single `/` and a 240-byte cap. Errors name the
+  violated rule (`S1`–`S8`, `N1`–`N11`) so you can self-correct.
+- Valid: `feature/INC-212-fix-alert-dialog`, `release/2026.07.21`, `chore/update-dependencies`.
+  Invalid: `feat/x` (type not in list), `feature/fix--alert` (double hyphen),
+  `feature/.hidden` (leading dot), an `id` with spaces (`INC 212` — pass `INC-212`).
+- A failed checkout after a successful create returns `checkedOut: false` plus
+  `checkoutError` — the branch exists; resolve the blocker and check out manually. Re-running
+  the tool with the same segments fails with git's `already exists`.
