@@ -73,5 +73,13 @@ describe("create_branch wrapper registration (AC-13)", () => {
       { directory: "/dir" },
     )
     expect(createBranchMock.mock.calls[2]?.[0]?.checkout).toBe(false)
+
+    // AC-13: explicitly-undefined checkout defaults to true at the wrapper seam,
+    // same as omitted (a `"checkout" in args` rewrite would break this case).
+    await toolDef.execute(
+      { type: "feature", description: "x", checkout: undefined },
+      { directory: "/dir" },
+    )
+    expect(createBranchMock.mock.calls[3]?.[0]?.checkout).toBe(true)
   })
 })

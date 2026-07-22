@@ -113,7 +113,8 @@ export interface StribogToolHookHandle {
 /**
  * Build the `tool.execute.before` handler enforcing, for a session positively attributed as
  * `stribog`: (1) the tool-name allow-list — CORE_BUILTINS plus any config-granted extraTools
- * pattern, with the immutable capability-deny set winning over everything — and (2) the edit
+ * pattern, with the immutable capability-deny set winning over everything except the named
+ * commit-module carve-outs at step 2d (the sanctioned publish chain) — and (2) the edit
  * budget (at most STRIBOG_EDIT_BUDGET distinct files via edit/write). The budget binds ONLY native
  * edit/write; a native edit/write whose filePath is missing or non-absolute is REFUSED (fail-closed)
  * since it cannot be keyed into the per-file budget. Write-capable extraTools are not budgeted — they
@@ -134,6 +135,11 @@ export interface StribogToolHookHandle {
  *       extraPatterns here would skip the attribution gate and leak the conditional allow to every
  *       session, since the hook fails open for non-stribog).
  *   (2) Resolves attribution and FAILS OPEN for non-stribog / unresolved sessions.
+ *   (2d) (confirmed stribog only) allows the serena family (single-file editors budgeted, reads
+ *       unbudgeted) and the commit-module publish chain — `create_pr`/`create_branch`/`av_commit`
+ *       early-returns (attribution-gated, unbudgeted; the sanctioned executor chain
+ *       create_branch → av_commit → create_pr, 2026-07-22 decision) — BEFORE steps 3-4, which
+ *       would otherwise deny them (`create_` verb at step 3; allow-list at step 4).
  *   (3) THEN (confirmed stribog only) applies isImmutableDeny — gated behind attribution so a
  *       legitimate `execute_recipe` (zmora-setup) / `dispatch_*` (Perun/Veles) on a NON-stribog
  *       session, or during its own attribution-unresolved window, is never denied here.
@@ -282,7 +288,9 @@ export function makeStribogToolHook(
       // tripwire and the commit plugin's block-push gate are unchanged; this early-return
       // exempts the tool from BOTH the `create_` verb of the isImmutableDeny floor (step 3)
       // AND the step-4 allow-list gate — which no extraTools config could grant instead
-      // (validateExtraToolsPattern statically rejects `create_`-verb ids and covering globs).
+      // (validateExtraToolsPattern statically rejects `create_`-verb ids and `create_`-prefixed
+      // globs; a broader covering glob like `cr*` passes config validation but the step-3
+      // isImmutableDeny floor still wins over extraPatterns at runtime).
       // Unbudgeted: not an edit/write tool.
       if (norm === "create_pr") return
 

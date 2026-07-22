@@ -1,6 +1,6 @@
 const SVAROG_AGENT_KEY = "svarog";
 const DEFAULT_SVAROG_MODEL = "openai/gpt-5.5";
-const SVAROG_DESCRIPTION = "Heavy/main code executor: implements a multi-file feature or refactor from a plan or task \u2014 writes code test-first, runs the full suite/build, and returns a verified diff with a recoverable checkpoint. Stops at READY (does not commit). NOT for trivial 1-2 file mechanical changes (use stribog), secrets (use zmora-setup), or work needing an unsettled design decision (plan with veles).";
+const SVAROG_DESCRIPTION = "Heavy/main code executor: implements a multi-file feature or refactor from a plan or task \u2014 writes code test-first, runs the full suite/build, and returns a verified diff with a recoverable checkpoint. Finishes at READY; commits only via the sanctioned av_commit tool (never bash git commit). NOT for trivial 1-2 file mechanical changes (use stribog), secrets (use zmora-setup), or work needing an unsettled design decision (plan with veles).";
 const SVAROG_SERENA_EDITORS = /(create_text_file|replace_content|replace_regex|replace_symbol_body|insert_(after|before)_symbol|rename_symbol|safe_delete_symbol)$/;
 const SVAROG_DENIED_TOOLS = {
   task: false,

@@ -10,7 +10,7 @@
 
 Based on the uncommitted changes in the git repository, generate a concise and descriptive commit message that accurately summarizes the changes made. The commit message should be clear and informative, providing context for future reference.
 
-Create the commit with the prepared message, but DON'T push it to the repository.
+Create the commit with the prepared message, but DON'T push it as part of this command (publishing is a separate, explicit `create_pr` step — see the Publishing section below).
 
 Use the `av_commit` tool to create the commit.
 
@@ -40,11 +40,11 @@ config: changing configuration files
 
 Prefer `!` over `BREAKING CHANGE` in the footer for breaking changes.
 
-NEVER push messages to the repository. It's strictly forbidden.
+NEVER push via bash. Publishing goes only through the `create_pr` tool (see the Publishing section below).
 
 If user provided non-empty task ID ($1), include `Refs: <task-id>` in the footer of the commit message.
 
-Never run `git push`.
+Never run `git push` through `bash` (use `create_pr` to publish).
 Never run `git commit` through `bash`.
 
 **Co-authorship prohibition:**

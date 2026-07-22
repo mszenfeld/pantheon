@@ -63,8 +63,8 @@ pure TypeScript before any git invocation.
 - **Discovered constraint that shapes this design:** the shared `isImmutableDeny` floor
   (`src/modules/_shared/stribog-extra-tools-contract.ts:65`) denies any tool id containing
   `create` as a whole underscore-segment. `create_branch` matches, so the floor denies the tool
-  for **both** executors — Stribog at `src/modules/stribog/tool-budget-hook.ts:311` (step 3) and
-  Svarog at `src/modules/svarog/tool-budget-hook.ts:192` (step 4). The originating request assumed
+  for **both** executors — Stribog at `src/modules/stribog/tool-budget-hook.ts:319` (step 3) and
+  Svarog at `src/modules/svarog/tool-budget-hook.ts:197` (step 4). The originating request assumed
   "Svarog is allow-by-default for plugin tools, so no Svarog change is needed"; that assumption
   does not hold (see §5.4 and §9).
 - **Revision note (2026-07-21):** the first draft of this spec took a single `name` string. The
@@ -471,7 +471,7 @@ Alternatives considered and rejected:
 - **Operator `agents.stribog.extraTools: ["create_branch"]`** — rejected: impossible by design.
   `validateExtraToolsPattern` rejects exact ids that are immutable-denied
   (`src/modules/_shared/stribog-extra-tools-contract.ts:101-105`), and the runtime floor wins over
-  any extraPattern anyway (`tool-budget-hook.ts:306-311`).
+  any extraPattern anyway (`tool-budget-hook.ts:314-319`).
 - **Add to `STRIBOG_TOOLS`/`SVAROG_TOOLS`** — rejected: `tools-sync.test.ts:33` pins exact
   parity between `STRIBOG_TOOLS` structured entries and `CORE_BUILTINS` minus `bash`; the
   established pattern for hook-allowed non-builtin tools is hook-only with a comment in
@@ -658,7 +658,7 @@ Real temp repo via `mkdtemp` + `git init` + user config (pattern of
 ## 9. Deviations from the originating request
 
 1. **Svarog *does* need a (two-line) hook change** (D2, §5.4): the shared `isImmutableDeny`
-   floor denies the `create_` verb for Svarog at `src/modules/svarog/tool-budget-hook.ts:192`.
+   floor denies the `create_` verb for Svarog at `src/modules/svarog/tool-budget-hook.ts:197`.
    The request's "no Svarog change is needed" is incorrect on the evidence; the minimal carve-out
    is specified instead of loosening anything.
 2. **Return schema gains optional `checkoutError`** on the checkout-failure path only (D3, FR-7) —

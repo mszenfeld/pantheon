@@ -16,7 +16,7 @@ export const SVAROG_AGENT_KEY = "svarog" as const
 export const DEFAULT_SVAROG_MODEL = "openai/gpt-5.5"
 
 export const SVAROG_DESCRIPTION =
-  "Heavy/main code executor: implements a multi-file feature or refactor from a plan or task — writes code test-first, runs the full suite/build, and returns a verified diff with a recoverable checkpoint. Stops at READY (does not commit). NOT for trivial 1-2 file mechanical changes (use stribog), secrets (use zmora-setup), or work needing an unsettled design decision (plan with veles)."
+  "Heavy/main code executor: implements a multi-file feature or refactor from a plan or task — writes code test-first, runs the full suite/build, and returns a verified diff with a recoverable checkpoint. Finishes at READY; commits only via the sanctioned av_commit tool (never bash git commit). NOT for trivial 1-2 file mechanical changes (use stribog), secrets (use zmora-setup), or work needing an unsettled design decision (plan with veles)."
 
 /** Serena single-file + cross-file EDITORS Svarog may use (suffix-matched, server-prefix
  *  agnostic). The tool hook ALLOWS these via a carve-out BEFORE the reused isImmutableDeny
