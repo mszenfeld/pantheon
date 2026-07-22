@@ -71,3 +71,23 @@ If included in the type/scope prefix, breaking changes MUST be indicated by a `!
 Types other than `feat` and `fix` MAY be used in your commit messages.
 The units of information that make up Conventional Commits MUST NOT be treated as case sensitive by implementors, with the exception of `BREAKING CHANGE` which MUST be uppercase.
 `BREAKING-CHANGE` MUST be synonymous with `BREAKING CHANGE`, when used as a token in a footer.
+
+## Publishing: the `create_pr` tool
+
+After committing with `av_commit`, publish the branch and open a pull request with the
+`create_pr` tool — never with bash `git push` (blocked) or `gh pr create` directly.
+
+- Arguments: `title` (required), `body` (optional markdown), `base` (optional; defaults to
+  the origin default branch — an empty or whitespace-only value counts as omitted),
+  `draft` (optional, default `false` — the PR opens ready for review), `taskId` (optional;
+  appended to the body as a `Refs: <taskId>` footer).
+- The tool always pushes the **current** branch (`git push -u origin <branch>`, never
+  force) and never pushes from the base branch (create one with `create_branch` first).
+- Partial success: if the push lands but PR creation fails, the result carries
+  `pushed: true, prCreated: false` and a `prError` explaining what to fix (e.g. `gh` not
+  installed / not authenticated). Re-running the same call is safe — the push becomes a
+  no-op; if the PR already exists, its URL appears in `prError`.
+- Requirements on the host: GitHub origin, `gh` installed and authenticated
+  (`gh auth login`). Fork workflows: set the target once with `gh repo set-default`.
+- The existing prohibitions are unchanged: never push via bash, never `git commit` via
+  bash, Conventional Commits, no AI co-authorship.

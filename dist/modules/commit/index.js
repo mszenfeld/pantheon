@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import { tool } from "@opencode-ai/plugin";
 import { classifyBashCommand } from "./bash-policy.js";
 import { createControlledCommit } from "./controlled-commit.js";
+import { createPr } from "./create-pr.js";
 const COMMIT_COMMAND_DESCRIPTION = "Create a git commit with the AppVerk commit workflow";
 const moduleDirectory = path.dirname(fileURLToPath(import.meta.url));
 const packagedCommandPath = path.resolve(
@@ -48,6 +49,27 @@ const AppVerkCommitPlugin = async () => {
           });
           return JSON.stringify(result, null, 2);
         }
+      }),
+      create_pr: tool({
+        description: "Push the current branch to origin and open a pull request through the AppVerk workflow",
+        args: {
+          title: tool.schema.string().describe("Pull request title"),
+          body: tool.schema.string().optional().describe("Pull request description (markdown)"),
+          base: tool.schema.string().optional().describe("Base branch; defaults to the origin default branch"),
+          draft: tool.schema.boolean().optional().describe("Create the PR as a draft (default: ready for review)"),
+          taskId: tool.schema.string().optional().describe("Optional task ID appended to the body as a Refs footer")
+        },
+        async execute(args, context) {
+          const result = await createPr({
+            cwd: context.worktree ?? context.directory,
+            title: args.title,
+            body: args.body,
+            base: args.base,
+            draft: args.draft ?? false,
+            taskId: args.taskId
+          });
+          return JSON.stringify(result, null, 2);
+        }
       })
     },
     "tool.execute.before": async (input, output) => {
@@ -60,7 +82,9 @@ const AppVerkCommitPlugin = async () => {
         throw new Error("Direct git commit is blocked. Use /commit instead.");
       }
       if (decision === "block-push") {
-        throw new Error("git push is blocked by the AppVerk commit plugin.");
+        throw new Error(
+          "git push is blocked by the AppVerk commit plugin. Use the `create_pr` tool to publish the current branch and open a pull request."
+        );
       }
     }
   };

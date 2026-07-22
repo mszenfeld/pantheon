@@ -55,6 +55,7 @@ function makeSvarogToolHook(deps) {
           `${TOOL_DENIED}: Svarog is a leaf in-tree executor with no network egress (\`${raw}\` denied). If the task genuinely needs external data, return the ESCALATE result.`
         );
       }
+      if (norm === "create_pr") return;
       if (isImmutableDeny(norm)) {
         throw new Error(
           `${TOOL_DENIED}: tool "${raw}" is immutably denied for Svarog (capability class: secret-mint / dispatch / shell / DB-mutation / serena-memory-write). Svarog is a leaf executor \u2014 if the task requires this, return the ESCALATE result.`
