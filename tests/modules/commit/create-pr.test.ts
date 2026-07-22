@@ -5,6 +5,7 @@ import {
   githubPrProvider,
 } from "../../../src/modules/commit/github-pr-provider.js"
 import type { GitResult, GitRunner } from "../../../src/modules/commit/controlled-commit.js"
+import { createPr } from "../../../src/modules/commit/create-pr.js"
 
 describe("detectProvider (§5.4 normative vectors)", () => {
   it("recognizes github.com in all three URL shapes, case-insensitively", () => {
@@ -115,6 +116,84 @@ describe("githubPrProvider (gh argv contract, AC-9/AC-10)", () => {
     }
     await expect(githubPrProvider(runGh).createPullRequest(PR_INPUT)).rejects.toThrow(
       GH_MISSING_MESSAGE,
+    )
+  })
+})
+
+function recordingGitRunner(
+  responses: Partial<Record<string, GitResult>> = {},
+): { runGit: GitRunner; calls: FakeCall[] } {
+  const calls: FakeCall[] = []
+  const runGit: GitRunner = async (cwd, args) => {
+    calls.push({ cwd, args: [...args] })
+    return responses[args[0] ?? ""] ?? { stdout: "", stderr: "", exitCode: 0 }
+  }
+  return { runGit, calls }
+}
+
+describe("createPr parameter validation (AC-1: zero spawns, normative template)", () => {
+  async function rejectsWith(
+    args: Partial<Parameters<typeof createPr>[0]>,
+    pattern: RegExp,
+  ) {
+    const { runGit, calls } = recordingGitRunner()
+    await expect(
+      createPr({ cwd: "/tmp/fake", title: "ok", runGit, ...args }),
+    ).rejects.toThrow(pattern)
+    expect(calls).toHaveLength(0)
+  }
+
+  it("rejects every rule with the exact template (field, ruleId, slug, JSON value)", async () => {
+    await rejectsWith({ title: "   " }, /^create_pr: field 'title' violates rule T1 \(empty-title\): ""$/)
+    await rejectsWith({ title: "a".repeat(257) }, /rule T2 \(max-length-256-chars\)/)
+    await rejectsWith({ title: "two\nlines" }, /rule T3 \(control-characters\)/)
+    await rejectsWith({ taskId: "INC 212" }, /field 'taskId' violates rule K1 \(invalid-characters\): "INC 212"/)
+    await rejectsWith({ taskId: "-x" }, /field 'taskId' violates rule K2 \(leading-dash\): "-x"/)
+    await rejectsWith({ body: "x".repeat(64_001) }, /field 'body' violates rule B1 \(max-length-64000-bytes\)/)
+    await rejectsWith({ body: "nul\x00byte" }, /rule B2 \(control-characters\)/)
+    await rejectsWith({ body: "esc\x1Bbyte" }, /rule B2 \(control-characters\)/)
+    await rejectsWith({ base: "a b" }, /field 'base' violates rule R1 \(invalid-characters\): "a b"/)
+    await rejectsWith({ base: "-d" }, /field 'base' violates rule R2 \(leading-dash\): "-d"/)
+    await rejectsWith({ base: "a..b" }, /field 'base' violates rule R3 \(dot-dot\): "a\.\.b"/)
+    await rejectsWith({ base: "a//b" }, /rule R4 \(component-rules\)/)
+    await rejectsWith({ base: "/a" }, /rule R4 \(component-rules\)/)
+    await rejectsWith({ base: "a/" }, /rule R4 \(component-rules\)/)
+    await rejectsWith({ base: "a/.h" }, /rule R4 \(component-rules\)/)
+    await rejectsWith({ base: "x.lock" }, /rule R4 \(component-rules\)/)
+    await rejectsWith({ base: "x." }, /rule R4 \(component-rules\)/)
+    await rejectsWith({ base: "a".repeat(241) }, /rule R5 \(max-length-240-bytes\)/)
+  })
+
+  it("evaluation order is title → taskId → body → base; first failing rule reported", async () => {
+    // multi-violation input: bad title AND bad base — title wins
+    await rejectsWith({ title: "", base: "a b" }, /field 'title' violates rule T1/)
+    // bad taskId AND bad body — taskId wins (B1 validates the resolved body, taskId first)
+    await rejectsWith({ taskId: "bad id", body: "x".repeat(64_001) }, /field 'taskId' violates rule K1/)
+  })
+
+  it("accepts the boundary vectors without a validation throw", async () => {
+    // These stop at the not-yet-implemented guard phase, NOT at validation:
+    const { runGit } = recordingGitRunner()
+    await expect(
+      createPr({ cwd: "/t", title: "a".repeat(256), runGit }),
+    ).rejects.toThrow(/guards not implemented/)
+    await expect(
+      createPr({ cwd: "/t", title: "ok", body: "x".repeat(64_000), runGit }),
+    ).rejects.toThrow(/guards not implemented/)
+    await expect(
+      createPr({ cwd: "/t", title: "ok", base: "a".repeat(240), runGit }),
+    ).rejects.toThrow(/guards not implemented/)
+    await expect(
+      createPr({ cwd: "/t", title: "ok", base: "release/2026.07", runGit }),
+    ).rejects.toThrow(/guards not implemented/)
+  })
+
+  it("resolves the Refs footer per §5.2 Normalization", async () => {
+    // Whitespace-only body + taskId → "Refs: <id>" (no leading blank lines): B1/B2 must
+    // validate that resolved value, so an oversized taskId-only body still trips B1.
+    await rejectsWith(
+      { body: "   ", taskId: "A".repeat(64_001) },
+      /field 'taskId' violates rule K1|field 'body' violates rule B1/,
     )
   })
 })
