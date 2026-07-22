@@ -1,0 +1,188 @@
+{
+  "spec_path": "docs/specs/create-branch-tool-2.md",
+  "last_written_hash": "33cb6ddc4319cfca59f396700af23994f67b0059b78b4dcb15560b5223734754",
+  "status": "CONVERGED",
+  "run": 1,
+  "iterations_used": 2,
+  "dispatches_used": 18,
+  "active_seconds": 1330,
+  "loop_start_epoch": 1784713961,
+  "loop_end_epoch": 1784715488,
+  "scope_note": "Operator-approved deviation (precedent: create-pr-tool run 1): target spec lives in docs/specs/, loop artifacts in docs/specs/reviews/. Working-tree gate: spec untracked, operator confirmed proceed.",
+  "budgets": { "max_iterations": 3, "max_dispatches": 60, "time_budget_seconds": 1800 },
+  "decisions": {},
+  "registry": [
+    {
+      "sr_id": "SR-001",
+      "slug": "5-architecture--design-decisions",
+      "phrase": "composed vector -feature row primary rule N3 not N2",
+      "key": "sha256(5-architecture--design-decisions|composed vector -feature row primary rule N3 not N2)",
+      "severity": "major",
+      "lenses": ["internal-consistency", "ambiguity-testability", "contracts"],
+      "needs_decision": false,
+      "unlanded": false,
+      "unconfirmed": false,
+      "fix_failures": 0,
+      "challenger": "uphold",
+      "outcome_latest": "applied"
+    },
+    {
+      "sr_id": "SR-002",
+      "slug": "5-architecture--design-decisions",
+      "phrase": "segment validation order and first-failed-rule unpinned",
+      "key": "sha256(5-architecture--design-decisions|segment validation order and first-failed-rule unpinned)",
+      "severity": "major",
+      "lenses": ["ambiguity-testability", "contracts"],
+      "needs_decision": false,
+      "unlanded": false,
+      "unconfirmed": false,
+      "fix_failures": 0,
+      "challenger": "uphold",
+      "outcome_latest": "applied"
+    },
+    {
+      "sr_id": "SR-003",
+      "slug": "5-architecture--design-decisions",
+      "phrase": "composed vector table rule labels lack N prefix",
+      "key": "sha256(5-architecture--design-decisions|composed vector table rule labels lack N prefix)",
+      "severity": "nit",
+      "lenses": ["ambiguity-testability"],
+      "needs_decision": false,
+      "unlanded": false,
+      "unconfirmed": false,
+      "fix_failures": 0,
+      "outcome_latest": "applied"
+    },
+    {
+      "sr_id": "SR-004",
+      "slug": "5-architecture--design-decisions",
+      "phrase": "stale hook line-number citations after create_pr merge",
+      "key": "sha256(5-architecture--design-decisions|stale hook line-number citations after create_pr merge)",
+      "severity": "minor",
+      "lenses": ["feasibility"],
+      "needs_decision": false,
+      "unlanded": false,
+      "unconfirmed": false,
+      "fix_failures": 0,
+      "outcome_latest": "applied",
+      "note": "5 pairs incl. fixer follow-up for the §9 citation the original batch scope missed (fixer flagged it in notes; orchestrator requested the extra pair before the gate). R2 feasibility re-verified all refreshed numbers as accurate."
+    },
+    {
+      "sr_id": "SR-005",
+      "slug": "4-requirements",
+      "phrase": "type arg schema primitive unpinned string vs enum",
+      "key": "sha256(4-requirements|type arg schema primitive unpinned string vs enum)",
+      "severity": "minor",
+      "lenses": ["contracts"],
+      "needs_decision": false,
+      "unlanded": false,
+      "unconfirmed": false,
+      "fix_failures": 0,
+      "outcome_latest": "applied"
+    },
+    {
+      "sr_id": "SR-006",
+      "slug": "7-testing--acceptance-criteria",
+      "phrase": "cwd required in CreateBranchInput but elided in AC calls",
+      "key": "sha256(7-testing--acceptance-criteria|cwd required in CreateBranchInput but elided in AC calls)",
+      "severity": "minor",
+      "lenses": ["internal-consistency"],
+      "needs_decision": false,
+      "unlanded": false,
+      "unconfirmed": false,
+      "fix_failures": 0,
+      "outcome_latest": "reported-only",
+      "proposed_fix": "Add `cwd` to the createBranch calls in AC-2/AC-3/AC-5/AC-6 (matching AC-7), or mark §5.1 `cwd?` and state its default."
+    },
+    {
+      "sr_id": "SR-007",
+      "slug": "4-requirements",
+      "phrase": "checkoutError content unpinned when checkout stderr empty",
+      "key": "sha256(4-requirements|checkoutError content unpinned when checkout stderr empty)",
+      "severity": "minor",
+      "lenses": ["ambiguity-testability", "contracts"],
+      "needs_decision": false,
+      "unlanded": false,
+      "unconfirmed": false,
+      "fix_failures": 0,
+      "outcome_latest": "reported-only",
+      "proposed_fix": "Specify checkoutError as stderr-with-stdout-fallback (mirroring FR-4 / create-pr.ts's stderr.trim() || stdout.trim() || non-empty default) in FR-7 and AC-6, keeping the skip-vs-fail distinction unambiguous."
+    },
+    {
+      "sr_id": "SR-008",
+      "slug": "5-architecture--design-decisions",
+      "phrase": "invisible NUL byte in segment vector and empty legend escape",
+      "key": "sha256(5-architecture--design-decisions|invisible NUL byte in segment vector and empty legend escape)",
+      "severity": "nit",
+      "lenses": ["ambiguity-testability"],
+      "needs_decision": false,
+      "unlanded": false,
+      "unconfirmed": false,
+      "fix_failures": 0,
+      "outcome_latest": "reported-only",
+      "proposed_fix": "Render the NUL vector with a visible escape (e.g. \"fix\\u0000alert\") and give the legend's fourth escape entry a concrete spelling (e.g. \\0)."
+    }
+  ],
+  "rounds": [
+    {
+      "round": 1,
+      "panel": ["internal-consistency", "ambiguity-testability", "completeness", "feasibility", "doctrine-compliance", "contracts"],
+      "panel_rationale": "Two core lenses; completeness (9 sections > 3); feasibility + doctrine-compliance (marketplace-plugin tool trigger; doctrine calibrated for a non-loop tool); contracts (tool arg schema + result contract). ux omitted: no UI surface. Cap 6.",
+      "units": ["1. Goal", "2. Background & current behaviour", "3. Constraints", "4. Requirements", "5. Architecture & design decisions", "6. Security assessment", "7. Testing & acceptance criteria", "8. Rollout", "9. Deviations from the originating request"],
+      "findings": [
+        {"sr_id": "SR-001", "severity": "major", "lenses": ["internal-consistency", "ambiguity-testability", "contracts"], "outcome": "applied"},
+        {"sr_id": "SR-002", "severity": "major", "lenses": ["ambiguity-testability", "contracts"], "outcome": "applied"},
+        {"sr_id": "SR-003", "severity": "nit", "lenses": ["ambiguity-testability"], "outcome": "applied"},
+        {"sr_id": "SR-004", "severity": "minor", "lenses": ["feasibility"], "outcome": "applied"},
+        {"sr_id": "SR-005", "severity": "minor", "lenses": ["contracts"], "outcome": "applied"}
+      ],
+      "challengers": [
+        {"sr_id": "SR-001", "verdict": "uphold", "justification_summary": "All five refutation avenues fail: §5.2.4+§5.1 pin first-failed-rule order, rule 1 passes, rule 2 fires before rule 3 (-feature ≠ feature), AC-1 binds the row's rule id, and N3 is unreachable as a first failure for any valid expectedType."},
+        {"sr_id": "SR-002", "verdict": "uphold", "justification_summary": "No text pins S-rule or cross-segment evaluation order ('numbered in the order listed' fixes numbering, not evaluation); S3 applies to normalized description unconditionally so the S2/S3 collision is real; the bad-type-AND-bad-id case is covered by no vector — two competent implementers diverge observably."}
+      ],
+      "fix_batch": {"pairs": 21, "gate": "approved in full (interactive)", "applied": 21, "fix_failed": 0, "obsolete": 0},
+      "equivalence_log": [
+        {"a": "internal-consistency#1", "b": "ambiguity-testability#1", "match": true, "merged_as": "SR-001"},
+        {"a": "SR-001", "b": "contracts#1", "match": true, "merged_as": "SR-001"},
+        {"a": "ambiguity-testability#2", "b": "contracts#2", "match": true, "merged_as": "SR-002"},
+        {"a": "SR-003", "b": "SR-001", "match": false, "note": "label format vs wrong primary rule — distinct defects"},
+        {"a": "SR-005", "b": "SR-002", "match": false, "note": "schema primitive vs rule evaluation order — distinct defects"}
+      ],
+      "rejected": [
+        {"lens": "internal-consistency", "candidates": ["AC-2/AC-3 omit required cwd — prose elision, not literal source", "D8 GIT_DENIED message edit vs C-2 — message-only, behavior byte-identical, deferrable SHOULD", "FR-7 stderr-only vs FR-4 stderr-or-stdout — distinct invocations, no identity assertion", "AC-13 wrapper default vs AC-2 createBranch default — both hold simultaneously", "bare numbers vs N-ids — mapping defined in §5.2", "§2 line 285 vs §5.4 line 280/282-284 — anchor lines within one step-3 block, not a hard contradiction"]},
+        {"lens": "ambiguity-testability", "candidates": ["FR-4 'carrying stderr' vs AC-5 'rejects with that stderr' — pinned by controlled-commit.ts:82-88 mirror", "FR-7 checkoutError no stdout fallback — edge uncovered by ACs, not load-bearing two-way reading", "default-checkout location — AC-2+AC-13 jointly pin identical observable behavior", "NBSP row vs normal space — Rule column disambiguates, testable", "empty escape-spelling backtick in legend — Rule column normative", "FR-1 'required enum' schema kind — AC-13 asserts keys only, S1 runtime check, no divergent behavior", "'positively-attributed' undefined — existing attribution concept, delegated", "FR-7 'where permitted' for executors — parenthetical + operator path resolves", "runGit default — §5.1 import implies fallback", "D8 readability — labeled SHOULD, deferrable"]},
+        {"lens": "completeness", "candidates": ["checkoutError source when stderr empty — FR-7 decides (stderr, no fallback); divergence is consistency lens", "S-rule report order within segment — reject verdict identical; residual is ambiguity lens", "cross-segment error precedence — natural order inferable; ambiguity lens", "JSON schema enum vs free string — non-load-bearing, S1 enforces", "git-absent/ENOENT — delegated to reused GitRunner contract (C-3)", "execute catch vs propagate — derivable from av_commit pattern", "other agents calling the tool — explicitly out of scope + §6 posture", "uppercase in description — specified behavior", "base commit for branch — §5.3 states HEAD", "runGit injection default — derivable", "hook allow-return shape — serena-precedent convention, AC-11/12 pin observable", "schema enum surfacing to model — delegated to FR-11 + AC-13", "attribution semantics — existing gate, not new"]},
+        {"lens": "feasibility", "candidates": ["carve-out mechanism infeasible — create_pr implements it today", "two create_ carve-outs conflict — independent guards", "FR-4 propagation impossible — runner returns exitCode, createBranch throws, mirrors 82-88", "validateExtraToolsPattern citation stale — contract file untouched, 101-105 exact", "C-4 pins stale — verbatim at cited lines", "D1 src/index.ts registration false — AppVerkCommitPlugin registered", "240-byte arithmetic wrong — 8+232=240 exact, ASCII", "NBSP normalization unachievable — trim + \\s cover U+00A0", "N2 unenforceable — expectedType parameter carries it", "unborn-HEAD claim incorrect — git branch does fail; fixture correctly mandates initial commit", "av_commit citations stale after create_pr — av_commit block unmoved"]},
+        {"lens": "doctrine-compliance", "candidates": ["item 1 oracle — deterministic validator + git exit code named, boundary stated (§5.3)", "item 2 verifier/actor — gates on raw git exit, rules are fixed tool code", "item 3 coverage — no runtime coverage gate, trigger not hit", "item 4 human gate — no headless decision, deterministic verifier, attribution posture", "item 5 guards reuse — GitRunner + attribution model reused, zero-spawn abort", "item 6 budgets — no loop, ≤2 invocations", "item 7 no-progress/stopped — no loop; FR-6/FR-7 distinguish partial from success", "item 8 residual risks — §6 + FR-7/D3 enumerate", "item 9 provenance — D9 refuses id rewrite (the exact guard)", "item 10 sidecar — no persisted loop state, re-run pinned by AC-9", "item 11 scoped writes — one ref + same-commit checkout, never auto-delete, never commits", "oracle taxonomy — no soft oracle exists", "anti-pattern guessed-assertion auto-fix — deterministic transform, provenance-guarded", "item 8 sub-candidate unreported base HEAD — §5.3 same-commit property, low blast radius"]},
+        {"lens": "contracts", "candidates": ["'segment' vs create_pr 'field' naming — each spec internally consistent", "bare 4/7 vs N4/N7 — §5.2 maps ids, thrown string fully pinned", "checkout default location — additive/idempotent, not contradictory", "FR-7 no stdout fallback — explicit design choice, AC-6 tests stderr path", "created always true — vestigial, not contradictory", "composeBranchName full-input superset — harmless", "trimmedType TS narrowing — implementation detail", "register beside av_commit with create_pr present — purely additive", "checkoutError key omission on success — pinned, stringify drops undefined"]}
+      ]
+    },
+    {
+      "round": 2,
+      "panel": ["internal-consistency", "ambiguity-testability", "completeness", "feasibility", "doctrine-compliance", "contracts"],
+      "panel_rationale": "Same panel, fresh dispatch (fresh-panel re-review of the revised spec).",
+      "units": ["1. Goal", "2. Background & current behaviour", "3. Constraints", "4. Requirements", "5. Architecture & design decisions", "6. Security assessment", "7. Testing & acceptance criteria", "8. Rollout", "9. Deviations from the originating request"],
+      "findings": [
+        {"sr_id": "SR-006", "severity": "minor", "lenses": ["internal-consistency"], "outcome": "reported-only"},
+        {"sr_id": "SR-007", "severity": "minor", "lenses": ["ambiguity-testability", "contracts"], "outcome": "reported-only"},
+        {"sr_id": "SR-008", "severity": "nit", "lenses": ["ambiguity-testability"], "outcome": "reported-only"}
+      ],
+      "challengers": [],
+      "convergence": "CONVERGED at Step 6: zero significant findings (no major+), zero unlanded fixes, zero unconfirmed entries. Terminated before the fix phase; round-2 minors/nit → reported-only per contract.",
+      "equivalence_log": [
+        {"a": "ambiguity-testability#1", "b": "contracts#1", "match": true, "merged_as": "SR-007", "note": "same defect: checkoutError content when stderr empty"},
+        {"a": "SR-006", "b": "R1 internal-consistency rejected candidate 'AC-2/AC-3 omit required cwd'", "match": true, "note": "R1 self-rejected as prose elision; R2 reports it citing the runGit asymmetry — recorded as ghost-graduation, new entry (rejected candidates create no registry identity)"},
+        {"a": "SR-007", "b": "R1 rejected ghost 'FR-7 checkoutError no stdout fallback' (ambiguity, completeness, contracts)", "match": true, "note": "thrice-rejected R1 ghost graduated to a merged two-lens R2 finding"},
+        {"a": "SR-008", "b": "R1 ambiguity rejected candidate 'empty escape-spelling backtick in legend'", "match": true, "note": "R1 rejection covered the legend only; R2 finding adds the invisible-NUL reproducibility defect in the vector row itself"}
+      ],
+      "rejected": [
+        {"lens": "internal-consistency", "candidates": ["D8 message edit vs §5.1 'No other logic changes' — message-only, not a logic change", "§2 floor line 292 vs §5.4 denyKey 287 — one multi-line step-3 block, coherent", "AC-3 omits runGit vs 'injected runner' — optional, section header states the premise", "FR-6 shapes omit checkoutError vs FR-7 — 'always contains' ≠ 'never carries more'", "N4/N7/rule-2 unreachable in composed flow vs vectors — defense-in-depth + direct-test contract", "240-byte vectors vs rule 11 — arithmetic consistent", "strip-to-empty vs §6 'never introduces character outside whitelist' — removal/conversion only", "evaluation-order claim vs per-segment applicability — skipping non-applicable rules is well-defined"]},
+        {"lens": "ambiguity-testability", "candidates": ["trimmed type in composition — pinned by vectors + validateBranchName(name, trimmedType)", "NBSP input indistinguishable — rule annotation disambiguates", "'also N8'/'also N3' reporting — first-failed rule + fixed order determine id", "id empty/whitespace omission — §5.2.1 step 3 + FR-3 normative", "no AC re-verifies bash checkout denial — completeness concern; C-2 + AC-14 cover", "AC-1 zero-call clause vs direct validateBranchName vectors — applies to runner-exercised rows", "\\s vs trim() whitespace-set equivalence — intent unambiguous", "AC-1 via createBranch vs composeBranchName — identical throws, no divergence", "'positively-attributed' vs 'confirmed' — same hook-attribution gate", "checkedOut:false dual meaning — disambiguated by checkoutError key presence"]},
+        {"lens": "completeness", "candidates": ["checkoutError stderr-only vs FR-4 fallback — stated-content divergence, not missing decision (out of lens)", "/commit-flow access — derivable from §2 global visibility + §8", "description lowercasing — §5.2.1 normative, case-preserving decided", "GitRunner ENOENT — delegated via C-3 + FR-4 mirror", "runGit default — implementation detail of existing pattern", "tool description copy — ux/docs, FR-11 owns", "unattributed-session behavior — existing attribution logic governs (D2 placement)", "worktree and directory both undefined — FR-8 mirrors av_commit", "per-segment length caps — composed 240-byte cap suffices", "upstream tracking — explicitly out of scope", "created:false never returned — explicit choice", "pre-existing branch checkout impossible — intentional non-capability", "N1-N11 evaluation order — §5.2 + ordered list fix it", "wrapper error handling — FR-2 + §8 + av_commit mirror"]},
+        {"lens": "feasibility", "candidates": ["bash denial would block tool checkout — hook intercepts bash only; create_pr precedent runs git push via execFile", "plugin-tool id delivery — create_pr matched verbatim in both hooks", "string schema can't reach S1 — av_commit/create_pr enforce allow-lists in TS", "isImmutableDeny might not deny create_branch — pattern (^|_)create_ matches; carve-out needed at 292/186", "cited line numbers wrong — all verified accurate", "C-4 invariants would break — plugin-map registration only, pins pass", "FR-7 infeasible because runner throws — runner returns exitCode, mirrors prError path", "240-byte arithmetic — consistent", "D5 checkpoint skip — design rationale, outside feasibility", "AC-13 cwd/runGit hiding — av_commit demonstrates identically"]},
+        {"lens": "doctrine-compliance", "candidates": ["item 1 — bun run check + §7 ACs named; git single source of truth + TOCTOU limit stated", "item 2 — created:true gated on raw git exit, raw stderr propagated", "item 3 — no coverage gate, N/A by design", "item 4 — same-commit checkout non-destructive, §2 incident class structurally impossible, checkout:false explicit", "item 5 — GitRunner + attribution reuse, argv-only, zero-spawn abort", "item 6 — no loop, N/A", "item 7 — no loop, N/A", "item 8 — §6 + FR-7/D3 + §5.3 enumerate residuals", "item 9 — no auto-correction, N/A", "item 10 — stateless, N/A", "item 11 — scoped one-branch writes, never auto-delete, never commits", "taxonomy/anti-patterns — strong oracle only, no self-grading"]},
+        {"lens": "contracts", "candidates": ["FR-4 default when both streams empty — controlled-commit.ts:82-88 citation supplies the default tier", "checkout default location — both-defaulting consistent", "composeBranchName param type unnamed — derivable, not test-load-bearing", "C-3 lists GitResult but §5.1 import omits — comes along by inference", "createBranch return type unannotated — async by construction, matches sibling", "created:true constant — pinnable, create failure throws", "composition type not marked trimmed — pinned by vector + validateBranchName(name, trimmedType)", "skip-vs-fail via checkoutError presence — FR-6/FR-7 pin it (empty-stderr edge is the reported finding)", "id/checkout schema optionality — FR-1 specifies", "rule-id mappings and order — fully consistent", "hook carve-out shape — verified against live create_pr returns"]}
+      ]
+    }
+  ]
+}
