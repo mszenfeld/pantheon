@@ -121,9 +121,11 @@ export async function createPr(input: CreatePrInput): Promise<CreatePrResult> {
   // remote-tracking or full-ref spelling of the same branch (`origin/master`,
   // `refs/heads/master`) must not slip past the G2 head≠base guard — or reach `gh --base=`,
   // which wants the plain branch name.
+  // Re-validated AFTER normalization: stripping a prefix can expose a value the R-rules would
+  // have rejected outright (`origin/-x` → `-x`, which violates R2).
   const providedBase =
     input.base !== undefined && input.base.trim() !== ""
-      ? normalizeBaseRef(validateRef("base", input.base))
+      ? validateRef("base", normalizeBaseRef(validateRef("base", input.base)))
       : undefined
 
   const runGit = input.runGit ?? defaultGitRunner

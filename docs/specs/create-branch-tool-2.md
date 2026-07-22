@@ -46,8 +46,8 @@ pure TypeScript before any git invocation.
 ## 2. Background & current behaviour
 
 - The executor agents' bash is gated by `tool.execute.before` hooks that deny tree/branch-mutating
-  git via `isMutatingGitCommand` (`src/modules/stribog/tool-budget-hook.ts:230`,
-  `src/modules/svarog/tool-budget-hook.ts:138`). The deny was added after a dispatched executor ran
+  git via `isMutatingGitCommand` (`src/modules/stribog/tool-budget-hook.ts:245`,
+  `src/modules/svarog/tool-budget-hook.ts:148`). The deny was added after a dispatched executor ran
   `git checkout feature/global-skills` and silently moved the operator's worktree off `master`
   (rationale recorded in `src/modules/_shared/mutating-git.ts:1-16`). `git branch <name>` (create,
   no `-d/-D`) is *not* bash-denied, but switching to the new branch is — so today an executor
@@ -63,8 +63,8 @@ pure TypeScript before any git invocation.
 - **Discovered constraint that shapes this design:** the shared `isImmutableDeny` floor
   (`src/modules/_shared/stribog-extra-tools-contract.ts:65`) denies any tool id containing
   `create` as a whole underscore-segment. `create_branch` matches, so the floor denies the tool
-  for **both** executors — Stribog at `src/modules/stribog/tool-budget-hook.ts:322` (step 3) and
-  Svarog at `src/modules/svarog/tool-budget-hook.ts:199` (step 4). The originating request assumed
+  for **both** executors — Stribog at `src/modules/stribog/tool-budget-hook.ts:354` (step 3) and
+  Svarog at `src/modules/svarog/tool-budget-hook.ts:214` (step 4). The originating request assumed
   "Svarog is allow-by-default for plugin tools, so no Svarog change is needed"; that assumption
   does not hold (see §5.4 and §9).
 - **Revision note (2026-07-21):** the first draft of this spec took a single `name` string. The
@@ -473,7 +473,7 @@ Alternatives considered and rejected:
 - **Operator `agents.stribog.extraTools: ["create_branch"]`** — rejected: impossible by design.
   `validateExtraToolsPattern` rejects exact ids that are immutable-denied
   (`src/modules/_shared/stribog-extra-tools-contract.ts:101-105`), and the runtime floor wins over
-  any extraPattern anyway (`tool-budget-hook.ts:317-322`).
+  any extraPattern anyway (`tool-budget-hook.ts:349-354`).
 - **Add to `STRIBOG_TOOLS`/`SVAROG_TOOLS`** — rejected: `tools-sync.test.ts:33` pins exact
   parity between `STRIBOG_TOOLS` structured entries and `CORE_BUILTINS` minus `bash`; the
   established pattern for hook-allowed non-builtin tools is hook-only with a comment in
@@ -500,7 +500,7 @@ deletion is a second, unrequested mutation) and the tool never checks out a pre-
 This extends the request's return schema with one optional field, `checkoutError`.
 
 **D5 — No Svarog recovery checkpoint for `create_branch`.** The auto-checkpoint fires on
-file-mutating tools (`MUTATING_NATIVE`, `svarog/tool-budget-hook.ts:24-30`). A same-commit
+file-mutating tools (`MUTATING_NATIVE`, `svarog/tool-budget-hook.ts:28-36`). A same-commit
 checkout changes no working-tree file (§5.3), so there is nothing to recover; adding the tool to
 that set was considered and rejected.
 
@@ -509,7 +509,7 @@ that set was considered and rejected.
 strings in both hooks SHOULD also gain "use the `create_branch` tool" redirect text — the hooks
 already use redirect-guidance for collision families (`SKILL_META_TOOL`, `EDIT_EQUIVALENT_TOOL`)
 precisely because a bare denial makes models ESCALATE (documented in
-`stribog/tool-budget-hook.ts:31-47`). This edits only the *message* of a denial, never its
+`stribog/tool-budget-hook.ts:37-53`). This edits only the *message* of a denial, never its
 behavior, so it does not loosen the bash policy (C-2); it is flagged here because the request
 said "do not modify the executor bash hooks" — the approver may defer this line to a follow-up
 without affecting FR-1…FR-11. **Status: implemented 2026-07-22** (initially deferred, then
@@ -663,7 +663,7 @@ Real temp repo via `mkdtemp` + `git init` + user config (pattern of
 ## 9. Deviations from the originating request
 
 1. **Svarog *does* need a (two-line) hook change** (D2, §5.4): the shared `isImmutableDeny`
-   floor denies the `create_` verb for Svarog at `src/modules/svarog/tool-budget-hook.ts:199`.
+   floor denies the `create_` verb for Svarog at `src/modules/svarog/tool-budget-hook.ts:214`.
    The request's "no Svarog change is needed" is incorrect on the evidence; the minimal carve-out
    is specified instead of loosening anything.
 2. **Return schema gains optional `checkoutError`** on the checkout-failure path only (D3, FR-7) —

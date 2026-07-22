@@ -2,6 +2,8 @@ import { isAbsolute, resolve } from "node:path"
 import {
   bareCommitDenialMessage,
   hasExplicitCommitFiles,
+  matchesEditedPath,
+  unbudgetedCommitPathMessage,
 } from "../_shared/commit-staging-scope.js"
 import { isMutatingGitCommand } from "../_shared/mutating-git.js"
 import {
@@ -101,7 +103,6 @@ export interface StribogToolHookOutput {
     files?: unknown
   }
 }
-
 
 /** The `tool.execute.before` handler signature this factory produces. */
 export type StribogToolHook = (
@@ -323,9 +324,24 @@ export function makeStribogToolHook(
       // FAIL-CLOSED on staging scope: a bare av_commit falls back to `git add -A`
       // (controlled-commit.ts), so it is refused here — mirroring how an edit/write with no
       // bindable filePath is refused. The executor must name the paths it edited.
+      // Scope is bound twice: the shared predicate rejects whole-tree pathspecs ("." / ":/" /
+      // globs / traversal), and every named path must be one this session actually edited —
+      // the edit budget is Stribog's authoritative blast radius, so a commit may not reach
+      // past it.
       if (norm === "av_commit") {
-        if (!hasExplicitCommitFiles(output.args?.files)) {
+        const files: unknown = output.args?.files
+        if (!hasExplicitCommitFiles(files)) {
           throw new Error(bareCommitDenialMessage(SCOPE_VIOLATION, "Stribog"))
+        }
+        const edited = pathsFor(input.sessionID)
+        for (const file of files) {
+          if (!matchesEditedPath(file, edited)) {
+            throw new Error(
+              unbudgetedCommitPathMessage(SCOPE_VIOLATION, file.trim(), [
+                ...edited,
+              ]),
+            )
+          }
         }
         return
       }

@@ -381,37 +381,63 @@ describe("stribog tool-budget hook", () => {
     )
   })
 
-  it("allows av_commit for a confirmed stribog session when files are scoped explicitly", async () => {
+  it("allows av_commit for a confirmed stribog session, scoped to files it edited", async () => {
+    const h = hook(STRIBOG)
+    // the commit may only name paths this session actually edited
+    await h(input("edit"), { args: { filePath: "/repo/src/a.ts" } })
     const scoped = { args: { files: ["src/a.ts"] } }
-    await expect(
-      hook(STRIBOG)(input("av_commit"), scoped),
-    ).resolves.toBeUndefined()
+    await expect(h(input("av_commit"), scoped)).resolves.toBeUndefined()
     // case/hyphen normalization must not bypass the carve-out
+    await expect(h(input("Av-Commit"), scoped)).resolves.toBeUndefined()
+    // an absolute spelling of the same file resolves to the same edited path
     await expect(
-      hook(STRIBOG)(input("Av-Commit"), scoped),
+      h(input("av_commit"), { args: { files: ["/repo/src/a.ts"] } }),
     ).resolves.toBeUndefined()
     // floor regression guard: dispatch family stays denied
-    await expect(hook(STRIBOG)(input("execute_recipe"), out())).rejects.toThrow(
+    await expect(h(input("execute_recipe"), out())).rejects.toThrow(
       "STRIBOG_TOOL_DENIED",
     )
   })
 
-  it("refuses a bare av_commit — repo-wide `git add -A` staging is fail-closed", async () => {
+  it("refuses an unscoped av_commit — whole-tree staging is fail-closed", async () => {
+    // Shape failures AND whole-tree pathspecs: `git add -- .` / `-- :/` stage everything
+    // exactly like the `add -A` fallback the guard exists to prevent.
     for (const args of [
       {},
       { files: [] },
       { files: "src/a.ts" },
       { files: ["  "] },
       { files: ["src/a.ts", 42] },
+      { files: ["."] },
+      { files: ["./"] },
+      { files: ["/"] },
+      { files: [":/"] },
+      { files: [":(glob)**"] },
+      { files: ["src/*.ts"] },
+      { files: ["../outside.ts"] },
+      { files: ["src/a.ts", "."] },
     ]) {
       const message = await hook(STRIBOG)(input("av_commit"), { args })
         .then(() => "<allowed>")
         .catch((error: Error) => error.message)
       expect(message).toMatch(/^STRIBOG_SCOPE_VIOLATION/)
-      expect(message).toMatch(/explicit, non-empty 'files' list/)
+      expect(message).toMatch(/explicit 'files' list/)
       // redirect, not an escalation signal
       expect(message).toMatch(/Do NOT ESCALATE/)
     }
+  })
+
+  it("refuses an av_commit naming a path the session never edited", async () => {
+    const h = hook(STRIBOG)
+    await h(input("edit"), { args: { filePath: "/repo/src/a.ts" } })
+    const message = await h(input("av_commit"), {
+      args: { files: ["src/a.ts", "src/unrelated.ts"] },
+    })
+      .then(() => "<allowed>")
+      .catch((error: Error) => error.message)
+    expect(message).toMatch(/^STRIBOG_SCOPE_VIOLATION/)
+    expect(message).toMatch(/never edited this session/)
+    expect(message).toMatch(/Do NOT ESCALATE/)
   })
 })
 

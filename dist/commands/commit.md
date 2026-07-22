@@ -91,7 +91,10 @@ After committing with `av_commit`, publish the branch and open a pull request wi
   installed / not authenticated). Re-running the same call is safe — the push becomes a
   no-op; if the PR already exists, its URL appears in `prError`.
 - Validation is fail-fast and runs before any process spawn, reporting the first failing
-  rule as `create_pr: field '<field>' violates rule <ruleId> (<shortDescription>): <value>` —
+  rule as `create_pr: field '<field>' violates rule <ruleId> (<shortDescription>):
+  <jsonEncodedValue>` (the offending value is JSON-encoded). `<field>` is `title`, `body`,
+  `base`, `taskId`, or `head` — the last when the branch you are standing on itself violates
+  the ref rules, checked as defense-in-depth before the push. The rules:
   `title` T1–T3 (non-empty, ≤ 256 code points, no control characters), `taskId` K1–K2
   (`A–Z a–z 0–9 . _ -`, no leading dash), `body` B1–B2 (≤ 64 000 bytes; `\t`/`\n`/`\r` are
   the only allowed control characters), `base` R1–R5 (git-ref charset with `/`, no leading

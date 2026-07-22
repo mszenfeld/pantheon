@@ -195,13 +195,22 @@ describe("makeSvarogToolHook", () => {
     await allows("av_commit", { args: { files: ["src/a.ts"] } })
   })
 
-  it("refuses a bare av_commit — repo-wide `git add -A` staging is fail-closed", async () => {
-    for (const args of [{}, { files: [] }, { files: ["  "] }]) {
+  it("refuses an unscoped av_commit — whole-tree staging is fail-closed", async () => {
+    for (const args of [
+      {},
+      { files: [] },
+      { files: ["  "] },
+      { files: ["."] },
+      { files: [":/"] },
+      { files: ["**"] },
+      { files: ["../outside.ts"] },
+      { files: ["src/a.ts", "."] },
+    ]) {
       const message = await svarogHook()(input("av_commit"), { args })
         .then(() => "<allowed>")
         .catch((error: Error) => error.message)
       expect(message).toMatch(/^SVAROG_TOOL_DENIED/)
-      expect(message).toMatch(/explicit, non-empty 'files' list/)
+      expect(message).toMatch(/explicit 'files' list/)
       expect(message).toMatch(/Do NOT ESCALATE/)
     }
   })

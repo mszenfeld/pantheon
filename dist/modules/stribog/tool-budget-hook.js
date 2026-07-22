@@ -1,7 +1,9 @@
 import { isAbsolute, resolve } from "node:path";
 import {
   bareCommitDenialMessage,
-  hasExplicitCommitFiles
+  hasExplicitCommitFiles,
+  matchesEditedPath,
+  unbudgetedCommitPathMessage
 } from "../_shared/commit-staging-scope.js";
 import { isMutatingGitCommand } from "../_shared/mutating-git.js";
 import {
@@ -94,8 +96,19 @@ function makeStribogToolHook(deps) {
       if (norm === "create_pr") return;
       if (norm === "create_branch") return;
       if (norm === "av_commit") {
-        if (!hasExplicitCommitFiles(output.args?.files)) {
+        const files = output.args?.files;
+        if (!hasExplicitCommitFiles(files)) {
           throw new Error(bareCommitDenialMessage(SCOPE_VIOLATION, "Stribog"));
+        }
+        const edited = pathsFor(input.sessionID);
+        for (const file of files) {
+          if (!matchesEditedPath(file, edited)) {
+            throw new Error(
+              unbudgetedCommitPathMessage(SCOPE_VIOLATION, file.trim(), [
+                ...edited
+              ])
+            );
+          }
         }
         return;
       }
