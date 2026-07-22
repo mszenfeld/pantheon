@@ -20,6 +20,7 @@ interface StribogToolHookOutput {
         command?: unknown;
         relative_path?: unknown;
         path?: unknown;
+        files?: unknown;
     };
 }
 /** The `tool.execute.before` handler signature this factory produces. */

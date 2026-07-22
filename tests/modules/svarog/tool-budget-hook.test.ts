@@ -191,7 +191,18 @@ describe("makeSvarogToolHook", () => {
   it("allows av_commit — the sanctioned commit path (executor-chain doctrine, 2026-07-22)", async () => {
     // Svarog's hook is allow-by-default and av_commit is not floor-denied; this pin documents
     // the doctrine decision so a future floor/deny change cannot silently cut the chain's
-    // commit link (create_branch → av_commit → create_pr).
-    await allows("av_commit")
+    // commit link (create_branch → av_commit → create_pr). Staging must be scoped.
+    await allows("av_commit", { args: { files: ["src/a.ts"] } })
+  })
+
+  it("refuses a bare av_commit — repo-wide `git add -A` staging is fail-closed", async () => {
+    for (const args of [{}, { files: [] }, { files: ["  "] }]) {
+      const message = await svarogHook()(input("av_commit"), { args })
+        .then(() => "<allowed>")
+        .catch((error: Error) => error.message)
+      expect(message).toMatch(/^SVAROG_TOOL_DENIED/)
+      expect(message).toMatch(/explicit, non-empty 'files' list/)
+      expect(message).toMatch(/Do NOT ESCALATE/)
+    }
   })
 })

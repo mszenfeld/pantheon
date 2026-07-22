@@ -381,14 +381,37 @@ describe("stribog tool-budget hook", () => {
     )
   })
 
-  it("allows av_commit for a confirmed stribog session (executor-chain carve-out)", async () => {
-    await expect(hook(STRIBOG)(input("av_commit"), out())).resolves.toBeUndefined()
+  it("allows av_commit for a confirmed stribog session when files are scoped explicitly", async () => {
+    const scoped = { args: { files: ["src/a.ts"] } }
+    await expect(
+      hook(STRIBOG)(input("av_commit"), scoped),
+    ).resolves.toBeUndefined()
     // case/hyphen normalization must not bypass the carve-out
-    await expect(hook(STRIBOG)(input("Av-Commit"), out())).resolves.toBeUndefined()
+    await expect(
+      hook(STRIBOG)(input("Av-Commit"), scoped),
+    ).resolves.toBeUndefined()
     // floor regression guard: dispatch family stays denied
     await expect(hook(STRIBOG)(input("execute_recipe"), out())).rejects.toThrow(
       "STRIBOG_TOOL_DENIED",
     )
+  })
+
+  it("refuses a bare av_commit — repo-wide `git add -A` staging is fail-closed", async () => {
+    for (const args of [
+      {},
+      { files: [] },
+      { files: "src/a.ts" },
+      { files: ["  "] },
+      { files: ["src/a.ts", 42] },
+    ]) {
+      const message = await hook(STRIBOG)(input("av_commit"), { args })
+        .then(() => "<allowed>")
+        .catch((error: Error) => error.message)
+      expect(message).toMatch(/^STRIBOG_SCOPE_VIOLATION/)
+      expect(message).toMatch(/explicit, non-empty 'files' list/)
+      // redirect, not an escalation signal
+      expect(message).toMatch(/Do NOT ESCALATE/)
+    }
   })
 })
 

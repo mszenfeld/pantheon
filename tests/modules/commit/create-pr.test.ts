@@ -479,6 +479,31 @@ describe("createPr orchestration (AC-3…AC-7)", () => {
     }
   })
 
+  it("normalizes a remote/full-ref spelling of the base so G2 still fires", async () => {
+    for (const base of [
+      "origin/feature/INC-212-x",
+      "refs/heads/feature/INC-212-x",
+    ]) {
+      const { runGit, calls } = recordingGitRunner(HAPPY_GIT)
+      await expect(
+        createPr({ cwd: "/repo", title: "t", base, runGit }),
+      ).rejects.toThrow(
+        /refusing to push and open a PR from the base branch 'feature\/INC-212-x'/,
+      )
+      expect(calls.map((c) => c.args[0])).not.toContain("push")
+    }
+    // a genuinely different base keeps working, normalized for the provider
+    const { runGit } = recordingGitRunner(HAPPY_GIT)
+    const result = await createPr({
+      cwd: "/repo",
+      title: "t",
+      base: "origin/develop",
+      runGit,
+      runGh: happyGhRunner().runGh,
+    })
+    expect(result.base).toBe("develop")
+  })
+
   it("re-validates the resolved head (§5.2 defense-in-depth) and never pushes", async () => {
     const { runGit, calls } = recordingGitRunner({
       ...HAPPY_GIT,

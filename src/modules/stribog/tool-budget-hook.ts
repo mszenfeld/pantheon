@@ -1,4 +1,8 @@
 import { isAbsolute, resolve } from "node:path"
+import {
+  bareCommitDenialMessage,
+  hasExplicitCommitFiles,
+} from "../_shared/commit-staging-scope.js"
 import { isMutatingGitCommand } from "../_shared/mutating-git.js"
 import {
   STRIBOG_AGENT_KEY,
@@ -94,8 +98,10 @@ export interface StribogToolHookOutput {
     command?: unknown
     relative_path?: unknown
     path?: unknown
+    files?: unknown
   }
 }
+
 
 /** The `tool.execute.before` handler signature this factory produces. */
 export type StribogToolHook = (
@@ -313,7 +319,16 @@ export function makeStribogToolHook(
       // verb; `commit` is not a deny capability) — without this return it would fall only to
       // the step-4 allow-list denial (not in CORE_BUILTINS). Bash `git commit` stays blocked
       // by the commit plugin. Unbudgeted: not an edit/write tool.
-      if (norm === "av_commit") return
+      //
+      // FAIL-CLOSED on staging scope: a bare av_commit falls back to `git add -A`
+      // (controlled-commit.ts), so it is refused here — mirroring how an edit/write with no
+      // bindable filePath is refused. The executor must name the paths it edited.
+      if (norm === "av_commit") {
+        if (!hasExplicitCommitFiles(output.args?.files)) {
+          throw new Error(bareCommitDenialMessage(SCOPE_VIOLATION, "Stribog"))
+        }
+        return
+      }
 
       const denyKey = raw.toLowerCase() // lowercased copy used ONLY for deny + extraPattern match
 

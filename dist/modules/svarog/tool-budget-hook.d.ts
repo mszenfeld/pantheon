@@ -16,6 +16,7 @@ interface SvarogToolHookOutput {
     args: {
         command?: unknown;
         filePath?: unknown;
+        files?: unknown;
     };
 }
 type SvarogToolHook = (input: SvarogToolHookInput, output: SvarogToolHookOutput) => Promise<void>;

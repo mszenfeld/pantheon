@@ -1,3 +1,7 @@
+import {
+  bareCommitDenialMessage,
+  hasExplicitCommitFiles
+} from "../_shared/commit-staging-scope.js";
 import { isImmutableDeny } from "../_shared/stribog-extra-tools-contract.js";
 import { isMutatingGitCommand } from "../_shared/mutating-git.js";
 import { SVAROG_AGENT_KEY, SVAROG_SERENA_EDITORS } from "./svarog.metadata.js";
@@ -54,6 +58,9 @@ function makeSvarogToolHook(deps) {
         throw new Error(
           `${TOOL_DENIED}: Svarog is a leaf in-tree executor with no network egress (\`${raw}\` denied). If the task genuinely needs external data, return the ESCALATE result.`
         );
+      }
+      if (norm === "av_commit" && !hasExplicitCommitFiles(output.args?.files)) {
+        throw new Error(bareCommitDenialMessage(TOOL_DENIED, "Svarog"));
       }
       if (norm === "create_pr") return;
       if (norm === "create_branch") return;

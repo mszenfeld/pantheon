@@ -145,7 +145,11 @@ session's current branch to `origin` (never force), then creates the PR through 
   `git remote set-head origin --auto`). `base` counts as **omitted** iff `base === undefined`
   or `base.trim() === ""` — a whitespace-only value trims to empty and routes to the
   symbolic-ref auto-resolution above; otherwise `base` is provided, trimmed, and validated
-  per §5.2 (R-rules). The resolved base is always passed explicitly to the provider
+  per §5.2 (R-rules), then **normalized identically to the auto-resolved path** — a leading
+  `refs/heads/` and a leading `origin/` are stripped (2026-07-22 review hardening). Without
+  this, a remote-tracking spelling of the current branch (`origin/master` while standing on
+  `master`) would slip past the G2 head≠base guard and reach `gh --base=`, which wants the
+  plain branch name. The resolved base is always passed explicitly to the provider
   (`--base=<base>`) — the provider never guesses.
 - **FR-4 — Validate before any spawn.** All validation of the user-supplied parameters
   (`title`, `body`, `base`, `taskId`; §5.2) is pure TypeScript and runs before the first

@@ -56,11 +56,14 @@ function validateRef(field, rawValue) {
     throw ruleError(field, "R5", "max-length-240-bytes", value);
   return value;
 }
+function normalizeBaseRef(value) {
+  return value.replace(/^refs\/heads\//, "").replace(/^origin\//, "");
+}
 async function createPr(input) {
   const title = validateTitle(input.title);
   const taskId = validateTaskId(input.taskId);
   const body = validateBody(resolveBody(input.body, taskId));
-  const providedBase = input.base !== void 0 && input.base.trim() !== "" ? validateRef("base", input.base) : void 0;
+  const providedBase = input.base !== void 0 && input.base.trim() !== "" ? normalizeBaseRef(validateRef("base", input.base)) : void 0;
   const runGit = input.runGit ?? defaultGitRunner;
   const draft = input.draft ?? false;
   const headResult = await runGit(input.cwd, ["branch", "--show-current"]);
@@ -89,7 +92,7 @@ async function createPr(input) {
         "create_pr: cannot resolve the default branch of 'origin' \u2014 pass 'base' explicitly or run: git remote set-head origin --auto"
       );
     }
-    base = baseResult.stdout.trim().replace(/^origin\//, "");
+    base = normalizeBaseRef(baseResult.stdout.trim());
   }
   validateRef("head", head);
   if (head === base) {

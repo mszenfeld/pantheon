@@ -1,3 +1,7 @@
+import {
+  bareCommitDenialMessage,
+  hasExplicitCommitFiles,
+} from "../_shared/commit-staging-scope.js"
 import { isImmutableDeny } from "../_shared/stribog-extra-tools-contract.js"
 import { isMutatingGitCommand } from "../_shared/mutating-git.js"
 import { SVAROG_AGENT_KEY, SVAROG_SERENA_EDITORS } from "./svarog.metadata.js"
@@ -46,7 +50,7 @@ export interface SvarogToolHookInput {
 }
 
 export interface SvarogToolHookOutput {
-  args: { command?: unknown; filePath?: unknown }
+  args: { command?: unknown; filePath?: unknown; files?: unknown }
 }
 
 export type SvarogToolHook = (
@@ -182,7 +186,16 @@ export function makeSvarogToolHook(
         )
       }
 
-      // (3c) publish/branch carve-out.
+      // (3c) publish/branch carve-out — plus the commit path's staging-scope guard.
+      //
+      // av_commit is allow-by-default here (not floor-denied), but a bare call falls back to
+      // `git add -A` (controlled-commit.ts) and would sweep the operator's unrelated changes
+      // into the executor's commit — which create_pr then publishes. Refused fail-closed; the
+      // executor must name the paths it edited.
+      if (norm === "av_commit" && !hasExplicitCommitFiles(output.args?.files)) {
+        throw new Error(bareCommitDenialMessage(TOOL_DENIED, "Svarog"))
+      }
+
       // create_pr — the sanctioned publish path (validated, argv-only, never force;
       // docs/specs/create-pr-tool.md). The bash mutating-git tripwire is unchanged; this
       // early-return only lets the plugin tool through the `create_` verb of the

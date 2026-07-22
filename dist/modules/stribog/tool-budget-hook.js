@@ -1,4 +1,8 @@
 import { isAbsolute, resolve } from "node:path";
+import {
+  bareCommitDenialMessage,
+  hasExplicitCommitFiles
+} from "../_shared/commit-staging-scope.js";
 import { isMutatingGitCommand } from "../_shared/mutating-git.js";
 import {
   STRIBOG_AGENT_KEY,
@@ -89,7 +93,12 @@ function makeStribogToolHook(deps) {
       }
       if (norm === "create_pr") return;
       if (norm === "create_branch") return;
-      if (norm === "av_commit") return;
+      if (norm === "av_commit") {
+        if (!hasExplicitCommitFiles(output.args?.files)) {
+          throw new Error(bareCommitDenialMessage(SCOPE_VIOLATION, "Stribog"));
+        }
+        return;
+      }
       const denyKey = raw.toLowerCase();
       if (isImmutableDeny(denyKey)) {
         if (EDIT_EQUIVALENT_TOOL.test(denyKey.replace(/-/g, "_"))) {

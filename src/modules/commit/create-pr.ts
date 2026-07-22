@@ -105,6 +105,11 @@ function validateRef(field: "base" | "head", rawValue: string): string {
   return value
 }
 
+/** Strips a `refs/heads/` and/or leading `origin/` prefix so both base paths compare alike. */
+function normalizeBaseRef(value: string): string {
+  return value.replace(/^refs\/heads\//, "").replace(/^origin\//, "")
+}
+
 export async function createPr(input: CreatePrInput): Promise<CreatePrResult> {
   // §5.2 — evaluation order (normative): title → taskId → body (resolved) → base.
   // Pure TypeScript; zero process spawns on any violation (FR-4/NFR-2).
@@ -112,9 +117,13 @@ export async function createPr(input: CreatePrInput): Promise<CreatePrResult> {
   const taskId = validateTaskId(input.taskId)
   const body = validateBody(resolveBody(input.body, taskId))
   // FR-3: base counts as omitted iff undefined or empty after trim (whitespace-only).
+  // The provided base is normalized exactly like the auto-resolved one (below): a
+  // remote-tracking or full-ref spelling of the same branch (`origin/master`,
+  // `refs/heads/master`) must not slip past the G2 head≠base guard — or reach `gh --base=`,
+  // which wants the plain branch name.
   const providedBase =
     input.base !== undefined && input.base.trim() !== ""
-      ? validateRef("base", input.base)
+      ? normalizeBaseRef(validateRef("base", input.base))
       : undefined
 
   const runGit = input.runGit ?? defaultGitRunner
@@ -152,7 +161,7 @@ export async function createPr(input: CreatePrInput): Promise<CreatePrResult> {
           "explicitly or run: git remote set-head origin --auto",
       )
     }
-    base = baseResult.stdout.trim().replace(/^origin\//, "")
+    base = normalizeBaseRef(baseResult.stdout.trim())
   }
 
   // G2 — head defense-in-depth re-validation (§5.2, field 'head'), then never publish from base.
