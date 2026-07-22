@@ -357,6 +357,7 @@ describe("stribog tool-budget hook", () => {
 
   it("allows create_pr for a confirmed stribog session (publish-path carve-out)", async () => {
     await expect(hook(STRIBOG)(input("create_pr"), out())).resolves.toBeUndefined()
+    await expect(hook(STRIBOG)(input("Create-PR"), out())).resolves.toBeUndefined()
     // floor regression guard (AC-14): dispatch family stays denied
     await expect(hook(STRIBOG)(input("execute_recipe"), out())).rejects.toThrow(
       "STRIBOG_TOOL_DENIED",

@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest"
-import { detectProvider, type PrProvider } from "../../../src/modules/commit/pr-provider.js"
+import {
+  detectProvider,
+  type CreatePullRequestInput,
+  type PrProvider,
+} from "../../../src/modules/commit/pr-provider.js"
 import {
   GH_MISSING_MESSAGE,
   githubPrProvider,
@@ -118,6 +122,16 @@ describe("githubPrProvider (gh argv contract, AC-9/AC-10)", () => {
       GH_MISSING_MESSAGE,
     )
   })
+
+  it("AC-9: an empty body still emits the anti-interactive --body= token (=-joined, never omitted)", async () => {
+    const { runGh, calls } = fakeGhRunner({
+      stdout: "https://github.com/AppVerk/x/pull/10\n",
+      stderr: "",
+      exitCode: 0,
+    })
+    await githubPrProvider(runGh).createPullRequest({ ...PR_INPUT, body: "" })
+    expect(calls[0]?.args).toContain("--body=")
+  })
 })
 
 function recordingGitRunner(
@@ -147,7 +161,10 @@ describe("createPr parameter validation (AC-1: zero spawns, normative template)"
     await rejectsWith({ title: "   " }, /^create_pr: field 'title' violates rule T1 \(empty-title\): ""$/)
     await rejectsWith({ title: "a".repeat(257) }, /rule T2 \(max-length-256-chars\)/)
     await rejectsWith({ title: "two\nlines" }, /rule T3 \(control-characters\)/)
-    await rejectsWith({ taskId: "INC 212" }, /field 'taskId' violates rule K1 \(invalid-characters\): "INC 212"/)
+    await rejectsWith(
+      { taskId: "INC 212" },
+      /^create_pr: field 'taskId' violates rule K1 \(invalid-characters\): "INC 212"$/,
+    )
     await rejectsWith({ taskId: "-x" }, /field 'taskId' violates rule K2 \(leading-dash\): "-x"/)
     await rejectsWith({ body: "x".repeat(64_001) }, /field 'body' violates rule B1 \(max-length-64000-bytes\)/)
     await rejectsWith({ body: "nul\x00byte" }, /rule B2 \(control-characters\)/)
@@ -155,7 +172,10 @@ describe("createPr parameter validation (AC-1: zero spawns, normative template)"
     await rejectsWith({ base: "a b" }, /field 'base' violates rule R1 \(invalid-characters\): "a b"/)
     await rejectsWith({ base: "-d" }, /field 'base' violates rule R2 \(leading-dash\): "-d"/)
     await rejectsWith({ base: "a..b" }, /field 'base' violates rule R3 \(dot-dot\): "a\.\.b"/)
-    await rejectsWith({ base: "a//b" }, /rule R4 \(component-rules\)/)
+    await rejectsWith(
+      { base: "a//b" },
+      /^create_pr: field 'base' violates rule R4 \(component-rules\): "a\/\/b"$/,
+    )
     await rejectsWith({ base: "/a" }, /rule R4 \(component-rules\)/)
     await rejectsWith({ base: "a/" }, /rule R4 \(component-rules\)/)
     await rejectsWith({ base: "a/.h" }, /rule R4 \(component-rules\)/)
@@ -169,6 +189,13 @@ describe("createPr parameter validation (AC-1: zero spawns, normative template)"
     await rejectsWith({ title: "", base: "a b" }, /field 'title' violates rule T1/)
     // bad taskId AND bad body — taskId wins (B1 validates the resolved body, taskId first)
     await rejectsWith({ taskId: "bad id", body: "x".repeat(64_001) }, /field 'taskId' violates rule K1/)
+    // bad body AND bad base — body wins (validated before base per §5.2); anchored B2 template,
+    // JSON.stringify of the embedded NUL control char renders it as a 6-char escape
+    // sequence (backslash, letter u, four zero digits) -- the regex double-escapes below.
+    await rejectsWith(
+      { body: "nul\x00byte", base: "a b" },
+      /^create_pr: field 'body' violates rule B2 \(control-characters\): "nul\\u0000byte"$/,
+    )
   })
 
   it("accepts the boundary vectors without a validation throw", async () => {
@@ -192,9 +219,10 @@ describe("createPr parameter validation (AC-1: zero spawns, normative template)"
   it("resolves the Refs footer per §5.2 Normalization", async () => {
     // Whitespace-only body + taskId → "Refs: <id>" (no leading blank lines): B1/B2 must
     // validate that resolved value, so an oversized taskId-only body still trips B1.
+    // Note: "A".repeat(64_001) always passes K1's charset, so only B1 is reachable here.
     await rejectsWith(
       { body: "   ", taskId: "A".repeat(64_001) },
-      /field 'taskId' violates rule K1|field 'body' violates rule B1/,
+      /field 'body' violates rule B1/,
     )
   })
 })
@@ -216,6 +244,24 @@ function happyGhRunner(): { runGh: GitRunner; calls: FakeCall[] } {
     stderr: "",
     exitCode: 0,
   })
+}
+
+/** Local recording PrProvider — pattern mirrors the integration suite's fakeProvider(). */
+function recordingFakeProvider(): {
+  provider: PrProvider
+  calls: CreatePullRequestInput[]
+} {
+  const calls: CreatePullRequestInput[] = []
+  return {
+    calls,
+    provider: {
+      name: "fake",
+      async createPullRequest(input) {
+        calls.push(input)
+        return { url: "https://example.invalid/pr/1" }
+      },
+    },
+  }
 }
 
 describe("createPr orchestration (AC-3…AC-7)", () => {
@@ -367,5 +413,33 @@ describe("createPr orchestration (AC-3…AC-7)", () => {
     })
     expect(result.draft).toBe(true)
     expect(gh.calls[0]?.args.at(-1)).toBe("--draft")
+  })
+
+  it("AC-9: a non-empty body + taskId resolves to 'body\\n\\nRefs: <taskId>' at the provider", async () => {
+    const { runGit } = recordingGitRunner(HAPPY_GIT)
+    const { provider, calls } = recordingFakeProvider()
+    await createPr({
+      cwd: "/repo",
+      title: "feat: x",
+      body: "line one",
+      taskId: "INC-212",
+      runGit,
+      provider,
+    })
+    expect(calls[0]?.body).toBe("line one\n\nRefs: INC-212")
+  })
+
+  it("AC-9: a whitespace-only body + taskId resolves to the bare 'Refs: <taskId>' (no leading blank lines)", async () => {
+    const { runGit } = recordingGitRunner(HAPPY_GIT)
+    const { provider, calls } = recordingFakeProvider()
+    await createPr({
+      cwd: "/repo",
+      title: "feat: x",
+      body: "   ",
+      taskId: "INC-212",
+      runGit,
+      provider,
+    })
+    expect(calls[0]?.body).toBe("Refs: INC-212")
   })
 })
