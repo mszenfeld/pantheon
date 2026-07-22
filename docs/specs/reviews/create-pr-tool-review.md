@@ -80,5 +80,5 @@ None (all three fix batches were approved in full).
 ## Recovery
 
 - Loop-touched files: `docs/specs/create-pr-tool.md` (three approved fix batches applied; **changes are uncommitted**), `docs/specs/reviews/create-pr-tool-review.state.json`, `docs/specs/reviews/create-pr-tool-review.md`.
-- Pre-loop snapshot: `docs/specs/reviews/create-pr-tool.pre-loop.bak` (spec as of commit `bd3594f`). To roll back, copy the snapshot over the spec — never `git restore` on the spec.
+- Pre-loop snapshot: `docs/specs/reviews/create-pr-tool.pre-loop.bak` (spec as of commit `bd3594f`) — an uncommitted local working file, never checked into git; it exists only in the originating working tree, not in the repository's tracked tree. Where it is present, roll back by copying the snapshot over the spec — never `git restore` on the spec.
 - Nothing was committed by the loop.

@@ -246,9 +246,21 @@ describe("makeSvarogToolHook", () => {
   it("allows av_commit — the sanctioned commit path (executor-chain doctrine, 2026-07-22)", async () => {
     // Svarog's hook is allow-by-default and av_commit is not floor-denied; this pin documents
     // the doctrine decision so a future floor/deny change cannot silently cut the chain's
-    // commit link (create_branch → av_commit → create_pr). Staging must be scoped to real
-    // files (the default hook resolves against the runner's cwd — the repo root).
-    await allows("av_commit", { args: { files: ["package.json"] } })
+    // commit link (create_branch → av_commit → create_pr). Hermetic temp worktree threaded in
+    // as the resolution base, mirroring the directory-rejection test — no cwd dependence.
+    const root = await mkdtemp(path.join(tmpdir(), "av-svarog-allow-"))
+    await writeFile(path.join(root, "a.ts"), "export {}\n")
+    const scoped = makeSvarogToolHook({
+      resolveAgent: async () => SVAROG_AGENT_KEY,
+      worktree: root,
+    }).hook
+    try {
+      await expect(
+        scoped(input("av_commit"), { args: { files: ["a.ts"] } }),
+      ).resolves.toBeUndefined()
+    } finally {
+      await rm(root, { recursive: true, force: true })
+    }
   })
 
   it("refuses an unscoped av_commit — whole-tree staging is fail-closed", async () => {
