@@ -29,16 +29,20 @@ function fakePlanInput() {
   return { client: { tui: { showToast: async () => {} } } } as never
 }
 
-async function getVelesEnabledToolNames(): Promise<string[]> {
+async function getVelesEnabledDispatchToolNames(): Promise<string[]> {
   const hooks = await AppVerkPlanPlugin(fakePlanInput())
   const config: {
     agent?: Record<string, { tools?: Record<string, boolean> }>
   } = {}
   await hooks.config?.(config as never)
   const tools = config.agent?.["Veles - Planner"]?.tools ?? {}
-  // Only the opted-IN (true) entries are "enabled" dispatch tools.
+  // Veles additionally enables its own planning-artifact tools. This sync
+  // contract covers only coordinator-owned dispatch tools.
   return Object.entries(tools)
-    .filter(([, enabled]) => enabled === true)
+    .filter(
+      ([name, enabled]) =>
+        enabled === true && DISPATCH_TOOL_NAMES.some((dispatchName) => dispatchName === name),
+    )
     .map(([name]) => name)
 }
 
@@ -60,7 +64,7 @@ describe("Veles dispatch-tool sync", () => {
   it("every dispatch tool Veles enables is a registered coordinator tool", async () => {
     const hooks = await AppVerkCoordinatorPlugin(fakeCoordinatorInput())
     const registered = Object.keys(hooks.tool ?? {})
-    const velesEnabled = await getVelesEnabledToolNames()
+    const velesEnabled = await getVelesEnabledDispatchToolNames()
     expect(velesEnabled.length).toBeGreaterThan(0)
     for (const name of velesEnabled) {
       expect(registered).toContain(name)
@@ -68,7 +72,7 @@ describe("Veles dispatch-tool sync", () => {
   })
 
   it("the keys Veles enables match the canonical dispatch set exactly", async () => {
-    const velesEnabled = await getVelesEnabledToolNames()
+    const velesEnabled = await getVelesEnabledDispatchToolNames()
     expect(velesEnabled.sort()).toEqual([...DISPATCH_TOOL_NAMES].sort())
   })
 })

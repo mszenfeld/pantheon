@@ -1,3 +1,6 @@
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises"
+import { tmpdir } from "node:os"
+import path from "node:path"
 import { describe, expect, it } from "vitest"
 import { makeSvarogToolHook } from "../../../src/modules/svarog/tool-budget-hook.js"
 import { SVAROG_AGENT_KEY } from "../../../src/modules/svarog/svarog.metadata.js"
@@ -65,7 +68,9 @@ describe("makeSvarogToolHook", () => {
 
   it("denies secret GENERATION via bash (minter != actuator)", async () => {
     await expect(
-      svarogHook()(input("bash"), { args: { command: "openssl rand -hex 32" } }),
+      svarogHook()(input("bash"), {
+        args: { command: "openssl rand -hex 32" },
+      }),
     ).rejects.toThrow("SVAROG_SECRET_DENIED")
     await expect(
       svarogHook()(input("bash"), {
@@ -90,9 +95,18 @@ describe("makeSvarogToolHook", () => {
         svarogHook()(input("bash"), { args: { command: cmd } }),
       ).rejects.toThrow("SVAROG_GIT_DENIED")
     }
+    // The denial redirects branch creation to the sanctioned tool instead of ESCALATE
+    // (message-only guidance; the deny decision itself is unchanged).
+    const branchDenial = await svarogHook()(input("bash"), {
+      args: { command: "git checkout -b feature/x" },
+    }).catch((error: Error) => error.message)
+    expect(branchDenial).toMatch(/use the create_branch tool/)
+    expect(branchDenial).toMatch(/do NOT ESCALATE for branch creation/)
     // read-only git stays allowed — an executor legitimately inspects state.
     await allows("bash", { args: { command: "git status" } })
-    await allows("bash", { args: { command: "git --no-pager log --oneline -5" } })
+    await allows("bash", {
+      args: { command: "git --no-pager log --oneline -5" },
+    })
     await allows("bash", { args: { command: "git diff --stat" } })
   })
 
@@ -149,7 +163,9 @@ describe("makeSvarogToolHook", () => {
     const other = makeSvarogToolHook({
       resolveAgent: async () => "zmora-setup",
     }).hook
-    await expect(other(input("execute_recipe"), noArgs)).resolves.toBeUndefined()
+    await expect(
+      other(input("execute_recipe"), noArgs),
+    ).resolves.toBeUndefined()
     const unknown = makeSvarogToolHook({
       resolveAgent: async () => undefined,
     }).hook
@@ -167,5 +183,103 @@ describe("makeSvarogToolHook", () => {
     clearSession("s1")
     await hook(input("edit"), { args: { filePath: "/b" } }) // checkpoints again
     expect(created).toHaveLength(2)
+  })
+
+  it("allows create_pr — the sanctioned publish path — past the immutable floor", async () => {
+    await allows("create_pr")
+    await allows("Create-PR") // case/hyphen normalization must not bypass the carve-out
+    await denies("execute_recipe") // floor regression guard (AC-15)
+  })
+
+  it("allows create_branch — the sanctioned branch path — past the immutable floor", async () => {
+    await allows("create_branch")
+    await allows("Create-Branch") // normalization must not bypass the carve-out
+    await denies("execute_recipe") // floor regression guard
+  })
+
+  it("refuses an av_commit naming a directory — it would stage everything beneath it", async () => {
+    // Hermetic: a temp worktree, threaded in as the resolution base exactly as the plugin
+    // wires it, so the guard stats the same paths av_commit would stage — no dependence on
+    // the runner's cwd or on real repo directories.
+    const root = await mkdtemp(path.join(tmpdir(), "av-svarog-scope-"))
+    await mkdir(path.join(root, "pkg"), { recursive: true })
+    await writeFile(path.join(root, "pkg", "a.ts"), "export {}\n")
+    const scoped = makeSvarogToolHook({
+      resolveAgent: async () => SVAROG_AGENT_KEY,
+      worktree: root,
+    }).hook
+
+    try {
+      // `git add -- pkg` stages every modified/untracked file under pkg/. Svarog has no edit
+      // budget to compare against, so the directory check is its floor.
+      for (const dir of ["pkg", "pkg/", "./pkg"]) {
+        const message = await scoped(input("av_commit"), {
+          args: { files: [dir] },
+        })
+          .then(() => "<allowed>")
+          .catch((error: Error) => error.message)
+        expect(message).toMatch(/^SVAROG_TOOL_DENIED/)
+        expect(message).toMatch(/not a single existing file/)
+        expect(message).toMatch(/Do NOT ESCALATE/)
+      }
+      // a real file in that worktree passes, in either spelling
+      await expect(
+        scoped(input("av_commit"), { args: { files: ["pkg/a.ts"] } }),
+      ).resolves.toBeUndefined()
+      await expect(
+        scoped(input("av_commit"), {
+          args: { files: [path.join(root, "pkg", "a.ts")] },
+        }),
+      ).resolves.toBeUndefined()
+      // fail-closed: a path that does not resolve cannot be proven to be one file
+      const missing = await scoped(input("av_commit"), {
+        args: { files: ["pkg/nope.ts"] },
+      })
+        .then(() => "<allowed>")
+        .catch((error: Error) => error.message)
+      expect(missing).toMatch(/^SVAROG_TOOL_DENIED/)
+    } finally {
+      await rm(root, { recursive: true, force: true })
+    }
+  })
+
+  it("allows av_commit — the sanctioned commit path (executor-chain doctrine, 2026-07-22)", async () => {
+    // Svarog's hook is allow-by-default and av_commit is not floor-denied; this pin documents
+    // the doctrine decision so a future floor/deny change cannot silently cut the chain's
+    // commit link (create_branch → av_commit → create_pr). Hermetic temp worktree threaded in
+    // as the resolution base, mirroring the directory-rejection test — no cwd dependence.
+    const root = await mkdtemp(path.join(tmpdir(), "av-svarog-allow-"))
+    await writeFile(path.join(root, "a.ts"), "export {}\n")
+    const scoped = makeSvarogToolHook({
+      resolveAgent: async () => SVAROG_AGENT_KEY,
+      worktree: root,
+    }).hook
+    try {
+      await expect(
+        scoped(input("av_commit"), { args: { files: ["a.ts"] } }),
+      ).resolves.toBeUndefined()
+    } finally {
+      await rm(root, { recursive: true, force: true })
+    }
+  })
+
+  it("refuses an unscoped av_commit — whole-tree staging is fail-closed", async () => {
+    for (const args of [
+      {},
+      { files: [] },
+      { files: ["  "] },
+      { files: ["."] },
+      { files: [":/"] },
+      { files: ["**"] },
+      { files: ["../outside.ts"] },
+      { files: ["src/a.ts", "."] },
+    ]) {
+      const message = await svarogHook()(input("av_commit"), { args })
+        .then(() => "<allowed>")
+        .catch((error: Error) => error.message)
+      expect(message).toMatch(/^SVAROG_TOOL_DENIED/)
+      expect(message).toMatch(/explicit 'files' list/)
+      expect(message).toMatch(/Do NOT ESCALATE/)
+    }
   })
 })

@@ -17,7 +17,7 @@ import type { SpecialistInfo } from "../agent-registry/agent-metadata.js"
 export const VELES_AGENT_KEY = "Veles - Planner" as const
 
 export const VELES_DESCRIPTION =
-  "Planning specialist: authors QA test plans (and other work plans) from a diff or request. Dispatches read-only helpers (triglav) and returns a plan it saved — it does not execute the planned work."
+  "Planning specialist: authors feature specs, implementation plans, and QA test plans from a diff or request. Dispatches read-only helpers (triglav) and returns a saved artefact — it does not execute the planned work."
 
 export const velesSpecialistInfo: SpecialistInfo = {
   name: VELES_AGENT_KEY,
@@ -25,20 +25,31 @@ export const velesSpecialistInfo: SpecialistInfo = {
   description: VELES_DESCRIPTION,
   metadata: {
     keyTrigger:
-      "QA run requested but no plan exists → dispatch `veles` to author one before attempting QA",
+      "No durable planning artefact exists for the requested work → dispatch `veles` to author a feature spec, implementation plan, or QA test plan before execution",
     useWhen: [
+      "No feature spec exists and the user wants to design a feature",
+      "No implementation plan exists and the user wants to plan work from an approved spec or request",
       "No QA plan exists and the user wants to run QA",
-      "User asks to plan QA scenarios or a piece of work from a diff/request",
+      "User asks to plan any of the above from a diff/request",
     ],
     avoidWhen: [
+      "A current feature spec already exists in docs/specs/ for the topic",
+      "A current implementation plan already exists in docs/plans/ for the topic",
       "A current QA plan already exists in docs/testing/plans/",
-      "The task is execution, not planning (dispatch zmora / svarog instead)",
+      "The task is execution, not planning (dispatch stribog / svarog instead)",
     ],
     triggers: [
       {
         domain: "Planning",
-        trigger:
-          "Author a QA test plan (or other work plan) from a diff or request",
+        trigger: "Author a feature spec from a request or diff",
+      },
+      {
+        domain: "Planning",
+        trigger: "Author an implementation plan from an approved spec or request",
+      },
+      {
+        domain: "Planning",
+        trigger: "Author a QA test plan from a diff or request",
       },
     ],
   },

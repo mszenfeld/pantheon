@@ -1,3 +1,11 @@
+import { statSync } from "node:fs";
+import { resolve } from "node:path";
+import {
+  bareCommitDenialMessage,
+  directoryCommitDenialMessage,
+  findDirectoryPath,
+  hasExplicitCommitFiles
+} from "../_shared/commit-staging-scope.js";
 import { isImmutableDeny } from "../_shared/stribog-extra-tools-contract.js";
 import { isMutatingGitCommand } from "../_shared/mutating-git.js";
 import { SVAROG_AGENT_KEY, SVAROG_SERENA_EDITORS } from "./svarog.metadata.js";
@@ -14,6 +22,7 @@ const MUTATING_NATIVE = /* @__PURE__ */ new Set([
   "apply_patch"
 ]);
 function makeSvarogToolHook(deps) {
+  const worktree = deps.worktree ?? process.cwd();
   const checkpointed = /* @__PURE__ */ new Set();
   const hook = async (input, output) => {
     try {
@@ -39,7 +48,7 @@ function makeSvarogToolHook(deps) {
         }
         if (isMutatingGitCommand(command)) {
           throw new Error(
-            `${GIT_DENIED}: this command mutates the git working tree/branch (checkout/switch/reset/restore/clean/stash/rebase/merge/cherry-pick/worktree or branch -d/-D), which Svarog \u2014 an in-tree leaf executor \u2014 must never do (it would move or rewrite the operator's worktree). Read-only git (status/log/diff/blame/show) is allowed. Do NOT switch branches; if the task genuinely requires a branch/tree operation, return the ESCALATE result.`
+            `${GIT_DENIED}: this command mutates the git working tree/branch (checkout/switch/reset/restore/clean/stash/rebase/merge/cherry-pick/worktree or branch -d/-D), which Svarog \u2014 an in-tree leaf executor \u2014 must never do (it would move or rewrite the operator's worktree). Read-only git (status/log/diff/blame/show) is allowed. To create and switch to a convention-valid branch, use the create_branch tool \u2014 do NOT ESCALATE for branch creation. For any other branch/tree operation, return the ESCALATE result.`
           );
         }
         return;
@@ -55,6 +64,30 @@ function makeSvarogToolHook(deps) {
           `${TOOL_DENIED}: Svarog is a leaf in-tree executor with no network egress (\`${raw}\` denied). If the task genuinely needs external data, return the ESCALATE result.`
         );
       }
+      if (norm === "av_commit") {
+        const files = output.args?.files;
+        if (!hasExplicitCommitFiles(files)) {
+          throw new Error(bareCommitDenialMessage(TOOL_DENIED, "Svarog"));
+        }
+        const directory = findDirectoryPath(files, (path) => {
+          try {
+            return statSync(resolve(worktree, path)).isDirectory();
+          } catch {
+            return true;
+          }
+        });
+        if (directory !== void 0) {
+          throw new Error(
+            directoryCommitDenialMessage(
+              TOOL_DENIED,
+              "Svarog",
+              directory.trim()
+            )
+          );
+        }
+      }
+      if (norm === "create_pr") return;
+      if (norm === "create_branch") return;
       if (isImmutableDeny(norm)) {
         throw new Error(
           `${TOOL_DENIED}: tool "${raw}" is immutably denied for Svarog (capability class: secret-mint / dispatch / shell / DB-mutation / serena-memory-write). Svarog is a leaf executor \u2014 if the task requires this, return the ESCALATE result.`

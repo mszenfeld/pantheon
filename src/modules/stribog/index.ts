@@ -2,7 +2,7 @@ import type { Plugin } from "@opencode-ai/plugin"
 import {
   forgetSessionAgent,
   getSessionAgentCached,
-} from "@appverk/opencode-skill-utils"
+} from "../_shared/session-identity.js"
 import { registerAgentMetadata } from "../agent-registry/index.js"
 import {
   applyModelOverride,
@@ -25,7 +25,11 @@ import { makeStribogToolHook } from "./tool-budget-hook.js"
 /** Provider id the pinned default needs (`opencode-go` for `opencode-go/kimi-k2.7-code`). */
 const DEFAULT_MODEL_PROVIDER = providerIdOf(DEFAULT_STRIBOG_MODEL)
 
-export const AppVerkStribogPlugin: Plugin = async ({ client }) => {
+export const AppVerkStribogPlugin: Plugin = async ({
+  client,
+  worktree,
+  directory,
+}) => {
   registerAgentMetadata(stribogSpecialistInfo)
 
   // The hook is the load-bearing enforcement (attribution via getSessionAgentCached,
@@ -40,6 +44,9 @@ export const AppVerkStribogPlugin: Plugin = async ({ client }) => {
   const { hook, clearSession } = makeStribogToolHook({
     resolveAgent: (sessionID) => getSessionAgentCached(sessionID, client),
     extraPatterns,
+    // Same base av_commit stages against, so the edit budget and the commit's `files` key on
+    // one origin (falls back to process.cwd() when the host supplies neither).
+    worktree: worktree ?? directory,
   })
 
   // One-time degraded-mode warning, mirroring the serena-gate pattern in

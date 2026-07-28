@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import { AppVerkPlanPlugin } from "../../../src/modules/plan/index.js"
+import { VELES_ARTIFACT_TOOL_NAMES } from "../../../src/modules/plan/artifact-tool-names.js"
 import { VELES_TOOLS } from "../../../src/modules/plan/allowed-tools.js"
 import { DISPATCH_TOOL_NAMES } from "../../../src/modules/coordinator/dispatch-tool-names.js"
 import {
@@ -35,7 +36,7 @@ describe("AppVerkPlanPlugin", () => {
     expect(agent?.prompt).toContain(`allowed-tools: ${VELES_TOOLS.join(", ")}`)
   })
 
-  it("enables exactly the coordinator's canonical dispatch tools via the AgentConfig.tools map", async () => {
+  it("enables the coordinator dispatch and Veles-only artifact tools via the AgentConfig.tools map", async () => {
     const hooks = await AppVerkPlanPlugin(fakeInput())
     const config: {
       agent?: Record<string, { tools?: Record<string, boolean> }>
@@ -49,10 +50,18 @@ describe("AppVerkPlanPlugin", () => {
     for (const name of DISPATCH_TOOL_NAMES) {
       expect(tools?.[name]).toBe(true)
     }
-    // And nothing extra is enabled beyond the canonical dispatch set.
+    // The Veles-only artifact tools are opt-in alongside the canonical dispatch set.
     expect(Object.keys(tools ?? {}).sort()).toEqual(
-      [...DISPATCH_TOOL_NAMES].sort(),
+      [...DISPATCH_TOOL_NAMES, ...VELES_ARTIFACT_TOOL_NAMES].sort(),
     )
+  })
+
+  it("registers the Veles-only planning artifact tools", async () => {
+    const hooks = await AppVerkPlanPlugin(fakeInput())
+
+    for (const toolName of VELES_ARTIFACT_TOOL_NAMES) {
+      expect(hooks.tool?.[toolName]).toBeDefined()
+    }
   })
 
   it("warns exactly once on session.created when serena is absent", async () => {

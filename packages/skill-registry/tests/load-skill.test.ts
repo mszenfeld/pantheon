@@ -1,3 +1,5 @@
+import path from "node:path"
+import { fileURLToPath } from "node:url"
 import { describe, expect, it } from "vitest"
 import { createSkillLoader } from "../src/load-skill.js"
 import { buildSkillCatalog } from "../src/skill-catalog.js"
@@ -33,5 +35,22 @@ describe("createSkillLoader", () => {
     expect(() => loadSkill("unknown")).toThrow("python-coding-standards")
     expect(() => loadSkill("unknown")).toThrow("frontend-coding-standards")
     expect(() => loadSkill("unknown")).toThrow("fastapi-patterns")
+  })
+
+  it("loads both Veles planning skills", () => {
+    const velesCatalog = buildSkillCatalog([
+      path.resolve(
+        path.dirname(fileURLToPath(import.meta.url)),
+        "../../../dist/skills/veles",
+      ),
+    ])
+    const loadVelesSkill = createSkillLoader(velesCatalog)
+
+    expect(loadVelesSkill("feature-spec-authoring")).toContain(
+      "Reservation policy",
+    )
+    expect(loadVelesSkill("implementation-plan-authoring")).toContain(
+      "risk register",
+    )
   })
 })

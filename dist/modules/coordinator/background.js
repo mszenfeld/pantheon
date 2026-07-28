@@ -26,6 +26,7 @@ async function startBackgroundTask(input) {
     agent,
     prompt,
     context,
+    executionContext,
     callerMode,
     sessionAgentRegistry
   } = input;
@@ -38,9 +39,16 @@ async function startBackgroundTask(input) {
   const fullPrompt = context ? `${prompt}
 
 ${context}` : prompt;
-  const childSessionId = await specialist.startBackground(agent, fullPrompt);
+  const childSessionId = await specialist.startBackground(
+    agent,
+    fullPrompt,
+    (createdId) => {
+      sessionAgentRegistry?.registerWithMetadata(createdId, agent, {
+        headless: executionContext === "perun-headless"
+      });
+    }
+  );
   const id = `bg_${randomUUID().slice(0, 8)}`;
-  sessionAgentRegistry?.register(childSessionId, agent);
   store.register({
     id,
     childSessionId,

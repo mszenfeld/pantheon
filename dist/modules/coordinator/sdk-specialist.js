@@ -65,7 +65,7 @@ function createSDKSpecialist(client, parentSessionID) {
         return false;
       }
     },
-    async startBackground(agentName, prompt) {
+    async startBackground(agentName, prompt, onSessionCreated) {
       const created = await client.session.create({
         body: {
           parentID: parentSessionID,
@@ -78,6 +78,7 @@ function createSDKSpecialist(client, parentSessionID) {
           `startBackground returned no session id for agent ${agentName}`
         );
       }
+      onSessionCreated?.(sessionId);
       await client.session.promptAsync({
         path: { id: sessionId },
         body: {

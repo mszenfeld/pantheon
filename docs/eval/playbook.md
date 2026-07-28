@@ -613,7 +613,8 @@ Svarog is a **deep worker**: it receives a planned multi-file feature or refacto
 executes it end-to-end (explore → test-first → implement → verify → self-verify), and
 ends with a JSON contract
 `{ status: READY|FAIL|ESCALATE, reason, changed, verification, checkpoint }`. It has
-**no `question` tool** (ambiguity → `ESCALATE`, never interactive), never commits,
+**no `question` tool** (ambiguity → `ESCALATE`, never interactive), never commits via
+bash (`av_commit` is the only sanctioned commit path — 2026-07-22 executor-chain decision),
 never mints secrets, and is a leaf (never dispatches). A recovery checkpoint is
 created automatically before the first edit; restore is MANUAL (operator/Perun).
 The generic procedure mostly applies, with these amendments.

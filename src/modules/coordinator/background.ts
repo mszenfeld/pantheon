@@ -32,6 +32,7 @@ export interface StartBackgroundInput {
   agent: string
   prompt: string
   context?: string
+  executionContext?: "perun-headless"
   /** Caller's mode — see dispatch.ts DispatchParallelInput.callerMode. */
   callerMode?: AgentInfo["mode"]
   /**
@@ -60,6 +61,7 @@ export async function startBackgroundTask(
     agent,
     prompt,
     context,
+    executionContext,
     callerMode,
     sessionAgentRegistry,
   } = input
@@ -74,7 +76,15 @@ export async function startBackgroundTask(
 
   const fullPrompt = context ? `${prompt}\n\n${context}` : prompt
   // Rejects on create/ack failure → propagates to the caller, nothing registered.
-  const childSessionId = await specialist.startBackground(agent, fullPrompt)
+  const childSessionId = await specialist.startBackground(
+    agent,
+    fullPrompt,
+    (createdId: string): void => {
+      sessionAgentRegistry?.registerWithMetadata(createdId, agent, {
+        headless: executionContext === "perun-headless",
+      })
+    },
+  )
 
   const id = `bg_${randomUUID().slice(0, 8)}`
   // Register the child in BOTH the BackgroundTaskStore AND the QA
@@ -93,7 +103,6 @@ export async function startBackgroundTask(
   // the background turn is fire-and-forget (`promptAsync`) and consults no
   // bindings, so there is no before-the-turn ordering constraint to satisfy.
   // See `sdk-specialist.ts` `startBackground`.
-  sessionAgentRegistry?.register(childSessionId, agent)
   store.register({
     id,
     childSessionId,

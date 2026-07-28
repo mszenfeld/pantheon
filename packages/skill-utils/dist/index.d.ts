@@ -20,88 +20,30 @@ declare const VALID_PREFIXES: string[];
 declare const VALID_CATEGORIES: string[];
 
 type Client = PluginInput["client"];
-/**
- * The agent identifier the coordinator (Perun) session runs under.
- * Pinned in Task 1b to the observed `UserMessage.info.agent` value and kept in
- * sync with the `config.agent[...]` key in src/modules/coordinator/index.ts via
- * the sync test in Task 7.
- */
+/** The agent identifier the coordinator (Perun) session runs under. */
 declare const COORDINATOR_AGENT_NAME = "Perun - Coordinator";
 /** The agent a session runs under, from its first user message. Undefined if unknown. Never throws. */
 declare function getSessionAgent(sessionID: string, client: Client): Promise<string | undefined>;
 /**
- * Memoized variant of {@link getSessionAgent}, shared by all consumers (the bash gate
- * and the skill-registry transform) so the underlying transcript fetch happens at most
- * once per session.
- *
- * IMPORTANT: only RESOLVED (non-undefined) identities are cached forever. On the
- * coordinator's very first turn `getSessionAgent` may be unresolvable (messages not yet
- * queryable); caching that miss permanently would freeze the turn-1 unresolved window and
- * the identity could never resolve later. So a miss is never cached forever — instead:
- *
- *  - concurrent resolves of the same session coalesce into ONE transcript fetch
- *    (promise-dedup, the `loadAgentRegistry` pattern); and
- *  - after {@link NEGATIVE_CACHE_AFTER_MISSES} consecutive misses a session is
- *    negatively cached for {@link NEGATIVE_CACHE_TTL_MS}, so an unresolved identity no
- *    longer triggers a full-transcript fetch on EVERY call (previously quadratic over the
- *    life of a never-resolving session). The short TTL lets a late-resolving session
- *    re-attempt within seconds.
+ * Memoized variant of {@link getSessionAgent}. Resolved identities are cached
+ * forever; unresolved identities are only suppressed briefly after repeated
+ * misses so a late-resolving first turn remains retryable.
  */
 declare function getSessionAgentCached(sessionID: string, client: Client): Promise<string | undefined>;
-/**
- * Evict ALL per-session identity bookkeeping for `sessionID`. Call this from a
- * consumer's `session.deleted` handler so the module-level maps do not grow
- * unbounded over a long-lived process (one entry per session, plus one per
- * dispatch-child, retained forever otherwise — mirrors the per-session eviction
- * every other store in the repo already does: qa's `BindingsStore.purgeParent`,
- * stribog's edit-budget `clearSession`, the coordinator's `BackgroundTaskStore`).
- *
- * Clears every map that {@link getSessionAgentCached} populates for a session —
- * the resolved-identity cache AND the negative-cache bookkeeping (the in-flight
- * coalescing promise, the consecutive-miss counter, and the negative-cache TTL).
- * A deleted session id is never reused, so dropping a still-in-flight coalescing
- * entry is safe: any awaiter already holds the promise; only the map slot is freed.
- *
- * Idempotent and safe to call for an id that was never cached (every `delete` is
- * a no-op on an absent key).
- */
+/** Evict all session identity bookkeeping on session teardown. */
 declare function forgetSessionAgent(sessionID: string): void;
-/**
- * True only when the session is positively identified as the coordinator.
- *
- * Resolves identity through the memoized {@link getSessionAgentCached}, so the shared
- * production call sites (the per-bash-call gate and the per-turn skill-registry
- * transform) can route through this predicate without reintroducing a full-transcript
- * fetch on every invocation.
- */
+/** True only when the session is positively identified as the coordinator. */
 declare function isCoordinatorSession(sessionID: string, client: Client): Promise<boolean>;
 
 /** Parse `Bash(<prog>:*)` programs out of an agent's `allowed-tools` frontmatter line. */
 declare function parseAllowedBashPrograms(frontmatter: string): string[];
-/**
- * True when the command contains a compound separator/operator/redirect or a
- * shell wrapper (the same forms `classifyCoordinatorBash` rejects without a
- * single resolvable program token). Shared so the rejection classifier and the
- * violation-error subject agree on what "compound" means.
- */
+/** True when a command contains a shell compound form or wrapper. */
 declare function isCompoundCommand(command: string): boolean;
 interface BashClassification {
     allowed: boolean;
     program: string | null;
 }
-/**
- * Decide whether a coordinator bash command is permitted (allowlist + no compounds).
- *
- * This allowlist is a workflow rail, NOT a security boundary. It is
- * defense-in-depth that keeps the coordinator on its intended path (dispatch
- * agents rather than inspect the repo directly) and raises the cost of a
- * prompt-injection escalation; it is NOT a hardened control over shell
- * execution. Per project doctrine (`docs/plugins/coordinator.md` — "Security
- * model — code-enforced vs LLM-requested"): code-enforced rules are the
- * security boundary; LLM-requested rails like this one are defense in depth.
- * Real shell-execution boundaries (sandboxing, permission controls) live
- * outside this plugin. Do not "harden" this into a fake boundary.
- */
+/** Decide whether a coordinator bash command is permitted by its allowlist. */
 declare function classifyCoordinatorBash(command: string, allowedPrograms: string[]): BashClassification;
 interface ViolationInfo {
     tool: string;
@@ -109,15 +51,7 @@ interface ViolationInfo {
     skill?: string;
     reason: string;
 }
-/**
- * Build the rejection error. The message embeds a machine-readable marker + JSON
- * and a human/LLM redirect (G). The hook throws this, so opencode records the
- * marker in the offending TOOL PART's `state.error` (`part.type === "tool" &&
- * part.state?.status === "error"`) — the path the eval counts. It reaches the
- * assistant message's `info.error` only when the turn dies at the wall on it (the
- * non-cooperative path); when the model cooperatively continues after the
- * rejection, `info.error` stays empty. See docs/eval/playbook.md "Marker counting".
- */
+/** Build the coordinator-policy rejection error and its machine-readable marker. */
 declare function buildViolationError(info: ViolationInfo): Error;
 
 interface CreateSkillPluginOptions {

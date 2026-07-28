@@ -1,4 +1,7 @@
 import type { Config, Plugin } from "@opencode-ai/plugin"
+import { COORDINATOR_AGENT_NAME as COORDINATOR_AGENT } from "../_shared/session-identity.js"
+
+export { COORDINATOR_AGENT }
 
 /**
  * Visible-primary native built-in agents on opencode 1.15.10 — the ONLY natives
@@ -26,7 +29,6 @@ export function setDefaultAgent(config: Config, name: string): void {
 }
 
 const HIDE = { hidden: true } as const
-export const COORDINATOR_AGENT = "Perun - Coordinator"
 
 type AgentMap = NonNullable<Config["agent"]>
 type AgentEntry = AgentMap[string]

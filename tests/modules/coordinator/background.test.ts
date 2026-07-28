@@ -10,6 +10,7 @@ import type {
   AgentInfo,
 } from "../../../src/modules/coordinator/dispatch.js"
 import type { PollerMessage } from "../../../src/modules/coordinator/poller.js"
+import { SessionAgentRegistry } from "../../../src/modules/_shared/session-agent-registry.js"
 
 const registry: Record<string, AgentInfo> = {
   triglav: { mode: "subagent" },
@@ -126,6 +127,35 @@ describe("startBackgroundTask", () => {
       }),
     ).rejects.toThrow(/create failed/)
     expect(store.countActiveByParent("p1")).toBe(0)
+  })
+
+  it("registers perun-headless metadata before starting a background child", async () => {
+    const store = new BackgroundTaskStore()
+    const sessionAgentRegistry = new SessionAgentRegistry()
+    const specialist = fakeSpecialist({
+      startBackground: async (_agent, _prompt, onSessionCreated) => {
+        onSessionCreated?.("veles-background-child")
+        expect(sessionAgentRegistry.lookupMetadata("veles-background-child")).toEqual({
+          headless: true,
+        })
+        return "veles-background-child"
+      },
+    })
+
+    await startBackgroundTask({
+      store,
+      specialist,
+      agentRegistry: registry,
+      parentSessionId: "p1",
+      agent: "triglav",
+      prompt: "explore",
+      executionContext: "perun-headless",
+      sessionAgentRegistry,
+    })
+
+    expect(sessionAgentRegistry.lookupMetadata("veles-background-child")).toEqual({
+      headless: true,
+    })
   })
 })
 

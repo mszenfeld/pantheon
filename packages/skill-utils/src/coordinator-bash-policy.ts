@@ -1,3 +1,15 @@
+/*
+ * @deprecated Legacy copy for external package consumers.
+ *
+ * The canonical implementation lives in `src/modules/_shared/coordinator-bash-policy.ts`
+ * (the harness-owned home); keep this file in sync with it. The duplication is
+ * deliberate: the import boundary is frozen in BOTH directions (packages must not
+ * import `src/`, and `src/modules/` must not import `packages/skill-utils` — see
+ * AGENTS.md "skill-utils package boundary"), so a re-export facade in either
+ * direction would violate doctrine. Delete this copy once `skill-registry` is
+ * absorbed into `src/modules/` and no external consumer needs these exports.
+ */
+
 /** Parse `Bash(<prog>:*)` programs out of an agent's `allowed-tools` frontmatter line. */
 export function parseAllowedBashPrograms(frontmatter: string): string[] {
   const out: string[] = []
@@ -10,25 +22,10 @@ export function parseAllowedBashPrograms(frontmatter: string): string[] {
   return out
 }
 
-// Compound/escape forms a coordinator must never run inline. The shell-name tokens
-// (bash/sh/eval) are anchored with a lookbehind so they only match a standalone
-// program token, not a substring inside a path/filename like `./qa-preflight.sh`.
-//
-// Newline (`\n`), CR (`\r`), single `&` and redirection (`<`/`>`) are shell
-// separators/operators just like `;` and `&&`. Without them, `ls\ngit log`,
-// `ls & curl …`, `ls > /tmp/x` smuggle a forbidden command/redirect past the
-// token[0]-only program check below (the parsed "program" is the harmless first
-// token while the shell still runs the second statement). They MUST stay in the
-// alternation; each has a reject test in coordinator-bash-policy.test.ts.
 const COMPOUND =
   /(\|\||&&|;|\||&|[\r\n]|`|\$\(|<|>|(?<![\w./-])(?:bash|sh|eval)\b)/
 
-/**
- * True when the command contains a compound separator/operator/redirect or a
- * shell wrapper (the same forms `classifyCoordinatorBash` rejects without a
- * single resolvable program token). Shared so the rejection classifier and the
- * violation-error subject agree on what "compound" means.
- */
+/** True when a command contains a shell compound form or wrapper. */
 export function isCompoundCommand(command: string): boolean {
   return COMPOUND.test(command.trim())
 }
@@ -38,19 +35,7 @@ export interface BashClassification {
   program: string | null
 }
 
-/**
- * Decide whether a coordinator bash command is permitted (allowlist + no compounds).
- *
- * This allowlist is a workflow rail, NOT a security boundary. It is
- * defense-in-depth that keeps the coordinator on its intended path (dispatch
- * agents rather than inspect the repo directly) and raises the cost of a
- * prompt-injection escalation; it is NOT a hardened control over shell
- * execution. Per project doctrine (`docs/plugins/coordinator.md` — "Security
- * model — code-enforced vs LLM-requested"): code-enforced rules are the
- * security boundary; LLM-requested rails like this one are defense in depth.
- * Real shell-execution boundaries (sandboxing, permission controls) live
- * outside this plugin. Do not "harden" this into a fake boundary.
- */
+/** Decide whether a coordinator bash command is permitted by its allowlist. */
 export function classifyCoordinatorBash(
   command: string,
   allowedPrograms: string[],
@@ -68,24 +53,12 @@ export interface ViolationInfo {
   reason: string
 }
 
-/**
- * Build the rejection error. The message embeds a machine-readable marker + JSON
- * and a human/LLM redirect (G). The hook throws this, so opencode records the
- * marker in the offending TOOL PART's `state.error` (`part.type === "tool" &&
- * part.state?.status === "error"`) — the path the eval counts. It reaches the
- * assistant message's `info.error` only when the turn dies at the wall on it (the
- * non-cooperative path); when the model cooperatively continues after the
- * rejection, `info.error` stays empty. See docs/eval/playbook.md "Marker counting".
- */
+/** Build the coordinator-policy rejection error and its machine-readable marker. */
 export function buildViolationError(info: ViolationInfo): Error {
   const payload = JSON.stringify({
     marker: "COORDINATOR_POLICY_VIOLATION",
     ...info,
   })
-  // A multi-line/compound command has no single resolvable program, so naming
-  // `command.split(/\s+/)[0]` (e.g. `ls` for `ls\ngit log`) would misname the
-  // rejection. Use a stable label instead; only single-program commands get the
-  // first token as their subject.
   const subject = info.command
     ? isCompoundCommand(info.command)
       ? "a compound command"

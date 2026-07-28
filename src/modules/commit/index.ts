@@ -5,6 +5,8 @@ import type { Plugin } from "@opencode-ai/plugin"
 import { tool } from "@opencode-ai/plugin"
 import { classifyBashCommand } from "./bash-policy.js"
 import { createControlledCommit } from "./controlled-commit.js"
+import { createBranch } from "./create-branch.js"
+import { createPr } from "./create-pr.js"
 
 const COMMIT_COMMAND_DESCRIPTION =
   "Create a git commit with the AppVerk commit workflow"
@@ -68,6 +70,78 @@ export const AppVerkCommitPlugin: Plugin = async () => {
           return JSON.stringify(result, null, 2)
         },
       }),
+      create_pr: tool({
+        description:
+          "Push the current branch to origin and open a pull request through the AppVerk workflow",
+        args: {
+          title: tool.schema.string().describe("Pull request title"),
+          body: tool.schema
+            .string()
+            .optional()
+            .describe("Pull request description (markdown)"),
+          base: tool.schema
+            .string()
+            .optional()
+            .describe("Base branch; defaults to the origin default branch"),
+          draft: tool.schema
+            .boolean()
+            .optional()
+            .describe("Create the PR as a draft (default: ready for review)"),
+          taskId: tool.schema
+            .string()
+            .optional()
+            .describe("Optional task ID appended to the body as a Refs footer"),
+        },
+        async execute(args, context) {
+          const result = await createPr({
+            cwd: context.worktree ?? context.directory,
+            title: args.title,
+            body: args.body,
+            base: args.base,
+            draft: args.draft ?? false,
+            taskId: args.taskId,
+          })
+          return JSON.stringify(result, null, 2)
+        },
+      }),
+      create_branch: tool({
+        description:
+          "Create (and by default switch to) a convention-validated git branch from type/id/description segments",
+        args: {
+          type: tool.schema
+            .string()
+            .describe(
+              "Branch type — one of: feature, fix, hotfix, release, docs, chore, refactor (validated in-tool)",
+            ),
+          id: tool.schema
+            .string()
+            .optional()
+            .describe(
+              "Optional task/ticket id, e.g. INC-212 (never rewritten)",
+            ),
+          description: tool.schema
+            .string()
+            .describe(
+              "Short plain-English or kebab-case description; whitespace becomes dashes",
+            ),
+          checkout: tool.schema
+            .boolean()
+            .optional()
+            .describe(
+              "Switch to the new branch after creating it (default: true)",
+            ),
+        },
+        async execute(args, context) {
+          const result = await createBranch({
+            cwd: context.worktree ?? context.directory,
+            type: args.type,
+            id: args.id,
+            description: args.description,
+            checkout: args.checkout ?? true,
+          })
+          return JSON.stringify(result, null, 2)
+        },
+      }),
     },
     "tool.execute.before": async (input, output) => {
       if (input.tool !== "bash") {
@@ -82,7 +156,10 @@ export const AppVerkCommitPlugin: Plugin = async () => {
       }
 
       if (decision === "block-push") {
-        throw new Error("git push is blocked by the AppVerk commit plugin.")
+        throw new Error(
+          "git push is blocked by the AppVerk commit plugin. Use the `create_pr` tool to " +
+            "publish the current branch and open a pull request.",
+        )
       }
     },
   }

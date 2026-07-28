@@ -6,6 +6,13 @@ interface SvarogToolHookDeps {
      *  per session. Failures are swallowed — the checkpoint is a recovery aid, never a gate. Omit in
      *  tests that do not exercise it. */
     createCheckpoint?: (sessionID: string) => void;
+    /**
+     * Root that relative paths resolve against — the session worktree, threaded from the plugin's
+     * `PluginInput` (`worktree ?? directory`), mirroring `makeVelesPlanningWriteGate`. It MUST be
+     * the same base `av_commit` stages with (`cwd: context.worktree ?? context.directory`), or the
+     * directory check would stat a path the commit never touches. Defaults to `process.cwd()`.
+     */
+    worktree?: string;
 }
 interface SvarogToolHookInput {
     tool: string;
@@ -16,6 +23,7 @@ interface SvarogToolHookOutput {
     args: {
         command?: unknown;
         filePath?: unknown;
+        files?: unknown;
     };
 }
 type SvarogToolHook = (input: SvarogToolHookInput, output: SvarogToolHookOutput) => Promise<void>;
@@ -34,8 +42,14 @@ interface SvarogToolHookHandle {
  *   (2b) bash secret-generation tripwire -> SECRET_DENIED;
  *   (2c) serena-EDITOR carve-out (allowed BEFORE the floor, which would otherwise deny them);
  *   (3) explicit `question` deny (headless leaf -> ESCALATE; no isImmutableDeny pattern covers it);
+ *   (3b) network-egress deny — `webfetch`/`websearch` (leaf in-tree executor);
+ *   (3c) publish/branch carve-out — `create_pr`/`create_branch` early-returns (the spec-mandated
+ *       sanctioned publish chain; 2026-07-22 executor-chain decision) allowed BEFORE the floor's
+ *       `create_` verb would deny them. `av_commit` needs no carve-out here: it is not
+ *       floor-denied and falls to the allow-by-default at (5);
  *   (4) the shared isImmutableDeny floor, REUSED UNCHANGED (shell / dispatch / recipe / DB-mutation /
- *       serena memory-write). The carve-out at (2c) is the only reason the legit serena editors pass;
+ *       serena memory-write). The carve-outs at (2c)/(3c) are the only reasons the legit serena
+ *       editors and the publish tools pass;
  *   (5) everything else -> ALLOW (edit/write/multiedit, serena reads + diagnostics, skill, ...).
  * Fail-open on the attribution axis and on any internal error; only intended denials throw.
  */

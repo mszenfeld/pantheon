@@ -4,7 +4,11 @@
 // (allow-by-default with the isImmutableDeny floor + serena carve-out + secret tripwire). serena
 // editors, `get_diagnostics_for_file`, and `skill`/`load_appverk_skill` are HOOK-allowed and are
 // deliberately NOT listed here (mirrors Stribog keeping serena hook-only). Bash `git commit`/`push`
-// are globally blocked by the commit plugin; Svarog stops at READY and never commits.
+// are globally blocked by the commit plugin; commits go through the sanctioned `av_commit` tool
+// (2026-07-22 executor-chain decision: create_branch → av_commit → create_pr), which the
+// allow-by-default hook passes without needing a carve-out.
+// create_pr is HOOK-allowed (publish-path carve-out in tool-budget-hook.ts), not listed here.
+// create_branch is HOOK-allowed (branch-path carve-out in tool-budget-hook.ts), not listed here.
 
 const STRUCTURED_TOOLS = ["Read", "Glob", "Grep", "Edit", "Write", "MultiEdit"]
 

@@ -13,7 +13,7 @@ declare const SVAROG_AGENT_KEY: "svarog";
  *  model. Provider-gated on `openai` with a session-default fallback + one-time toast (see
  *  index.ts). Must satisfy MODEL_REGEX in src/modules/pantheon-config/schema.ts. NOT a security control. */
 declare const DEFAULT_SVAROG_MODEL = "openai/gpt-5.5";
-declare const SVAROG_DESCRIPTION = "Heavy/main code executor: implements a multi-file feature or refactor from a plan or task \u2014 writes code test-first, runs the full suite/build, and returns a verified diff with a recoverable checkpoint. Stops at READY (does not commit). NOT for trivial 1-2 file mechanical changes (use stribog), secrets (use zmora-setup), or work needing an unsettled design decision (plan with veles).";
+declare const SVAROG_DESCRIPTION = "Heavy/main code executor: implements a multi-file feature or refactor from a plan or task \u2014 writes code test-first, runs the full suite/build, and returns a verified diff with a recoverable checkpoint. Finishes at READY; commits only via the sanctioned av_commit tool (never bash git commit). NOT for trivial 1-2 file mechanical changes (use stribog), secrets (use zmora-setup), or work needing an unsettled design decision (plan with veles).";
 /** Serena single-file + cross-file EDITORS Svarog may use (suffix-matched, server-prefix
  *  agnostic). The tool hook ALLOWS these via a carve-out BEFORE the reused isImmutableDeny
  *  floor — which would otherwise deny them via its mutation-verb / `_symbol`/`_content`/

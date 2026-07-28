@@ -16,7 +16,9 @@ function git(cwd: string, args: string[], env?: NodeJS.ProcessEnv): string {
  * §6 total-undo capture. Snapshot the WHOLE working tree (tracked + untracked, excluding
  * gitignored — the same scope as createCheckpoint) into refs/qa-loop/pre/<run> BEFORE the first
  * fix, via a throwaway index so the live index/worktree are untouched. Capturing dirty work means
- * undoToPreLoop returns the user to exactly where they started (§6).
+ * undoToPreLoop returns the user's WORKING TREE to where they started (§6). It does not rewind
+ * commits: since the 2026-07-22 executor-chain decision the in-loop Svarog fixer may commit its
+ * verified-green work via `av_commit`, and `restoreCheckpoint` never moves `HEAD`.
  */
 export function capturePreLoopRef(cwd: string, runId: string): string {
   const dir = mkdtempSync(path.join(tmpdir(), "qa-loop-pre-"))
@@ -29,7 +31,14 @@ export function capturePreLoopRef(cwd: string, runId: string): string {
     const env = { ...process.env, GIT_INDEX_FILE: idx }
     git(cwd, ["add", "-A"], env)
     const tree = git(cwd, ["write-tree"], env)
-    const commit = git(cwd, ["commit-tree", tree, "-p", "HEAD", "-m", "qa-loop pre-loop"])
+    const commit = git(cwd, [
+      "commit-tree",
+      tree,
+      "-p",
+      "HEAD",
+      "-m",
+      "qa-loop pre-loop",
+    ])
     const ref = `refs/qa-loop/pre/${runId}`
     git(cwd, ["update-ref", ref, commit])
     return ref
@@ -57,7 +66,17 @@ export function restoreFailRef(cwd: string, ref: string): void {
   restoreCheckpoint(cwd, ref)
 }
 
-/** §6 total undo — revert everything the loop did by restoring the pre-loop ref (same mechanics). */
+/**
+ * §6 total undo — revert the loop's WORKING-TREE changes by restoring the pre-loop ref (same
+ * mechanics as the FAIL restore).
+ *
+ * **Bounded, not total, since the 2026-07-22 executor-chain decision.** `restoreCheckpoint`
+ * resets the index to the current `HEAD`; it never moves `HEAD`, re-checks-out a branch, or
+ * un-pushes. Svarog may now commit its verified-green work through `av_commit` (and switch
+ * branches through `create_branch`, publish through `create_pr`), so a loop run whose fixer
+ * committed leaves those commits in place — this restores the tree around them. Undoing
+ * committed loop work is an operator step (`git reset --hard <pre-loop HEAD>`, or the reflog).
+ */
 export function undoToPreLoop(cwd: string, ref: string): void {
   restoreCheckpoint(cwd, ref)
 }
@@ -84,7 +103,8 @@ export function antiHardcodeDiff(
     // plain in-tree path so an entry cannot be read as a git flag (`-x`) or a pathspec magic
     // prefix (`:(glob)`). The diff is best-effort and read-only; the restore path ignores
     // changed[] entirely and derives orphans from git ls-files.
-    if (file.startsWith("-") || file.startsWith(":") || file.includes("..")) continue
+    if (file.startsWith("-") || file.startsWith(":") || file.includes(".."))
+      continue
     let diff = ""
     try {
       diff = git(cwd, ["diff", "--no-color", ckptRef, "--", file])

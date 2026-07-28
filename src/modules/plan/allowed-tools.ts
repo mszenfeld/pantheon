@@ -1,8 +1,11 @@
+import { VELES_ARTIFACT_TOOL_NAMES } from "./artifact-tool-names.js"
+
 // Built-in tool allow-list for the Veles planning agent (emitted into the
-// prompt frontmatter). PLUGIN tools (the coordinator's dispatch tools) are NOT
-// listed here — they are enabled via the `AgentConfig.tools` boolean map in
-// index.ts (mirrors QA's execute_recipe opt-in), derived from the coordinator's
-// canonical `DISPATCH_TOOL_NAMES` so the names can't drift. The
+// prompt frontmatter). Coordinator dispatch tools are NOT listed here — they
+// are enabled via the `AgentConfig.tools` boolean map in index.ts (mirrors QA's
+// execute_recipe opt-in), derived from the coordinator's canonical
+// `DISPATCH_TOOL_NAMES` so the names can't drift. Veles's own planning-artifact
+// tools are listed because the prompt instructs the planner to call them. The
 // git/gh/command/date/mkdir Bash tokens are the BROAD forms that
 // are exact members of the /qa:create-plan command's allow-list, so the shared
 // qa-plan-authoring skill's allowed-tools are an exact subset of both callers.
@@ -38,5 +41,6 @@ export const VELES_TOOLS: string[] = [
   ...STRUCTURED_TOOLS,
   ...BASH_TOOLS,
   ...HARNESS_TOOLS,
+  ...VELES_ARTIFACT_TOOL_NAMES,
   ...MCP_REASONING_TOOLS,
 ]

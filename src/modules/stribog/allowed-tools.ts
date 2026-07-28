@@ -18,6 +18,10 @@
 //   - serena IS accepted (code-intelligence) → the hook ALLOWS it (step 2c), EXCEPT the shell
 //     escape (`execute_shell_command`) and whole-repo edits (`rename_symbol`/`safe_delete_symbol`);
 //     serena single-file edits are charged to the SAME 2-file budget as edit/write.
+//   - create_pr is HOOK-allowed (publish-path carve-out in tool-budget-hook.ts), not listed here.
+//   - create_branch is HOOK-allowed (branch-path carve-out in tool-budget-hook.ts), not listed here.
+//   - av_commit is HOOK-allowed (executor-chain carve-out in tool-budget-hook.ts, 2026-07-22
+//     doctrine decision: create_branch → av_commit → create_pr), not listed here.
 // The hook allows `bash` at the TOOL-NAME level but DOES inspect one thing: it denies secret-
 // GENERATION commands (`STRIBOG_SECRET_DENIED` — openssl rand, `node -e …randomBytes`, uuidgen,
 // /dev/urandom, ssh-keygen, …), the hard minter≠actuator invariant. Otherwise the `Bash(docker:*)`-

@@ -1,3 +1,4 @@
+import { COORDINATOR_AGENT_NAME as COORDINATOR_AGENT } from "../_shared/session-identity.js";
 const NATIVE_BUILTINS = ["build", "plan"];
 function getDefaultAgent(config) {
   return config.default_agent;
@@ -7,7 +8,6 @@ function setDefaultAgent(config, name) {
   config.default_agent = name;
 }
 const HIDE = { hidden: true };
-const COORDINATOR_AGENT = "Perun - Coordinator";
 function isVisibleSessionTarget(entry) {
   if (entry === void 0) return false;
   const e = entry;

@@ -75,6 +75,6 @@ describe("AppVerkCommitPlugin runtime", () => {
         { tool: "bash", args: { command: "git push origin main" } } as never,
         { args: { command: "git push origin main" } } as never,
       ),
-    ).rejects.toThrow(/git push is blocked/i)
+    ).rejects.toThrow(/git push is blocked.*create_pr/is)
   })
 })

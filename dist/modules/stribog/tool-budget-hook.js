@@ -1,4 +1,9 @@
 import { isAbsolute, resolve } from "node:path";
+import {
+  bareCommitDenialMessage,
+  hasExplicitCommitFiles,
+  unbudgetedCommitPathMessage
+} from "../_shared/commit-staging-scope.js";
 import { isMutatingGitCommand } from "../_shared/mutating-git.js";
 import {
   STRIBOG_AGENT_KEY,
@@ -22,6 +27,7 @@ function editRedirectMessage(raw) {
   return `${TOOL_DENIED}: tool "${raw}" is not a budget-tracked Stribog editor. Make file changes with the \`edit\`/\`write\` tools (or serena's edit tools) instead \u2014 they ARE available to you and count toward your ${STRIBOG_EDIT_BUDGET}-file budget. Retry the change with one of those \u2014 do NOT return ESCALATE for this.`;
 }
 function makeStribogToolHook(deps) {
+  const worktree = deps.worktree ?? process.cwd();
   const editedPaths = /* @__PURE__ */ new Map();
   function pathsFor(sessionID) {
     let set = editedPaths.get(sessionID);
@@ -58,7 +64,7 @@ function makeStribogToolHook(deps) {
         }
         if (isMutatingGitCommand(command)) {
           throw new Error(
-            `${GIT_DENIED}: this command mutates the git working tree/branch (checkout/switch/reset/restore/clean/stash/rebase/merge/cherry-pick/worktree or branch -d/-D), which Stribog \u2014 a leaf actuator \u2014 must never do (it would move or rewrite the operator's worktree). Read-only git (status/log/diff/blame/show) is allowed. Do NOT switch branches; if the task genuinely requires a branch/tree operation, return the ESCALATE result.`
+            `${GIT_DENIED}: this command mutates the git working tree/branch (checkout/switch/reset/restore/clean/stash/rebase/merge/cherry-pick/worktree or branch -d/-D), which Stribog \u2014 a leaf actuator \u2014 must never do (it would move or rewrite the operator's worktree). Read-only git (status/log/diff/blame/show) is allowed. To create and switch to a convention-valid branch, use the create_branch tool \u2014 do NOT ESCALATE for branch creation. For any other branch/tree operation, return the ESCALATE result.`
           );
         }
         return;
@@ -82,8 +88,27 @@ function makeStribogToolHook(deps) {
               `${SCOPE_VIOLATION}: serena edit refused \u2014 no \`relative_path\` to bind to the edit budget. This task exceeds Stribog's scope. Return the ESCALATE result now.`
             );
           }
-          consumeFileBudget(input.sessionID, resolve(rel));
+          consumeFileBudget(input.sessionID, resolve(worktree, rel));
           return;
+        }
+        return;
+      }
+      if (norm === "create_pr") return;
+      if (norm === "create_branch") return;
+      if (norm === "av_commit") {
+        const files = output.args?.files;
+        if (!hasExplicitCommitFiles(files)) {
+          throw new Error(bareCommitDenialMessage(SCOPE_VIOLATION, "Stribog"));
+        }
+        const edited = pathsFor(input.sessionID);
+        for (const file of files) {
+          if (!edited.has(resolve(worktree, file.trim()))) {
+            throw new Error(
+              unbudgetedCommitPathMessage(SCOPE_VIOLATION, file.trim(), [
+                ...edited
+              ])
+            );
+          }
         }
         return;
       }
@@ -121,7 +146,7 @@ function makeStribogToolHook(deps) {
             `${SCOPE_VIOLATION}: edit/write refused \u2014 filePath must be an absolute path but was ${kind}; a non-absolute path cannot be bound to the edit budget. This task exceeds Stribog's scope. Return the ESCALATE result now.`
           );
         }
-        consumeFileBudget(input.sessionID, resolve(filePath));
+        consumeFileBudget(input.sessionID, resolve(worktree, filePath));
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : "";

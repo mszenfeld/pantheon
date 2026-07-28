@@ -1,7 +1,7 @@
 import {
   forgetSessionAgent,
   getSessionAgentCached
-} from "@appverk/opencode-skill-utils";
+} from "../_shared/session-identity.js";
 import { registerAgentMetadata } from "../agent-registry/index.js";
 import {
   applyModelOverride,
@@ -21,13 +21,20 @@ import {
 import { buildStribogPrompt } from "./prompt.js";
 import { makeStribogToolHook } from "./tool-budget-hook.js";
 const DEFAULT_MODEL_PROVIDER = providerIdOf(DEFAULT_STRIBOG_MODEL);
-const AppVerkStribogPlugin = async ({ client }) => {
+const AppVerkStribogPlugin = async ({
+  client,
+  worktree,
+  directory
+}) => {
   registerAgentMetadata(stribogSpecialistInfo);
   const extraTools = loadPantheonConfig().agents[STRIBOG_AGENT_KEY]?.extraTools ?? [];
   const extraPatterns = extraTools.map((p) => p.toLowerCase());
   const { hook, clearSession } = makeStribogToolHook({
     resolveAgent: (sessionID) => getSessionAgentCached(sessionID, client),
-    extraPatterns
+    extraPatterns,
+    // Same base av_commit stages against, so the edit budget and the commit's `files` key on
+    // one origin (falls back to process.cwd() when the host supplies neither).
+    worktree: worktree ?? directory
   });
   let providerMissing = false;
   let toastShown = false;

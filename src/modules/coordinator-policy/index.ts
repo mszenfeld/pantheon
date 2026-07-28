@@ -2,9 +2,11 @@ import type { Plugin, PluginInput } from "@opencode-ai/plugin"
 import {
   buildViolationError,
   classifyCoordinatorBash,
+} from "../_shared/coordinator-bash-policy.js"
+import {
   forgetSessionAgent,
   isCoordinatorSession,
-} from "@appverk/opencode-skill-utils"
+} from "../_shared/session-identity.js"
 import { readCoordinatorBashAllowlist } from "./read-allowlist.js"
 
 type Client = PluginInput["client"]

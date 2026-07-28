@@ -1,4 +1,9 @@
 import { isAbsolute, resolve } from "node:path"
+import {
+  bareCommitDenialMessage,
+  hasExplicitCommitFiles,
+  unbudgetedCommitPathMessage,
+} from "../_shared/commit-staging-scope.js"
 import { isMutatingGitCommand } from "../_shared/mutating-git.js"
 import {
   STRIBOG_AGENT_KEY,
@@ -80,6 +85,14 @@ export interface StribogToolHookDeps {
    * trust class as bash (no edit budget). Absent/empty ⇒ allow-list is CORE_BUILTINS only.
    */
   extraPatterns?: string[]
+  /**
+   * Root that relative paths resolve against — the session worktree, threaded from the plugin's
+   * `PluginInput` (`worktree ?? directory`), mirroring `makeVelesPlanningWriteGate`. It MUST be
+   * the same base `av_commit` stages with (`cwd: context.worktree ?? context.directory`), or the
+   * edit budget and the commit's `files` would key on different origins and the membership check
+   * would compare unrelated paths. Defaults to `process.cwd()`.
+   */
+  worktree?: string
 }
 
 export interface StribogToolHookInput {
@@ -94,6 +107,7 @@ export interface StribogToolHookOutput {
     command?: unknown
     relative_path?: unknown
     path?: unknown
+    files?: unknown
   }
 }
 
@@ -113,7 +127,8 @@ export interface StribogToolHookHandle {
 /**
  * Build the `tool.execute.before` handler enforcing, for a session positively attributed as
  * `stribog`: (1) the tool-name allow-list — CORE_BUILTINS plus any config-granted extraTools
- * pattern, with the immutable capability-deny set winning over everything — and (2) the edit
+ * pattern, with the immutable capability-deny set winning over everything except the named
+ * commit-module carve-outs at step 2d (the sanctioned publish chain) — and (2) the edit
  * budget (at most STRIBOG_EDIT_BUDGET distinct files via edit/write). The budget binds ONLY native
  * edit/write; a native edit/write whose filePath is missing or non-absolute is REFUSED (fail-closed)
  * since it cannot be keyed into the per-file budget. Write-capable extraTools are not budgeted — they
@@ -134,6 +149,13 @@ export interface StribogToolHookHandle {
  *       extraPatterns here would skip the attribution gate and leak the conditional allow to every
  *       session, since the hook fails open for non-stribog).
  *   (2) Resolves attribution and FAILS OPEN for non-stribog / unresolved sessions.
+ *   (2c) (confirmed stribog only) serena family handling — single-file editors budgeted, reads
+ *       unbudgeted (labeled "(2c)" in the body).
+ *   (2d) (confirmed stribog only) commit-module publish-chain carve-out —
+ *       `create_pr`/`create_branch`/`av_commit` early-returns (attribution-gated, unbudgeted;
+ *       the sanctioned executor chain create_branch → av_commit → create_pr, 2026-07-22
+ *       decision) — BEFORE steps 3-4, which would otherwise deny them (`create_` verb at
+ *       step 3; allow-list at step 4).
  *   (3) THEN (confirmed stribog only) applies isImmutableDeny — gated behind attribution so a
  *       legitimate `execute_recipe` (zmora-setup) / `dispatch_*` (Perun/Veles) on a NON-stribog
  *       session, or during its own attribution-unresolved window, is never denied here.
@@ -156,6 +178,8 @@ export interface StribogToolHookHandle {
 export function makeStribogToolHook(
   deps: StribogToolHookDeps,
 ): StribogToolHookHandle {
+  /** Single resolution base for the budget keys AND the av_commit membership check. */
+  const worktree = deps.worktree ?? process.cwd()
   /** Per-session set of distinct, resolved absolute paths modified via edit/write. */
   const editedPaths = new Map<string, Set<string>>()
 
@@ -233,8 +257,9 @@ export function makeStribogToolHook(
               `(checkout/switch/reset/restore/clean/stash/rebase/merge/cherry-pick/worktree or ` +
               `branch -d/-D), which Stribog — a leaf actuator — must never do (it would move or ` +
               `rewrite the operator's worktree). Read-only git (status/log/diff/blame/show) is ` +
-              `allowed. Do NOT switch branches; if the task genuinely requires a branch/tree ` +
-              `operation, return the ESCALATE result.`,
+              `allowed. To create and switch to a convention-valid branch, use the ` +
+              `create_branch tool — do NOT ESCALATE for branch creation. For any other ` +
+              `branch/tree operation, return the ESCALATE result.`,
           )
         }
         return // bash otherwise allowed — host-shell trust boundary unchanged
@@ -271,10 +296,67 @@ export function makeStribogToolHook(
                 "budget. This task exceeds Stribog's scope. Return the ESCALATE result now.",
             )
           }
-          consumeFileBudget(input.sessionID, resolve(rel))
+          consumeFileBudget(input.sessionID, resolve(worktree, rel))
           return // budgeted serena single-file edit — allowed
         }
         return // serena read / navigation / memory — allowed, unbudgeted
+      }
+
+      // (2d) commit-module publish-chain carve-out (see the factory docblock's order map).
+      // create_pr — the sanctioned publish path (validated, argv-only, never force; push + PR
+      // in one audited plugin tool — docs/specs/create-pr-tool.md). The bash mutating-git
+      // tripwire and the commit plugin's block-push gate are unchanged; this early-return
+      // exempts the tool from BOTH the `create_` verb of the isImmutableDeny floor (step 3)
+      // AND the step-4 allow-list gate — which no extraTools config could grant instead
+      // (validateExtraToolsPattern statically rejects `create_`-verb ids and `create_`-prefixed
+      // globs; a broader covering glob like `cr*` passes config validation but the step-3
+      // isImmutableDeny floor still wins over extraPatterns at runtime).
+      // Unbudgeted: not an edit/write tool.
+      if (norm === "create_pr") return
+
+      // create_branch — the sanctioned branch path (convention-validated, argv-only, no
+      // shell; same-commit checkout — docs/specs/create-branch-tool-2.md §5.3). The bash
+      // mutating-git tripwire (git checkout denial) is unchanged; this early-return exempts
+      // the plugin tool from both the `create_` verb of the isImmutableDeny floor (step 3)
+      // and the step-4 allow-list gate (extraTools cannot grant `create_`-verb ids).
+      // Unbudgeted: not an edit/write tool.
+      if (norm === "create_branch") return
+
+      // av_commit — the sanctioned commit path (controlled-commit: validated, staged-scope,
+      // argv-only — src/modules/commit/). Executor-chain doctrine decision (2026-07-22):
+      // attributed executors complete the full self-serve publish chain
+      // create_branch → av_commit → create_pr. av_commit is NOT floor-denied (no `create_`
+      // verb; `commit` is not a deny capability) — without this return it would fall only to
+      // the step-4 allow-list denial (not in CORE_BUILTINS). Bash `git commit` stays blocked
+      // by the commit plugin. Unbudgeted: not an edit/write tool.
+      //
+      // FAIL-CLOSED on staging scope: a bare av_commit falls back to `git add -A`
+      // (controlled-commit.ts), so it is refused here — mirroring how an edit/write with no
+      // bindable filePath is refused. The executor must name the paths it edited.
+      // Scope is bound twice: the shared predicate rejects whole-tree pathspecs ("." / ":/" /
+      // globs / traversal), and every named path must be one this session actually edited —
+      // the edit budget is Stribog's authoritative blast radius, so a commit may not reach
+      // past it.
+      if (norm === "av_commit") {
+        const files: unknown = output.args?.files
+        if (!hasExplicitCommitFiles(files)) {
+          throw new Error(bareCommitDenialMessage(SCOPE_VIOLATION, "Stribog"))
+        }
+        // EXACT membership, resolved on the same basis the budget itself uses
+        // (`resolve(worktree, ...)` — the injected worktree, the same base av_commit stages
+        // with). Never a suffix compare: `a.ts` must not satisfy an edited `/repo/src/a.ts`,
+        // and a directory is rejected for free because it is never an edited file path.
+        const edited = pathsFor(input.sessionID)
+        for (const file of files) {
+          if (!edited.has(resolve(worktree, file.trim()))) {
+            throw new Error(
+              unbudgetedCommitPathMessage(SCOPE_VIOLATION, file.trim(), [
+                ...edited,
+              ]),
+            )
+          }
+        }
+        return
       }
 
       const denyKey = raw.toLowerCase() // lowercased copy used ONLY for deny + extraPattern match
@@ -360,7 +442,7 @@ export function makeStribogToolHook(
               "Stribog's scope. Return the ESCALATE result now.",
           )
         }
-        consumeFileBudget(input.sessionID, resolve(filePath))
+        consumeFileBudget(input.sessionID, resolve(worktree, filePath))
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : ""

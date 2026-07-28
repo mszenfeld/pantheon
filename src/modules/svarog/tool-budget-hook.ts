@@ -1,3 +1,11 @@
+import { statSync } from "node:fs"
+import { resolve } from "node:path"
+import {
+  bareCommitDenialMessage,
+  directoryCommitDenialMessage,
+  findDirectoryPath,
+  hasExplicitCommitFiles,
+} from "../_shared/commit-staging-scope.js"
 import { isImmutableDeny } from "../_shared/stribog-extra-tools-contract.js"
 import { isMutatingGitCommand } from "../_shared/mutating-git.js"
 import { SVAROG_AGENT_KEY, SVAROG_SERENA_EDITORS } from "./svarog.metadata.js"
@@ -37,6 +45,13 @@ export interface SvarogToolHookDeps {
    *  per session. Failures are swallowed — the checkpoint is a recovery aid, never a gate. Omit in
    *  tests that do not exercise it. */
   createCheckpoint?: (sessionID: string) => void
+  /**
+   * Root that relative paths resolve against — the session worktree, threaded from the plugin's
+   * `PluginInput` (`worktree ?? directory`), mirroring `makeVelesPlanningWriteGate`. It MUST be
+   * the same base `av_commit` stages with (`cwd: context.worktree ?? context.directory`), or the
+   * directory check would stat a path the commit never touches. Defaults to `process.cwd()`.
+   */
+  worktree?: string
 }
 
 export interface SvarogToolHookInput {
@@ -46,7 +61,7 @@ export interface SvarogToolHookInput {
 }
 
 export interface SvarogToolHookOutput {
-  args: { command?: unknown; filePath?: unknown }
+  args: { command?: unknown; filePath?: unknown; files?: unknown }
 }
 
 export type SvarogToolHook = (
@@ -70,14 +85,22 @@ export interface SvarogToolHookHandle {
  *   (2b) bash secret-generation tripwire -> SECRET_DENIED;
  *   (2c) serena-EDITOR carve-out (allowed BEFORE the floor, which would otherwise deny them);
  *   (3) explicit `question` deny (headless leaf -> ESCALATE; no isImmutableDeny pattern covers it);
+ *   (3b) network-egress deny — `webfetch`/`websearch` (leaf in-tree executor);
+ *   (3c) publish/branch carve-out — `create_pr`/`create_branch` early-returns (the spec-mandated
+ *       sanctioned publish chain; 2026-07-22 executor-chain decision) allowed BEFORE the floor's
+ *       `create_` verb would deny them. `av_commit` needs no carve-out here: it is not
+ *       floor-denied and falls to the allow-by-default at (5);
  *   (4) the shared isImmutableDeny floor, REUSED UNCHANGED (shell / dispatch / recipe / DB-mutation /
- *       serena memory-write). The carve-out at (2c) is the only reason the legit serena editors pass;
+ *       serena memory-write). The carve-outs at (2c)/(3c) are the only reasons the legit serena
+ *       editors and the publish tools pass;
  *   (5) everything else -> ALLOW (edit/write/multiedit, serena reads + diagnostics, skill, ...).
  * Fail-open on the attribution axis and on any internal error; only intended denials throw.
  */
 export function makeSvarogToolHook(
   deps: SvarogToolHookDeps,
 ): SvarogToolHookHandle {
+  /** Resolution base for av_commit path checks — the same base the tool stages against. */
+  const worktree = deps.worktree ?? process.cwd()
   /** Sessions for which the one-time recovery checkpoint has already been created. */
   const checkpointed = new Set<string>()
 
@@ -141,8 +164,10 @@ export function makeSvarogToolHook(
               `(checkout/switch/reset/restore/clean/stash/rebase/merge/cherry-pick/worktree or ` +
               `branch -d/-D), which Svarog — an in-tree leaf executor — must never do (it would ` +
               `move or rewrite the operator's worktree). Read-only git ` +
-              `(status/log/diff/blame/show) is allowed. Do NOT switch branches; if the task ` +
-              `genuinely requires a branch/tree operation, return the ESCALATE result.`,
+              `(status/log/diff/blame/show) is allowed. To create and switch to a ` +
+              `convention-valid branch, use the create_branch tool — do NOT ESCALATE for ` +
+              `branch creation. For any other branch/tree operation, return the ESCALATE ` +
+              `result.`,
           )
         }
         return
@@ -173,6 +198,55 @@ export function makeSvarogToolHook(
             `denied). If the task genuinely needs external data, return the ESCALATE result.`,
         )
       }
+
+      // (3c) publish/branch carve-out — plus the commit path's staging-scope guard.
+      //
+      // av_commit is allow-by-default here (not floor-denied), but a bare call falls back to
+      // `git add -A` (controlled-commit.ts) and would sweep the operator's unrelated changes
+      // into the executor's commit — which create_pr then publishes. Refused fail-closed; the
+      // executor must name the paths it edited.
+      if (norm === "av_commit") {
+        const files: unknown = output.args?.files
+        if (!hasExplicitCommitFiles(files)) {
+          throw new Error(bareCommitDenialMessage(TOOL_DENIED, "Svarog"))
+        }
+        // Svarog has no edit budget to compare against (it is the allow-by-default multi-file
+        // worker, and legitimately commits generated output it never hand-edited — this repo's
+        // committed dist/ tree, for one), so membership would deny real work. Its floor is the
+        // shape gate plus: no named path may be a DIRECTORY, which would stage everything
+        // modified or untracked beneath it.
+        // Resolved against the SAME base av_commit stages with, so the guard stats the path the
+        // commit would actually add. Fails CLOSED: a path that cannot be stat'ed cannot be
+        // proven to be a file, and this guard is the only scope binding Svarog has.
+        const directory = findDirectoryPath(files, (path) => {
+          try {
+            return statSync(resolve(worktree, path)).isDirectory()
+          } catch {
+            return true
+          }
+        })
+        if (directory !== undefined) {
+          throw new Error(
+            directoryCommitDenialMessage(
+              TOOL_DENIED,
+              "Svarog",
+              directory.trim(),
+            ),
+          )
+        }
+      }
+
+      // create_pr — the sanctioned publish path (validated, argv-only, never force;
+      // docs/specs/create-pr-tool.md). The bash mutating-git tripwire is unchanged; this
+      // early-return only lets the plugin tool through the `create_` verb of the
+      // isImmutableDeny floor (step 4).
+      if (norm === "create_pr") return
+
+      // create_branch — the sanctioned branch path (convention-validated, argv-only, no
+      // shell; same-commit checkout — docs/specs/create-branch-tool-2.md §5.3). The bash
+      // mutating-git tripwire is unchanged; this early-return only lets the plugin tool
+      // through the `create_` verb of the isImmutableDeny floor (step 4).
+      if (norm === "create_branch") return
 
       // (4) shared immutable floor, reused unchanged: shell-escape, dispatch/task, execute_recipe,
       // DB/DDL mutation verbs, serena `_memory` writes. (Bare `edit`/`write` are exempt by design;

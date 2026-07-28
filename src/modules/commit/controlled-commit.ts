@@ -46,6 +46,18 @@ export const defaultGitRunner: GitRunner = async (cwd, args) => {
   }
 }
 
+/** True when a merge or cherry-pick is mid-flight, so git cannot do a partial (pathspec) commit. */
+async function isMergeInProgress(
+  runGit: GitRunner,
+  cwd: string,
+): Promise<boolean> {
+  for (const ref of ["MERGE_HEAD", "CHERRY_PICK_HEAD"]) {
+    const result = await runGit(cwd, ["rev-parse", "-q", "--verify", ref])
+    if (result.exitCode === 0) return true
+  }
+  return false
+}
+
 export async function createControlledCommit(input: ControlledCommitInput) {
   const runGit = input.runGit ?? defaultGitRunner
   const repoCheck = await runGit(input.cwd, [
@@ -77,7 +89,26 @@ export async function createControlledCommit(input: ControlledCommitInput) {
   }
 
   const commitMessage = normalizeCommitMessage(input.message, input.taskId)
-  const commitResult = await runGit(input.cwd, ["commit", "-m", commitMessage])
+  // Bind the commit to the SAME paths that were staged. `git commit -m` with no pathspec
+  // captures the whole index, so anything staged out-of-band before this call — the operator's
+  // own `git add`, or a bash `git add -A` from an executor session (bash `add` is not on the
+  // mutating-git tripwire) — would ride along, defeating the executor staging-scope guard in
+  // `_shared/commit-staging-scope.ts` and getting published by `create_pr`. With `files` empty
+  // the caller asked for the whole tree (`add -A` above), so no pathspec is the correct shape.
+  //
+  // EXCEPTION — an in-progress merge/cherry-pick: git refuses a partial (pathspec) commit there
+  // ("fatal: cannot do a partial commit during a merge"). The merge itself already scopes the
+  // commit to its result, so the whole-index shape is both required and correct; a pathspec
+  // would hard-fail the operator's conflict-resolution commit and dead-end an executor.
+  const inMerge =
+    input.files &&
+    input.files.length > 0 &&
+    (await isMergeInProgress(runGit, input.cwd))
+  const commitArgs =
+    input.files && input.files.length > 0 && !inMerge
+      ? ["commit", "-m", commitMessage, "--", ...input.files]
+      : ["commit", "-m", commitMessage]
+  const commitResult = await runGit(input.cwd, commitArgs)
 
   if (commitResult.exitCode !== 0) {
     throw new Error(

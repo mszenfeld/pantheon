@@ -1,3 +1,4 @@
+import { resolve } from "node:path"
 import { describe, expect, it } from "vitest"
 import { makeStribogToolHook } from "../../../src/modules/stribog/tool-budget-hook.js"
 import { STRIBOG_EDIT_BUDGET } from "../../../src/modules/stribog/stribog.metadata.js"
@@ -65,6 +66,13 @@ describe("stribog tool-budget hook", () => {
         h(input("bash"), { args: { command: cmd } }),
       ).rejects.toThrow("STRIBOG_GIT_DENIED")
     }
+    // The denial redirects branch creation to the sanctioned tool instead of ESCALATE
+    // (message-only guidance; the deny decision itself is unchanged).
+    const branchDenial = await h(input("bash"), {
+      args: { command: "git checkout -b feature/x" },
+    }).catch((error: Error) => error.message)
+    expect(branchDenial).toMatch(/use the create_branch tool/)
+    expect(branchDenial).toMatch(/do NOT ESCALATE for branch creation/)
     // read-only git stays allowed — an executor legitimately inspects state.
     for (const cmd of [
       "git status",
@@ -354,6 +362,137 @@ describe("stribog tool-budget hook", () => {
       new RegExp(`${STRIBOG_EDIT_BUDGET} distinct files`),
     )
   })
+
+  it("allows create_pr for a confirmed stribog session (publish-path carve-out)", async () => {
+    await expect(
+      hook(STRIBOG)(input("create_pr"), out()),
+    ).resolves.toBeUndefined()
+    await expect(
+      hook(STRIBOG)(input("Create-PR"), out()),
+    ).resolves.toBeUndefined()
+    // floor regression guard (AC-14): dispatch family stays denied
+    await expect(hook(STRIBOG)(input("execute_recipe"), out())).rejects.toThrow(
+      "STRIBOG_TOOL_DENIED",
+    )
+  })
+
+  it("allows create_branch for a confirmed stribog session (branch-path carve-out)", async () => {
+    await expect(
+      hook(STRIBOG)(input("create_branch"), out()),
+    ).resolves.toBeUndefined()
+    // case/hyphen normalization must not bypass the carve-out
+    await expect(
+      hook(STRIBOG)(input("Create-Branch"), out()),
+    ).resolves.toBeUndefined()
+    // floor regression guard: dispatch family stays denied
+    await expect(hook(STRIBOG)(input("execute_recipe"), out())).rejects.toThrow(
+      "STRIBOG_TOOL_DENIED",
+    )
+  })
+
+  it("allows av_commit for a confirmed stribog session, scoped to files it edited", async () => {
+    const h = hook(STRIBOG)
+    // the commit may only name paths this session actually edited; the budget keys on
+    // resolve(...), so the repo-relative spelling of the same file is the one that matches
+    const edited = resolve("src/a.ts")
+    await h(input("edit"), { args: { filePath: edited } })
+    const scoped = { args: { files: ["src/a.ts"] } }
+    await expect(h(input("av_commit"), scoped)).resolves.toBeUndefined()
+    // case/hyphen normalization must not bypass the carve-out
+    await expect(h(input("Av-Commit"), scoped)).resolves.toBeUndefined()
+    // the absolute spelling of the same file resolves to the same edited path
+    await expect(
+      h(input("av_commit"), { args: { files: [edited] } }),
+    ).resolves.toBeUndefined()
+    // floor regression guard: dispatch family stays denied
+    await expect(h(input("execute_recipe"), out())).rejects.toThrow(
+      "STRIBOG_TOOL_DENIED",
+    )
+  })
+
+  it("resolves av_commit paths against the injected worktree, not the process cwd", async () => {
+    // Discriminating pin for the shared resolution basis: with a worktree that is NOT the
+    // runner's cwd, a repo-relative `files` entry must still match the absolute path the
+    // edit budget recorded. Resolving against process.cwd() would deny this.
+    const scoped = makeStribogToolHook({
+      resolveAgent: async () => STRIBOG,
+      worktree: "/tmp/wt-elsewhere",
+    }).hook
+    await scoped(input("edit"), {
+      args: { filePath: "/tmp/wt-elsewhere/src/a.ts" },
+    })
+    await expect(
+      scoped(input("av_commit"), { args: { files: ["src/a.ts"] } }),
+    ).resolves.toBeUndefined()
+    // and a path under the runner's cwd instead is refused
+    await expect(
+      scoped(input("av_commit"), { args: { files: [resolve("src/a.ts")] } }),
+    ).rejects.toThrow(/STRIBOG_SCOPE_VIOLATION/)
+  })
+
+  it("matches edited paths EXACTLY — a bare basename or shorter suffix is refused", async () => {
+    // Regression: a suffix compare would let `a.ts` satisfy an edited `<repo>/src/a.ts`,
+    // staging a different file at the worktree root while the edited one never gets staged.
+    const h = hook(STRIBOG)
+    await h(input("edit"), { args: { filePath: resolve("src/a.ts") } })
+    for (const file of ["a.ts", "other/a.ts", "./a.ts", "src", "src/"]) {
+      const message = await h(input("av_commit"), { args: { files: [file] } })
+        .then(() => "<allowed>")
+        .catch((error: Error) => error.message)
+      expect(message).toMatch(/^STRIBOG_SCOPE_VIOLATION/)
+      expect(message).toMatch(/did not edit this session/)
+    }
+  })
+
+  it("refuses an unscoped av_commit — whole-tree staging is fail-closed", async () => {
+    // Shape failures AND whole-tree pathspecs: `git add -- .` / `-- :/` stage everything
+    // exactly like the `add -A` fallback the guard exists to prevent.
+    for (const args of [
+      {},
+      { files: [] },
+      { files: "src/a.ts" },
+      { files: ["  "] },
+      { files: ["src/a.ts", 42] },
+      { files: ["."] },
+      { files: ["./"] },
+      { files: ["/"] },
+      { files: [":/"] },
+      { files: [":(glob)**"] },
+      { files: ["src/*.ts"] },
+      { files: ["../outside.ts"] },
+      { files: ["src/a.ts", "."] },
+      // C0/C1 control bytes: a forged path is refused at the gate, never echoed raw (CWE-117)
+      { files: [`src/x${String.fromCharCode(10)}FORGED`] },
+      { files: [`src/x${String.fromCharCode(0)}y`] },
+      { files: [`src/x${String.fromCharCode(27)}]0;pwn`] },
+      // edge whitespace: the guard validates the trimmed spelling but git stages the raw one,
+      // so a whitespace-decorated twin is refused so validated and staged strings coincide
+      { files: ["src/a.ts "] },
+      { files: [" src/a.ts"] },
+    ]) {
+      const message = await hook(STRIBOG)(input("av_commit"), { args })
+        .then(() => "<allowed>")
+        .catch((error: Error) => error.message)
+      expect(message).toMatch(/^STRIBOG_SCOPE_VIOLATION/)
+      expect(message).toMatch(/explicit 'files' list/)
+      // redirect, not an escalation signal
+      expect(message).toMatch(/Do NOT ESCALATE/)
+    }
+  })
+
+  it("refuses an av_commit naming a path the session never edited", async () => {
+    const h = hook(STRIBOG)
+    await h(input("edit"), { args: { filePath: resolve("src/a.ts") } })
+    const message = await h(input("av_commit"), {
+      args: { files: ["src/a.ts", "src/unrelated.ts"] },
+    })
+      .then(() => "<allowed>")
+      .catch((error: Error) => error.message)
+    expect(message).toMatch(/^STRIBOG_SCOPE_VIOLATION/)
+    expect(message).toMatch(/did not edit this session/)
+    // a file it never touched is out of lane, so ESCALATE is the honest route here
+    expect(message).toMatch(/return the ESCALATE result/)
+  })
 })
 
 describe("stribog deny-guidance: skill/edit-alias tools redirect, not escalate", () => {
@@ -373,7 +512,12 @@ describe("stribog deny-guidance: skill/edit-alias tools redirect, not escalate",
   }
 
   it("denies skill-activation tools but tells the model to CONTINUE (not escalate)", async () => {
-    for (const t of ["skill", "load_appverk_skill", "activate_skill", "load-appverk-skill"]) {
+    for (const t of [
+      "skill",
+      "load_appverk_skill",
+      "activate_skill",
+      "load-appverk-skill",
+    ]) {
       const msg = await denialOf(t)
       expect(msg).toMatch(/^STRIBOG_TOOL_DENIED/)
       expect(msg).toMatch(/continue/i)
@@ -491,10 +635,7 @@ describe("stribog serena toolset (accepted; single-file edits budgeted)", () => 
 
   it("does not gate serena for a non-stribog session (fail-open)", async () => {
     await expect(
-      hook("Perun - Coordinator")(
-        input("serena_execute_shell_command"),
-        out(),
-      ),
+      hook("Perun - Coordinator")(input("serena_execute_shell_command"), out()),
     ).resolves.toBeUndefined()
   })
 })
@@ -557,7 +698,10 @@ describe("stribog bash secret-generation tripwire (minter != actuator)", () => {
 
   it("does NOT gate secret-gen bash for a non-stribog session (fail-open)", async () => {
     await expect(
-      hook("Perun - Coordinator")(input("bash"), bashOut("openssl rand -hex 32")),
+      hook("Perun - Coordinator")(
+        input("bash"),
+        bashOut("openssl rand -hex 32"),
+      ),
     ).resolves.toBeUndefined()
   })
 })

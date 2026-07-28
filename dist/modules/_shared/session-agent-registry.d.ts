@@ -13,7 +13,13 @@
 declare class SessionAgentRegistry {
     #private;
     register(sessionID: string, agent: string): void;
+    registerWithMetadata(sessionID: string, agent: string, metadata: {
+        headless?: boolean;
+    }): void;
     unregister(sessionID: string): void;
+    lookupMetadata(sessionID: string): {
+        headless?: boolean;
+    } | undefined;
     lookup(sessionID: string): string | undefined;
 }
 

@@ -16,7 +16,7 @@ export const SVAROG_AGENT_KEY = "svarog" as const
 export const DEFAULT_SVAROG_MODEL = "openai/gpt-5.5"
 
 export const SVAROG_DESCRIPTION =
-  "Heavy/main code executor: implements a multi-file feature or refactor from a plan or task — writes code test-first, runs the full suite/build, and returns a verified diff with a recoverable checkpoint. Stops at READY (does not commit). NOT for trivial 1-2 file mechanical changes (use stribog), secrets (use zmora-setup), or work needing an unsettled design decision (plan with veles)."
+  "Heavy/main code executor: implements a multi-file feature or refactor from a plan or task — writes code test-first, runs the full suite/build, and returns a verified diff with a recoverable checkpoint. Finishes at READY; commits only via the sanctioned av_commit tool (never bash git commit). NOT for trivial 1-2 file mechanical changes (use stribog), secrets (use zmora-setup), or work needing an unsettled design decision (plan with veles)."
 
 /** Serena single-file + cross-file EDITORS Svarog may use (suffix-matched, server-prefix
  *  agnostic). The tool hook ALLOWS these via a carve-out BEFORE the reused isImmutableDeny
@@ -76,6 +76,6 @@ export const svarogSpecialistInfo: SpecialistInfo = {
       },
     ],
     workflowContribution:
-      "For multi-file feature/refactor work that needs the full toolset (edit many files, run the suite), dispatch `svarog` (the heavy/main executor). For a trivial 1-2 file mechanical change or environment bring-up, use `stribog`; if the design is unsettled, plan with `veles` first. Svarog stops at READY with a verified diff and does not commit -- review the diff, then the user runs `/commit`.",
+      "For multi-file feature/refactor work that needs the full toolset (edit many files, run the suite), dispatch `svarog` (the heavy/main executor). For a trivial 1-2 file mechanical change or environment bring-up, use `stribog`; if the design is unsettled, plan with `veles` first. Svarog finishes at READY with a verified diff; it commits its own verified-green work through the sanctioned `av_commit` tool (executor publish chain create_branch -> av_commit -> create_pr; 2026-07-22 decision), scoped to the files it edited, never bash `git commit` -- review the returned diff; if a commit is still needed, the user runs `/commit`.",
   },
 }

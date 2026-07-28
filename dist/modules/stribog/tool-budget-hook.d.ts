@@ -8,6 +8,14 @@ interface StribogToolHookDeps {
      * trust class as bash (no edit budget). Absent/empty ⇒ allow-list is CORE_BUILTINS only.
      */
     extraPatterns?: string[];
+    /**
+     * Root that relative paths resolve against — the session worktree, threaded from the plugin's
+     * `PluginInput` (`worktree ?? directory`), mirroring `makeVelesPlanningWriteGate`. It MUST be
+     * the same base `av_commit` stages with (`cwd: context.worktree ?? context.directory`), or the
+     * edit budget and the commit's `files` would key on different origins and the membership check
+     * would compare unrelated paths. Defaults to `process.cwd()`.
+     */
+    worktree?: string;
 }
 interface StribogToolHookInput {
     tool: string;
@@ -20,6 +28,7 @@ interface StribogToolHookOutput {
         command?: unknown;
         relative_path?: unknown;
         path?: unknown;
+        files?: unknown;
     };
 }
 /** The `tool.execute.before` handler signature this factory produces. */
@@ -33,7 +42,8 @@ interface StribogToolHookHandle {
 /**
  * Build the `tool.execute.before` handler enforcing, for a session positively attributed as
  * `stribog`: (1) the tool-name allow-list — CORE_BUILTINS plus any config-granted extraTools
- * pattern, with the immutable capability-deny set winning over everything — and (2) the edit
+ * pattern, with the immutable capability-deny set winning over everything except the named
+ * commit-module carve-outs at step 2d (the sanctioned publish chain) — and (2) the edit
  * budget (at most STRIBOG_EDIT_BUDGET distinct files via edit/write). The budget binds ONLY native
  * edit/write; a native edit/write whose filePath is missing or non-absolute is REFUSED (fail-closed)
  * since it cannot be keyed into the per-file budget. Write-capable extraTools are not budgeted — they
@@ -54,6 +64,13 @@ interface StribogToolHookHandle {
  *       extraPatterns here would skip the attribution gate and leak the conditional allow to every
  *       session, since the hook fails open for non-stribog).
  *   (2) Resolves attribution and FAILS OPEN for non-stribog / unresolved sessions.
+ *   (2c) (confirmed stribog only) serena family handling — single-file editors budgeted, reads
+ *       unbudgeted (labeled "(2c)" in the body).
+ *   (2d) (confirmed stribog only) commit-module publish-chain carve-out —
+ *       `create_pr`/`create_branch`/`av_commit` early-returns (attribution-gated, unbudgeted;
+ *       the sanctioned executor chain create_branch → av_commit → create_pr, 2026-07-22
+ *       decision) — BEFORE steps 3-4, which would otherwise deny them (`create_` verb at
+ *       step 3; allow-list at step 4).
  *   (3) THEN (confirmed stribog only) applies isImmutableDeny — gated behind attribution so a
  *       legitimate `execute_recipe` (zmora-setup) / `dispatch_*` (Perun/Veles) on a NON-stribog
  *       session, or during its own attribution-unresolved window, is never denied here.

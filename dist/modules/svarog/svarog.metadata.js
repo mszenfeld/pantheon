@@ -1,6 +1,6 @@
 const SVAROG_AGENT_KEY = "svarog";
 const DEFAULT_SVAROG_MODEL = "openai/gpt-5.5";
-const SVAROG_DESCRIPTION = "Heavy/main code executor: implements a multi-file feature or refactor from a plan or task \u2014 writes code test-first, runs the full suite/build, and returns a verified diff with a recoverable checkpoint. Stops at READY (does not commit). NOT for trivial 1-2 file mechanical changes (use stribog), secrets (use zmora-setup), or work needing an unsettled design decision (plan with veles).";
+const SVAROG_DESCRIPTION = "Heavy/main code executor: implements a multi-file feature or refactor from a plan or task \u2014 writes code test-first, runs the full suite/build, and returns a verified diff with a recoverable checkpoint. Finishes at READY; commits only via the sanctioned av_commit tool (never bash git commit). NOT for trivial 1-2 file mechanical changes (use stribog), secrets (use zmora-setup), or work needing an unsettled design decision (plan with veles).";
 const SVAROG_SERENA_EDITORS = /(create_text_file|replace_content|replace_regex|replace_symbol_body|insert_(after|before)_symbol|rename_symbol|safe_delete_symbol)$/;
 const SVAROG_DENIED_TOOLS = {
   task: false,
@@ -39,7 +39,7 @@ const svarogSpecialistInfo = {
         trigger: "Carry out a designed multi-file / cross-symbol refactor and verify it"
       }
     ],
-    workflowContribution: "For multi-file feature/refactor work that needs the full toolset (edit many files, run the suite), dispatch `svarog` (the heavy/main executor). For a trivial 1-2 file mechanical change or environment bring-up, use `stribog`; if the design is unsettled, plan with `veles` first. Svarog stops at READY with a verified diff and does not commit -- review the diff, then the user runs `/commit`."
+    workflowContribution: "For multi-file feature/refactor work that needs the full toolset (edit many files, run the suite), dispatch `svarog` (the heavy/main executor). For a trivial 1-2 file mechanical change or environment bring-up, use `stribog`; if the design is unsettled, plan with `veles` first. Svarog finishes at READY with a verified diff; it commits its own verified-green work through the sanctioned `av_commit` tool (executor publish chain create_branch -> av_commit -> create_pr; 2026-07-22 decision), scoped to the files it edited, never bash `git commit` -- review the returned diff; if a commit is still needed, the user runs `/commit`."
   }
 };
 export {

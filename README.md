@@ -19,7 +19,7 @@ The harness curates the agent picker — only registered agents are shown and ne
 | Agent     | Description                                                                                                                 |
 | --------- | --------------------------------------------------------------------------------------------------------------------------- |
 | **Perun** | The coordinator. Delegates work to specialists (blocking or in the background so it can overlap exploration with its own work), computes dispatch waves with dependency awareness, and synthesizes results. |
-| **Veles** | Planning specialist. Authors QA/work plans from a diff or request and returns the saved plan; it plans the work rather than executing it. `EXPENSIVE`. |
+| **Veles** | Planning specialist. Authors feature specs, implementation plans, and QA test plans from a diff or request and returns the saved artefact; it plans the work rather than executing it. See [`docs/veles-planning.md`](docs/veles-planning.md). `EXPENSIVE`. |
 
 ## Subagents
 
@@ -28,7 +28,7 @@ The harness curates the agent picker — only registered agents are shown and ne
 | **Zmora**   | QA tester. Executes FE and BE test scenarios on demand, dispatched by Perun.                                                |
 | **Triglav** | Read-only codebase explorer. Maps structure and finds definitions/references/patterns; dispatched by Perun before planning. See [`docs/exploration.md`](docs/exploration.md). |
 | **Stribog** | Light execution specialist. Performs one small, mechanical task with real side effects (bring up/fix a service, restart, read logs, a 1–2 file config change), verifies it, and returns a structured result; dispatched by Perun. Experimental (Phase 1): no automatic edit-recovery yet. See [`docs/light-execution.md`](docs/light-execution.md). |
-| **Svarog** | Heavy/main code executor. Implements a multi-file feature or refactor from a plan — writes code test-first, runs the full suite/build, and returns a verified diff with a recoverable checkpoint. Stops at READY (does not commit); dispatched by Perun. See [`docs/heavy-execution.md`](docs/heavy-execution.md). |
+| **Svarog** | Heavy/main code executor. Implements a multi-file feature or refactor from a plan — writes code test-first, runs the full suite/build, and returns a verified diff with a recoverable checkpoint. Finishes at READY with a verified diff; commits go only through the sanctioned `av_commit` publish chain (`create_branch` → `av_commit` → `create_pr`), never bash `git commit`; dispatched by Perun. See [`docs/heavy-execution.md`](docs/heavy-execution.md). |
 
 ## Installation
 

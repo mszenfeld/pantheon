@@ -1,52 +1,33 @@
 import {
-  pollUntilIdle,
-  PollerAbortError,
-  PollerTimeoutError
-} from "./poller.js";
+  DEFAULT_AGGREGATE_MAX_BYTES,
+  DEFAULT_RESULT_MAX_BYTES,
+  enforceAggregateBudget,
+  resolveAgentTimeout
+} from "./budget-enforcer.js";
+import { createDispatchScrubber, normalizeDispatchResults } from "./dispatch-scrubbers.js";
+import { validateDispatchTasks } from "./task-builder.js";
 import {
-  neutralizeUntrustedOutput,
-  normalizeVariantSuffix
-} from "../_shared/sanitize.js";
+  createUnstartedAbortResult,
+  runDispatchedTask,
+  runWorkerPool
+} from "./worker-pool.js";
 import {
-  truncateBytes,
-  truncateBytesWithMarker,
-  AGGREGATE_TRUNCATION_MARKER
-} from "./truncate-bytes.js";
-const DISPATCHABLE_ALL_AGENTS = /* @__PURE__ */ new Set([
-  "Veles - Planner"
-]);
-function validateDispatchable(agentRegistry, name, callerMode) {
-  const agentInfo = agentRegistry[name];
-  if (agentInfo === void 0) {
-    throw new Error(`Unknown agent: ${name}`);
-  }
-  if (agentInfo.mode === "subagent") {
-    return;
-  }
-  if (agentInfo.mode === "all" && DISPATCHABLE_ALL_AGENTS.has(name) && callerMode === "primary") {
-    return;
-  }
-  throw new Error(`Cannot dispatch ${agentInfo.mode} agent: ${name}`);
-}
+  authorizeDispatchCaller,
+  DISPATCHABLE_ALL_AGENTS,
+  validateDispatchable
+} from "./dispatch-authorizer.js";
+import {
+  AGENT_TIMEOUT_OVERRIDES,
+  DEFAULT_AGGREGATE_MAX_BYTES as DEFAULT_AGGREGATE_MAX_BYTES2,
+  DEFAULT_RESULT_MAX_BYTES as DEFAULT_RESULT_MAX_BYTES2,
+  DEFAULT_TASK_TIMEOUT_MS,
+  enforceAggregateBudget as enforceAggregateBudget2,
+  resolveAgentTimeout as resolveAgentTimeout2,
+  VELES_IDLE_TIMEOUT_MS,
+  VELES_WALLCLOCK_BACKSTOP_MS
+} from "./budget-enforcer.js";
+import { DISPATCH_MAX_TASKS } from "./task-builder.js";
 const DEFAULT_POLL_INTERVAL_MS = 1e3;
-const DEFAULT_TASK_TIMEOUT_MS = 5 * 60 * 1e3;
-const VELES_IDLE_TIMEOUT_MS = 5 * 60 * 1e3;
-const VELES_WALLCLOCK_BACKSTOP_MS = 45 * 60 * 1e3;
-const AGENT_TIMEOUT_OVERRIDES = /* @__PURE__ */ new Map([
-  [
-    "Veles - Planner",
-    {
-      wallClockMs: VELES_WALLCLOCK_BACKSTOP_MS,
-      idleMs: VELES_IDLE_TIMEOUT_MS
-    }
-  ]
-]);
-function resolveAgentTimeout(agentName, defaultMs = DEFAULT_TASK_TIMEOUT_MS) {
-  return AGENT_TIMEOUT_OVERRIDES.get(agentName) ?? { wallClockMs: defaultMs };
-}
-const DEFAULT_RESULT_MAX_BYTES = 100 * 1024;
-const DEFAULT_AGGREGATE_MAX_BYTES = 128 * 1024;
-const DISPATCH_MAX_TASKS = 4;
 const DISPATCH_CONCURRENCY = 4;
 async function dispatchParallel(input) {
   const {
@@ -54,10 +35,6 @@ async function dispatchParallel(input) {
     agentRegistry,
     specialist,
     pollIntervalMs = DEFAULT_POLL_INTERVAL_MS,
-    // No default here: an explicit value is a deliberate per-call override; when
-    // omitted, each task's timeout is resolved per-agent in the worker below so
-    // the planner gets the inactivity-based budget while leaf agents keep the
-    // flat wall-clock (resolveAgentTimeout).
     taskTimeoutMs,
     resultMaxBytes = DEFAULT_RESULT_MAX_BYTES,
     aggregateMaxBytes = DEFAULT_AGGREGATE_MAX_BYTES,
@@ -69,198 +46,51 @@ async function dispatchParallel(input) {
     preflight,
     callerMode
   } = input;
-  if (tasks.length > DISPATCH_MAX_TASKS) {
-    throw new Error(
-      `dispatch_parallel: tasks.length (${tasks.length}) exceeds DISPATCH_MAX_TASKS (${DISPATCH_MAX_TASKS})`
-    );
-  }
-  for (const task of tasks) {
-    validateDispatchable(agentRegistry, task.name, callerMode);
-  }
+  validateDispatchTasks(tasks, agentRegistry, callerMode);
   if (preflight !== void 0 && parentSessionID !== void 0 && parentSessionID.length > 0) {
     try {
-      await preflight({
-        parentSessionID,
-        taskNames: tasks.map((t) => t.name)
-      });
+      await preflight({ parentSessionID, taskNames: tasks.map((task) => task.name) });
     } catch {
     }
   }
-  let scrubberSession;
-  if (scrubberFactory !== void 0 && parentSessionID !== void 0 && parentSessionID.length > 0) {
-    try {
-      scrubberSession = scrubberFactory(parentSessionID);
-    } catch {
-      scrubberSession = void 0;
-    }
-  }
-  const effectiveScrubber = scrubberSession !== void 0 ? (text) => scrubberSession.scrub(text) : scrubber;
-  const results = new Array(tasks.length);
-  const nextRef = { value: 0 };
-  async function worker() {
-    while (true) {
-      if (signal?.aborted === true) {
-        fillUnstartedAsAborted(results, tasks, nextRef);
-        return;
-      }
-      const i = nextRef.value++;
-      if (i >= tasks.length) return;
-      const task = tasks[i];
-      results[i] = await runTask(task, specialist, {
+  const activeScrubber = createDispatchScrubber(parentSessionID, scrubber, scrubberFactory);
+  try {
+    const results = await runWorkerPool({
+      tasks,
+      concurrency: DISPATCH_CONCURRENCY,
+      signal,
+      runTask: (task) => runDispatchedTask(task, specialist, {
         pollIntervalMs,
-        // Explicit per-call override wins (as a pure wall-clock budget, no
-        // heartbeat — back-compat for callers/tests that pass their own number);
-        // otherwise resolve per-agent so the planner (Veles) gets the
-        // inactivity-based budget while leaf agents keep the flat wall-clock.
-        timeout: taskTimeoutMs !== void 0 ? { wallClockMs: taskTimeoutMs } : resolveAgentTimeout(task.name),
+        timeout: taskTimeoutMs === void 0 ? resolveAgentTimeout(task.name) : { wallClockMs: taskTimeoutMs },
         resultMaxBytes,
         signal,
         sessionAgentRegistry,
-        scrubber: effectiveScrubber,
+        scrubber: activeScrubber.scrubber,
         parentSessionID
-      });
-    }
-  }
-  try {
-    const workerCount = Math.min(DISPATCH_CONCURRENCY, tasks.length);
-    await Promise.all(Array.from({ length: workerCount }, () => worker()));
-  } finally {
-    if (scrubberSession !== void 0) {
-      try {
-        scrubberSession.release();
-      } catch {
-      }
-    }
-  }
-  for (const r of results) {
-    r.name = normalizeVariantSuffix(r.name);
-    if (r.error !== void 0) {
-      r.error = normalizeVariantSuffix(r.error);
-    }
-  }
-  enforceAggregateBudget(results, aggregateMaxBytes);
-  return results;
-}
-function enforceAggregateBudget(results, aggregateMaxBytes) {
-  let remaining = aggregateMaxBytes;
-  for (const r of results) {
-    if (r.status !== "success" || r.result.length === 0) {
-      continue;
-    }
-    const bodyBytes = Buffer.byteLength(r.result, "utf8");
-    if (bodyBytes <= remaining) {
-      remaining -= bodyBytes;
-      continue;
-    }
-    r.result = truncateBytesWithMarker(
-      r.result,
-      remaining,
-      AGGREGATE_TRUNCATION_MARKER
-    );
-    remaining = 0;
-  }
-}
-function fillUnstartedAsAborted(results, tasks, nextRef) {
-  while (nextRef.value < tasks.length) {
-    const i = nextRef.value++;
-    const task = tasks[i];
-    results[i] = {
-      name: task.name,
-      status: "aborted",
-      result: "",
-      duration_ms: 0,
-      error: "aborted before start"
-    };
-  }
-}
-function classifyError(err) {
-  if (err instanceof PollerAbortError) {
-    return "aborted";
-  }
-  if (err instanceof PollerTimeoutError) {
-    return "timeout";
-  }
-  return "error";
-}
-async function cleanupOnAbort(specialist, sessionId) {
-  if (sessionId === void 0) {
-    return;
-  }
-  try {
-    await specialist.abortTask(sessionId);
-  } catch {
-  }
-}
-async function runTask(task, specialist, options) {
-  const startTime = Date.now();
-  let sessionId;
-  try {
-    const fullPrompt = task.context ? `${task.prompt}
-
-${task.context}` : task.prompt;
-    const id = await specialist.startTask(
-      task.name,
-      fullPrompt,
-      (createdId) => {
-        sessionId = createdId;
-        options.sessionAgentRegistry?.register(createdId, task.name);
-      }
-    );
-    const rawResult = await pollUntilIdle({
-      fetchMessages: () => specialist.fetchMessages(id),
-      // Status gate: only collect once the child session reports inactive —
-      // a terminal-looking message alone can be the inter-step finish race
-      // (see DispatchSpecialist.isSessionActive). The same probe doubles as the
-      // heartbeat's liveness fallback when `idleTimeoutMs` is set below.
-      isSessionActive: () => specialist.isSessionActive(id),
-      timeoutMs: options.timeout.wallClockMs,
-      idleTimeoutMs: options.timeout.idleMs,
-      pollIntervalMs: options.pollIntervalMs,
-      signal: options.signal,
-      // Bound in-flight memory in the poller too: the per-poll cap matches
-      // the final cap so we never hold an oversized string before the final
-      // truncation pass below.
-      maxBytes: options.resultMaxBytes
+      }),
+      onUnstartedAbort: createUnstartedAbortResult
     });
-    const neutralized = neutralizeUntrustedOutput(rawResult);
-    const scrubbed = options.scrubber !== void 0 && options.parentSessionID !== void 0 ? options.scrubber(neutralized, options.parentSessionID) : neutralized;
-    const result = truncateBytes(scrubbed, options.resultMaxBytes);
-    return {
-      name: task.name,
-      status: "success",
-      result,
-      duration_ms: Date.now() - startTime,
-      sessionId
-    };
-  } catch (err) {
-    const status = classifyError(err);
-    if (status === "aborted" || status === "timeout") {
-      await cleanupOnAbort(specialist, sessionId);
-    }
-    return {
-      name: task.name,
-      status,
-      result: "",
-      duration_ms: Date.now() - startTime,
-      error: neutralizeUntrustedOutput(
-        err instanceof Error ? err.message : String(err)
-      ),
-      sessionId
-    };
+    normalizeDispatchResults(results);
+    enforceAggregateBudget(results, aggregateMaxBytes);
+    return results;
+  } finally {
+    activeScrubber.release();
   }
 }
 export {
   AGENT_TIMEOUT_OVERRIDES,
-  DEFAULT_AGGREGATE_MAX_BYTES,
+  DEFAULT_AGGREGATE_MAX_BYTES2 as DEFAULT_AGGREGATE_MAX_BYTES,
   DEFAULT_POLL_INTERVAL_MS,
-  DEFAULT_RESULT_MAX_BYTES,
+  DEFAULT_RESULT_MAX_BYTES2 as DEFAULT_RESULT_MAX_BYTES,
   DEFAULT_TASK_TIMEOUT_MS,
   DISPATCHABLE_ALL_AGENTS,
   DISPATCH_CONCURRENCY,
   DISPATCH_MAX_TASKS,
   VELES_IDLE_TIMEOUT_MS,
   VELES_WALLCLOCK_BACKSTOP_MS,
+  authorizeDispatchCaller,
   dispatchParallel,
-  resolveAgentTimeout,
+  enforceAggregateBudget2 as enforceAggregateBudget,
+  resolveAgentTimeout2 as resolveAgentTimeout,
   validateDispatchable
 };

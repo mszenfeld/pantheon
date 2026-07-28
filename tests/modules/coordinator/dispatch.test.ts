@@ -896,6 +896,34 @@ describe("dispatchParallel", () => {
       expect(registry.lookup("s1")).toBe("qa-fe-tester")
     })
 
+    it("registers perun-headless metadata for a foreground child", async () => {
+      const { SessionAgentRegistry } =
+        await import("../../../src/modules/_shared/session-agent-registry.js")
+      const registry = new SessionAgentRegistry()
+      const { specialist } = makeSpecialistRecorder({
+        sessionIdSequence: ["veles-child"],
+        fetchMessagesHandler: async () => [finishedMessage("ok")],
+      })
+
+      await dispatchParallel({
+        tasks: [
+          {
+            name: "qa-fe-tester",
+            prompt: "p",
+            executionContext: "perun-headless",
+          },
+        ],
+        agentRegistry: defaultRegistry,
+        specialist,
+        pollIntervalMs: 10,
+        sessionAgentRegistry: registry,
+      })
+
+      expect(registry.lookupMetadata("veles-child")).toEqual({
+        headless: true,
+      })
+    })
+
     it("applies scrubber to task result when configured", async () => {
       // The scrubber runs between `neutralizeUntrustedOutput` and the byte
       // truncation step, so callers (e.g. Perun) can redact known secret

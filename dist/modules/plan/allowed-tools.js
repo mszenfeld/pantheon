@@ -1,3 +1,4 @@
+import { VELES_ARTIFACT_TOOL_NAMES } from "./artifact-tool-names.js";
 const SERENA_READ_TOOLS = [
   "serena_find_symbol",
   "serena_find_referencing_symbols",
@@ -22,6 +23,7 @@ const VELES_TOOLS = [
   ...STRUCTURED_TOOLS,
   ...BASH_TOOLS,
   ...HARNESS_TOOLS,
+  ...VELES_ARTIFACT_TOOL_NAMES,
   ...MCP_REASONING_TOOLS
 ];
 export {

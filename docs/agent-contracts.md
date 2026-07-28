@@ -46,7 +46,7 @@ would duplicate that machinery.
 | zmora-setup | `Provisioned QA_BIND_<NAME>` / `NEED_INFO kind=binding_input` / `RECIPE_FAILED` / `ERROR` / `PROVISIONING_BLOCKED` (`overlay-setup.md`) | mapped 1:1 from `execute_recipe` statuses | n/a (single call per dispatch) | Perun: 3 attempts then dependents SKIP; provisioning-blocked → consent gate + re-arm (`perun.md`) |
 | Svarog | `READY` / `FAIL` / `ESCALATE` (`src/modules/svarog/svarog.md`) | `READY` ⇔ done AND the full suite/build ran green; `ESCALATE` ⇔ out of scope / needs a decision | folds into `FAIL` after 3 approaches + one root-cause pass — see Known limitations | qa-loop `SvarogStatus`; `ESCALATE` → human |
 | Stribog | `READY` / `FAIL` / `ESCALATE` (`src/modules/stribog/stribog.md`) | `READY` ⇔ done/live (`baseUrl` when a service started); `ESCALATE` ⇔ out of lane | n/a (single-shot task, no retry budget) | Perun workflow prose; `ESCALATE` → re-plan or human |
-| Veles | `ok` / `error` / `timeout` (`src/modules/plan/veles.md`) | `ok` ⇔ plan written; `error` ⇔ could not; `timeout` ⇔ exploration exceeded limits | `timeout` IS the exhaustion outcome — distinct from `error` | "The coordinator branches on all three" (verbatim, veles.md) |
+| Veles | `ok` / `needs_clarification` / `error` / `timeout` (`src/modules/plan/veles.md`) | `ok` ⇔ plan written; `needs_clarification` ⇔ ambiguous input; `error` ⇔ could not; `timeout` ⇔ exploration exceeded limits | `timeout` IS the exhaustion outcome — distinct from `error` | Perun branches on all four; see Section C |
 | qa-loop (run-level) | `Pass` / `Fail` / `BudgetExhausted` / `Stopped` / `NotVerified` (`RunResult`, `types.ts`) | computed by the loop engine from the sidecar | `BudgetExhausted` — the reference implementation | `qa_loop_finalize` renders it; Perun reports it |
 | Triglav | a reader, not a verdict agent — see Section B | — | — | — |
 
@@ -108,6 +108,52 @@ from the result. The reader's return message IS its interface. The bar:
 - [ ] 3. Access failure → STOP + diagnostic; nothing synthesized
 - [ ] 4. Re-runs overwrite (idempotent artifacts)
 - [ ] 5. Truncation declared with what was skipped
+
+## Section C — Veles contract shape
+
+Veles (`Veles - Planner`) returns a discriminated JSON contract in every mode.
+The same schema is used for direct-user sessions and for headless Perun dispatch.
+
+### Execution modes
+
+- **Headless dispatch.** Perun sends a prompt that carries the envelope:
+  - `Execution context: perun-headless`
+  - `Mode: <spec|implementation-plan|qa>`
+  - In this mode Veles must not call `question`; ambiguous input is returned as
+    `status: "needs_clarification"`.
+- **Direct-user mode.** Veles may use `question` for clarification when intent
+  is ambiguous. When it returns a final result, it uses the same JSON contract
+  as headless mode.
+
+### Status variants
+
+| status | fields | meaning |
+|---|---|---|
+| `ok` | `type`, `plan_path`, `topic`, `summary` | Artefact written successfully. |
+| `needs_clarification` | `topic`, `message`, `suggested_modes` | Ambiguous input; needs user resolution. |
+| `error` | `topic`, `reason` | Could not complete the request. |
+| `timeout` | `topic` | Exploration/planning budget exhausted. |
+
+### `ok` sub-types
+
+- `type: "spec"` — feature spec written to `docs/specs/`.
+- `type: "implementation-plan"` — implementation plan written to `docs/plans/`.
+  Its `ok` result also includes `spec_path`: the approved, normalized
+  repository-relative path to the source feature spec.
+- `type: "qa"` — QA test plan. For backward compatibility with existing QA
+  consumers, an `ok` QA result also includes the legacy fields `fe_count`,
+  `be_count`, and `setup_prereqs`. The `plan_path` for QA plans remains under
+  `docs/testing/plans/`.
+
+### Section C checklist
+
+- [ ] 1. Discriminated status is one of `ok`, `needs_clarification`, `error`, `timeout`
+- [ ] 2. `ok` carries `type`, `plan_path`, `topic`, and `summary`
+- [ ] 3. Implementation-plan mode (`type: "implementation-plan"`) also carries approved, normalized `spec_path`
+- [ ] 4. QA mode (`type: "qa"`) also carries `fe_count`, `be_count`, `setup_prereqs`
+- [ ] 5. Headless envelope carries `Execution context: perun-headless` and `Mode:`
+- [ ] 6. Headless mode never calls `question`; ambiguous input returns `needs_clarification`
+- [ ] 7. Direct-user mode may call `question` but returns the same JSON contract on completion
 
 ## Ownership boundaries
 

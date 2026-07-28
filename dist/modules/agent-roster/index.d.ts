@@ -1,4 +1,5 @@
 import { Plugin, Config } from '@opencode-ai/plugin';
+export { COORDINATOR_AGENT_NAME as COORDINATOR_AGENT } from '../_shared/session-identity.js';
 
 /**
  * Visible-primary native built-in agents on opencode 1.15.10 — the ONLY natives
@@ -18,7 +19,6 @@ declare const NATIVE_BUILTINS: readonly ["build", "plan"];
  */
 declare function getDefaultAgent(config: Config): string | undefined;
 declare function setDefaultAgent(config: Config, name: string): void;
-declare const COORDINATOR_AGENT = "Perun - Coordinator";
 /**
  * Make the harness own the agent roster: hide every `config.agent` key we did
  * not register. `preExisting` = keys present BEFORE the harness's per-module
@@ -76,4 +76,4 @@ declare function buildDriftWarning(uncovered: readonly string[]): string;
  */
 declare const AppVerkAgentRosterPlugin: Plugin;
 
-export { AppVerkAgentRosterPlugin, COORDINATOR_AGENT, NATIVE_BUILTINS, applyRosterPolicy, buildDriftWarning, AppVerkAgentRosterPlugin as default, findUncoveredNatives, getDefaultAgent, setDefaultAgent };
+export { AppVerkAgentRosterPlugin, NATIVE_BUILTINS, applyRosterPolicy, buildDriftWarning, AppVerkAgentRosterPlugin as default, findUncoveredNatives, getDefaultAgent, setDefaultAgent };

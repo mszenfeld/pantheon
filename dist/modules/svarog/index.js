@@ -1,7 +1,7 @@
 import {
   forgetSessionAgent,
   getSessionAgentCached
-} from "@appverk/opencode-skill-utils";
+} from "../_shared/session-identity.js";
 import { registerAgentMetadata } from "../agent-registry/index.js";
 import {
   applyModelOverride,
@@ -22,13 +22,20 @@ import { buildSvarogPrompt } from "./prompt.js";
 import { makeSvarogToolHook } from "./tool-budget-hook.js";
 import { createCheckpoint } from "./checkpoint.js";
 const DEFAULT_MODEL_PROVIDER = providerIdOf(DEFAULT_SVAROG_MODEL);
-const AppVerkSvarogPlugin = async ({ client }) => {
+const AppVerkSvarogPlugin = async ({
+  client,
+  worktree,
+  directory
+}) => {
   registerAgentMetadata(svarogSpecialistInfo);
   const { hook, clearSession } = makeSvarogToolHook({
     resolveAgent: (sessionID) => getSessionAgentCached(sessionID, client),
     // Option C: auto-create the recovery checkpoint on the first mutating tool; restore is manual.
     // Phase-1 assumes Svarog edits the repo it runs in (process.cwd()).
-    createCheckpoint: (sessionID) => createCheckpoint(process.cwd(), sessionID)
+    createCheckpoint: (sessionID) => createCheckpoint(process.cwd(), sessionID),
+    // Same base av_commit stages against, so the staging-scope guard checks the path the
+    // commit would actually add (falls back to process.cwd() when the host supplies neither).
+    worktree: worktree ?? directory
   });
   let providerMissing = false;
   let toastShown = false;

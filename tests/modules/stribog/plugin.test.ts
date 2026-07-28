@@ -14,6 +14,32 @@ import {
 } from "../../../src/modules/agent-registry/index.js"
 import { __resetCacheForTests } from "../../../src/modules/pantheon-config/index.js"
 
+// The plugin's provider probe consults `loadPantheonConfig()`. Rather than isolate that read
+// with $HOME (process-global — it races into concurrent test files' real git under vitest's
+// shared-thread pool), substitute the function per-test: when `pantheonOverride.value` is set,
+// return it; otherwise defer to the real implementation (so the extraTools block, which writes a
+// real temp-home pantheon.json, is unaffected).
+const pantheonOverride = vi.hoisted(
+  () =>
+    ({ value: undefined }) as {
+      value: { agents: Record<string, unknown> } | undefined
+    },
+)
+vi.mock(
+  "../../../src/modules/pantheon-config/index.js",
+  async (importOriginal) => {
+    const actual =
+      await importOriginal<
+        typeof import("../../../src/modules/pantheon-config/index.js")
+      >()
+    return {
+      ...actual,
+      loadPantheonConfig: () =>
+        pantheonOverride.value ?? actual.loadPantheonConfig(),
+    }
+  },
+)
+
 function fakeInput() {
   return { client: {} } as never
 }
@@ -60,6 +86,14 @@ describe("AppVerkStribogPlugin", () => {
     tmpData = mkdtempSync(path.join(tmpdir(), "pantheon-stribog-data-"))
     origXdgData = process.env["XDG_DATA_HOME"]
     process.env["XDG_DATA_HOME"] = tmpData
+    // The other half of the provider probe is `loadPantheonConfig()`, which reads
+    // ~/.config/opencode/pantheon.json — a developer who pins `agents.stribog.model`
+    // there sets `overridePinned` and suppresses the provider-absent toast. We do NOT
+    // isolate that with $HOME: HOME is process-global and vitest's thread pool shares
+    // it, so mutating it races into concurrent test files' real git (it flipped the
+    // svarog checkpoint suite). Each toast test substitutes loadPantheonConfig via the
+    // module mock below (no global state, no race).
+    pantheonOverride.value = undefined
     // Edit-budget state is now factory-scoped: each AppVerkStribogPlugin(...) call
     // builds a fresh closure-bound map, so the session.deleted wiring test below
     // gets a clean budget without any module-global reset. The test still proves
@@ -70,6 +104,8 @@ describe("AppVerkStribogPlugin", () => {
   afterEach(() => {
     if (origXdgData === undefined) delete process.env["XDG_DATA_HOME"]
     else process.env["XDG_DATA_HOME"] = origXdgData
+    pantheonOverride.value = undefined
+    __resetCacheForTests()
     rmSync(tmpData, { recursive: true, force: true })
   })
 
@@ -125,6 +161,9 @@ describe("AppVerkStribogPlugin", () => {
   // is skipped (stribog inherits the session default) AND a one-time warning toast
   // documents the dependency — the serena-gate pattern from plan/explore.
   it("warns exactly once on session.created when the opencode-go provider is absent", async () => {
+    // No pantheon stribog-model override, so the pinned default (not the toast) is the only
+    // thing the missing provider suppresses — the toast then fires.
+    pantheonOverride.value = { agents: {} }
     const showToast = vi.fn(async () => {})
     const hooks = await AppVerkStribogPlugin(toastInput(showToast))
     await hooks.config?.({ agent: {}, provider: {} } as never)
@@ -134,9 +173,13 @@ describe("AppVerkStribogPlugin", () => {
   })
 
   it("does not warn when the opencode-go provider is configured", async () => {
+    pantheonOverride.value = { agents: {} }
     const showToast = vi.fn(async () => {})
     const hooks = await AppVerkStribogPlugin(toastInput(showToast))
-    await hooks.config?.({ agent: {}, provider: { "opencode-go": {} } } as never)
+    await hooks.config?.({
+      agent: {},
+      provider: { "opencode-go": {} },
+    } as never)
     await hooks.event?.({ event: { type: "session.created" } } as never)
     expect(showToast).not.toHaveBeenCalled()
   })
@@ -231,7 +274,10 @@ describe("AppVerkStribogPlugin – extraTools wiring", () => {
     const before = plugin["tool.execute.before"]!
     // supabase_execute_sql matches the "supabase_*" glob — must pass.
     await expect(
-      before({ tool: "supabase_execute_sql", sessionID: "s1", callID: "c" }, { args: {} }),
+      before(
+        { tool: "supabase_execute_sql", sessionID: "s1", callID: "c" },
+        { args: {} },
+      ),
     ).resolves.toBeUndefined()
   })
 
@@ -240,7 +286,10 @@ describe("AppVerkStribogPlugin – extraTools wiring", () => {
     const plugin = await makePlugin()
     const before = plugin["tool.execute.before"]!
     await expect(
-      before({ tool: "supabase_execute_sql", sessionID: "s1", callID: "c" }, { args: {} }),
+      before(
+        { tool: "supabase_execute_sql", sessionID: "s1", callID: "c" },
+        { args: {} },
+      ),
     ).rejects.toThrow(/STRIBOG_TOOL_DENIED/)
   })
 })

@@ -10,9 +10,16 @@
 
 Based on the uncommitted changes in the git repository, generate a concise and descriptive commit message that accurately summarizes the changes made. The commit message should be clear and informative, providing context for future reference.
 
-Create the commit with the prepared message, but DON'T push it to the repository.
+Create the commit with the prepared message, but DON'T push it as part of this command (publishing is a separate, explicit `create_pr` step — see the Publishing section below).
 
-Use the `av_commit` tool to create the commit.
+Use the `av_commit` tool to create the commit. Passing `files` stages exactly those paths and
+binds the commit to them (so nothing staged out-of-band rides along); omitting it stages the
+entire worktree (`git add -A`). Executor sessions (Stribog/Svarog) must always pass
+`files` naming individual files: their hooks refuse a bare call, a whole-tree pathspec, a
+directory (Svarog), or a path the session never edited (Stribog), so a dispatched agent cannot
+sweep the operator's unrelated changes into its commit. **During a merge or cherry-pick**, git
+cannot do a partial commit, so `av_commit` commits the whole resolved index regardless of
+`files` — conclude the conflict resolution normally; the merge itself scopes the commit.
 
 If the task ID is empty, omit `taskId` from the tool call.
 If the task ID is present, pass it through as `taskId`.
@@ -40,11 +47,11 @@ config: changing configuration files
 
 Prefer `!` over `BREAKING CHANGE` in the footer for breaking changes.
 
-NEVER push messages to the repository. It's strictly forbidden.
+NEVER push via bash. Publishing goes only through the `create_pr` tool (see the Publishing section below).
 
 If user provided non-empty task ID ($1), include `Refs: <task-id>` in the footer of the commit message.
 
-Never run `git push`.
+Never run `git push` through `bash` (use `create_pr` to publish).
 Never run `git commit` through `bash`.
 
 **Co-authorship prohibition:**
@@ -71,3 +78,56 @@ If included in the type/scope prefix, breaking changes MUST be indicated by a `!
 Types other than `feat` and `fix` MAY be used in your commit messages.
 The units of information that make up Conventional Commits MUST NOT be treated as case sensitive by implementors, with the exception of `BREAKING CHANGE` which MUST be uppercase.
 `BREAKING-CHANGE` MUST be synonymous with `BREAKING CHANGE`, when used as a token in a footer.
+
+## Publishing: the `create_pr` tool
+
+After committing with `av_commit`, publish the branch and open a pull request with the
+`create_pr` tool — never with bash `git push` (blocked) or `gh pr create` directly.
+
+- Arguments: `title` (required), `body` (optional markdown), `base` (optional; defaults to
+  the origin default branch — an empty or whitespace-only value counts as omitted),
+  `draft` (optional, default `false` — the PR opens ready for review), `taskId` (optional;
+  appended to the body as a `Refs: <taskId>` footer).
+- The tool always pushes the **current** branch (`git push -u origin <branch>`, never
+  force) and never pushes from the base branch (create one with `create_branch` first).
+- Partial success: if the push lands but PR creation fails, the result carries
+  `pushed: true, prCreated: false` and a `prError` explaining what to fix (e.g. `gh` not
+  installed / not authenticated). Re-running the same call is safe — the push becomes a
+  no-op; if the PR already exists, its URL appears in `prError`.
+- Validation is fail-fast and runs before any process spawn, reporting the first failing
+  rule as `create_pr: field '<field>' violates rule <ruleId> (<shortDescription>):
+  <jsonEncodedValue>` (the offending value is JSON-encoded). `<field>` is `title`, `body`,
+  `base`, `taskId`, or `head` — the last when the branch you are standing on itself violates
+  the ref rules, checked as defense-in-depth before the push. The rules:
+  `title` T1–T3 (non-empty, ≤ 256 code points, no control characters), `taskId` K1–K2
+  (`A–Z a–z 0–9 . _ -`, no leading dash), `body` B1–B2 (≤ 64 000 bytes; `\t`/`\n`/`\r` are
+  the only allowed control characters), `base` R1–R5 (git-ref charset with `/`, no leading
+  dash, no `..`, component rules, ≤ 240 bytes).
+- Requirements on the host: GitHub origin, `gh` installed and authenticated
+  (`gh auth login`). Fork workflows: set the target once with `gh repo set-default`.
+- The existing prohibitions are unchanged: never push via bash, never `git commit` via
+  bash, Conventional Commits, no AI co-authorship.
+
+## Branching: the `create_branch` tool
+
+Create (and by default switch to) a convention-valid branch with the `create_branch` tool —
+never with bash `git checkout -b` (blocked for executors) or hand-typed `git branch` names.
+
+- Arguments: `type` (required — one of `feature`, `fix`, `hotfix`, `release`, `docs`,
+  `chore`, `refactor`, case-sensitive), `id` (optional ticket id, e.g. `INC-212` — never
+  rewritten), `description` (required — plain English is fine), `checkout` (optional,
+  default `true`).
+- The tool composes the name itself: `<type>/<id>-<description>` (or `<type>/<description>`
+  without an id), collapsing description whitespace to dashes. `fix alert dialog` becomes
+  `feature/INC-212-fix-alert-dialog` with `type: "feature", id: "INC-212"`.
+- Validation is layered and fail-fast (zero git runs on invalid input): per-segment rules
+  (charset `A–Z a–z 0–9 . _ -`, no leading dash/dot, no `--`, no `..`, no `.lock`/trailing-dot
+  suffix), then whole-name rules including a single `/` and a 240-byte cap. Errors name the
+  violated rule (`S1`–`S8`, `N1`–`N11`) so you can self-correct.
+- Valid: `feature/INC-212-fix-alert-dialog`, `release/2026.07.21`, `chore/update-dependencies`.
+  Invalid: `feat/x` (type not in list), `feature/fix--alert` (double hyphen),
+  `feature/.hidden` (leading dot), an `id` with spaces (`INC 212` — pass `INC-212`).
+- A failed checkout after a successful create returns `checkedOut: false` plus
+  `checkoutError` — the branch exists; resolve the blocker and check out manually where the
+  session permits `git checkout` (executor bash denies it — ask the operator instead).
+  Re-running the tool with the same segments fails with git's `already exists`.
