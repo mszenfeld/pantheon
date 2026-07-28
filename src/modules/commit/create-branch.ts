@@ -1,4 +1,5 @@
 import { defaultGitRunner, type GitRunner } from "./controlled-commit.js"
+import { findNonEnglishToken } from "./english-policy.js"
 
 export const BRANCH_TYPES = [
   "feature",
@@ -34,9 +35,10 @@ function segmentError(
   ruleId: string,
   slug: string,
   value: string,
+  hint = "",
 ): Error {
   return new Error(
-    `create_branch: segment '${segment}' violates rule ${ruleId} (${slug}): ${JSON.stringify(value)}`,
+    `create_branch: segment '${segment}' violates rule ${ruleId} (${slug}): ${JSON.stringify(value)}${hint}`,
   )
 }
 
@@ -145,6 +147,17 @@ export function composeBranchName(input: {
   if (description === "")
     throw segmentError("description", "S2", "empty-description", description)
   validateSegmentRules("description", description)
+
+  // §4 S9: after S3–S8, on the normalized description only — never `id` (D3).
+  const nonEnglishToken = findNonEnglishToken(description)
+  if (nonEnglishToken !== undefined)
+    throw segmentError(
+      "description",
+      "S9",
+      "non-english-token",
+      nonEnglishToken,
+      " — branch names must be English; translate the description and retry.",
+    )
 
   const name =
     id !== "" ? `${type}/${id}-${description}` : `${type}/${description}`
