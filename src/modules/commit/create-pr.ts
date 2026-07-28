@@ -1,4 +1,5 @@
 import { defaultGitRunner, type GitRunner } from "./controlled-commit.js"
+import { findNonEnglishToken } from "./english-policy.js"
 import {
   defaultGhRunner,
   githubPrProvider,
@@ -28,15 +29,19 @@ export interface CreatePrResult {
   prError?: string
 }
 
-/** Normative §5.2 error template. */
+/**
+ * Normative §5.2 error template; the optional hint suffix carries the
+ * english-publish-chain spec's §4 extended (T4) template.
+ */
 function ruleError(
   field: string,
   ruleId: string,
   slug: string,
   value: string,
+  hint = "",
 ): Error {
   return new Error(
-    `create_pr: field '${field}' violates rule ${ruleId} (${slug}): ${JSON.stringify(value)}`,
+    `create_pr: field '${field}' violates rule ${ruleId} (${slug}): ${JSON.stringify(value)}${hint}`,
   )
 }
 
@@ -52,6 +57,15 @@ function validateTitle(rawTitle: string): string {
     throw ruleError("title", "T2", "max-length-256-chars", title)
   if (TITLE_CONTROL.test(title))
     throw ruleError("title", "T3", "control-characters", title)
+  const nonEnglishToken = findNonEnglishToken(title)
+  if (nonEnglishToken !== undefined)
+    throw ruleError(
+      "title",
+      "T4",
+      "non-english-token",
+      nonEnglishToken,
+      " — PR titles must be English; translate the title and retry.",
+    )
   return title
 }
 

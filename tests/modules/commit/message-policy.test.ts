@@ -68,3 +68,48 @@ describe("normalizeCommitMessage", () => {
     ).toThrow(/Co-Authored-By/i)
   })
 })
+
+describe("english-policy subject gate", () => {
+  function captureMessage(fn: () => unknown): string {
+    try {
+      fn()
+    } catch (error) {
+      return (error as Error).message
+    }
+    return "<no throw>"
+  }
+
+  it("rejects a Polish subject with the exact plain-sentence message", () => {
+    expect(
+      captureMessage(() => normalizeCommitMessage("fix: naprawa logowania")),
+    ).toBe(
+      'Commit message subject must be English; found non-English token "naprawa". Translate the subject and retry.',
+    )
+  })
+
+  it("folds an accented subject and reports the folded token", () => {
+    expect(
+      captureMessage(() => normalizeCommitMessage("feat: obsługa płatności")),
+    ).toBe(
+      'Commit message subject must be English; found non-English token "obsluga". Translate the subject and retry.',
+    )
+  })
+
+  it("never scans the body — a listed token below the subject passes (body exemption)", () => {
+    const message = "fix: add login retry\n\nNaprawa logowania: opisano zmiany."
+    expect(normalizeCommitMessage(message)).toBe(message)
+  })
+
+  it("runs after the Conventional-Commits header check", () => {
+    // A malformed header with a Polish word must still report the CC error, not the token.
+    expect(
+      captureMessage(() => normalizeCommitMessage("naprawa logowania")),
+    ).toBe("Commit message must follow Conventional Commits.")
+  })
+
+  it("the Refs footer never triggers the gate", () => {
+    expect(normalizeCommitMessage("fix: add retry", "ZMIANA-12")).toBe(
+      "fix: add retry\n\nRefs: ZMIANA-12",
+    )
+  })
+})

@@ -30,7 +30,8 @@ The commit plugin is an **absorbed module** — its source, tests, and command a
 | `src/modules/commit/index.ts` | Plugin factory (`AppVerkCommitPlugin`); registers the `av_commit`, `create_pr`, and `create_branch` tools and the `/commit` command. |
 | `src/modules/commit/bash-policy.ts` | `classifyBashCommand` workflow rail — blocks raw `git commit` / `git push` through the bash tool. |
 | `src/modules/commit/controlled-commit.ts` | Implements the `av_commit` tool (stage selected files, run `git commit` with the supplied message). |
-| `src/modules/commit/message-policy.ts` | Validates commit messages (Conventional Commits, rejects `Co-Authored-By` footers). |
+| `src/modules/commit/message-policy.ts` | Validates commit messages (Conventional Commits, rejects `Co-Authored-By` footers, rejects non-English subjects via the english-policy stoplist). |
+| `src/modules/commit/english-policy.ts` | Curated Polish-token stoplist and the diacritic-folding `findNonEnglishToken` tokenizer backing the English-only gates (branch `S9`, commit subject, PR title `T4`); pure TypeScript, no I/O. |
 | `src/modules/commit/create-pr.ts` | Implements the `create_pr` tool: validates title/body/base/taskId, pushes the current branch (`git push -u origin <branch>`, never force), then delegates PR creation to a `PrProvider`; returns a partial-success result when the push lands but PR creation fails. |
 | `src/modules/commit/pr-provider.ts` | Defines the `PrProvider` interface and `detectProvider(originUrl)` — pure origin-URL parsing that recognizes `github.com` SSH/HTTPS remotes. |
 | `src/modules/commit/github-pr-provider.ts` | `githubPrProvider`: the GitHub `PrProvider` implementation, shelling out to `gh pr create` via `execFile` (never a shell string) and surfacing a distinct error when `gh` is missing. |

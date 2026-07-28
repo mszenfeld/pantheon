@@ -315,6 +315,23 @@ describe("createPr parameter validation (AC-1: zero spawns, normative template)"
       /field 'body' violates rule B1/,
     )
   })
+
+  it("T4 rejects a non-English title: exact message, folded token, T3 precedence", async () => {
+    await rejectsWithMessage(
+      { title: "Naprawa bledu logowania" },
+      `${prRuleMessage("title", "T4", "non-english-token", "naprawa")} — PR titles must be English; translate the title and retry.`,
+    )
+    // The reported token is the folded, lowercased form of the caller's spelling.
+    await rejectsWith(
+      { title: "Obsługa płatności" },
+      /rule T4 \(non-english-token\): "obsluga"/,
+    )
+    // T4 runs after T3: a control character still reports T3.
+    await rejectsWith(
+      { title: "naprawa\u0007bledu" },
+      /rule T3 \(control-characters\)/,
+    )
+  })
 })
 
 const HAPPY_GIT: Partial<Record<string, GitResult>> = {

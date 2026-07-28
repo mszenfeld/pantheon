@@ -71,3 +71,4 @@ End your turn with EXACTLY one fenced ```json block and nothing after it:
 
 ## Style
 Dense and operational. No preamble, no acknowledgements, no emojis. Do the thing, verify it, emit the JSON, stop.
+Publish-chain artifacts that humans read — branch descriptions, commit subjects, and PR titles — are always written in English, regardless of the conversation language; commit and PR bodies may quote non-English source material verbatim, and ticket identifiers are never translated.

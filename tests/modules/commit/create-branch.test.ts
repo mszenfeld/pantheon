@@ -568,3 +568,55 @@ describe("createBranch — orchestration (§5.3, FR-4..FR-7)", () => {
     }
   })
 })
+
+describe("S9 non-english-token (english-policy gate)", () => {
+  it("rejects a Polish description with the exact S9 message naming the token", () => {
+    expect(
+      captureMessage(() =>
+        composeBranchName({
+          type: "feature",
+          description: "naprawa bledu logowania",
+        }),
+      ),
+    ).toBe(
+      `create_branch: segment 'description' violates rule S9 (non-english-token): "naprawa" — branch names must be English; translate the description and retry.`,
+    )
+  })
+
+  it("never checks the id segment — ZMIANA-12 with an English description passes", () => {
+    expect(
+      composeBranchName({
+        type: "feature",
+        id: "ZMIANA-12",
+        description: "fix login flow",
+      }),
+    ).toBe("feature/ZMIANA-12-fix-login-flow")
+  })
+
+  it("accepts an English description", () => {
+    expect(
+      composeBranchName({ type: "fix", description: "fix login flow" }),
+    ).toBe("fix/fix-login-flow")
+  })
+
+  it("S9 fires after S3–S8: a charset violation still reports S3, not S9", () => {
+    expect(
+      captureMessage(() =>
+        composeBranchName({ type: "fix", description: "naprawa/bledu" }),
+      ),
+    ).toContain("violates rule S3")
+  })
+
+  it("records zero git calls on an S9 rejection", async () => {
+    const { calls, runGit } = recordingRunner([])
+    await expect(
+      createBranch({
+        cwd: "/repo",
+        type: "feature",
+        description: "naprawa bledu",
+        runGit,
+      }),
+    ).rejects.toThrow(/rule S9/)
+    expect(calls).toHaveLength(0)
+  })
+})

@@ -1,0 +1,55 @@
+# english-collision-words.txt — §7 collision fixture (test-only; never bundled
+# into english-policy.ts, per D1). Format (§7): one lowercase, diacritic-folded
+# token per line; blank lines and # comments ignored.
+# §3.1 rule 4: every future stoplist addition must NOT appear here; extend this
+# file whenever a collision is discovered. It MUST contain every token
+# enumerated as excluded by §3.1 rule 2.
+fix
+add
+remove
+update
+test
+testy
+menu
+panel
+status
+admin
+token
+pod
+plan
+data
+list
+report
+client
+server
+address
+stare
+dane
+process
+module
+component
+date
+state
+stage
+rate
+mode
+note
+base
+case
+user
+file
+folder
+view
+page
+form
+table
+column
+row
+error
+log
+build
+deploy
+config
+option
+value
+type

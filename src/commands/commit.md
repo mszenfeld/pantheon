@@ -79,6 +79,11 @@ Types other than `feat` and `fix` MAY be used in your commit messages.
 The units of information that make up Conventional Commits MUST NOT be treated as case sensitive by implementors, with the exception of `BREAKING CHANGE` which MUST be uppercase.
 `BREAKING-CHANGE` MUST be synonymous with `BREAKING CHANGE`, when used as a token in a footer.
 
+Publish-chain artifacts that humans read — branch descriptions, commit subjects, and PR
+titles — are always written in English, regardless of the conversation language; commit
+and PR bodies may quote non-English source material verbatim, and ticket identifiers
+are never translated.
+
 ## Publishing: the `create_pr` tool
 
 After committing with `av_commit`, publish the branch and open a pull request with the
@@ -96,13 +101,15 @@ After committing with `av_commit`, publish the branch and open a pull request wi
   no-op; if the PR already exists, its URL appears in `prError`.
 - Validation is fail-fast and runs before any process spawn, reporting the first failing
   rule as `create_pr: field '<field>' violates rule <ruleId> (<shortDescription>):
-  <jsonEncodedValue>` (the offending value is JSON-encoded). `<field>` is `title`, `body`,
-  `base`, `taskId`, or `head` — the last when the branch you are standing on itself violates
-  the ref rules, checked as defense-in-depth before the push. The rules:
-  `title` T1–T3 (non-empty, ≤ 256 code points, no control characters), `taskId` K1–K2
-  (`A–Z a–z 0–9 . _ -`, no leading dash), `body` B1–B2 (≤ 64 000 bytes; `\t`/`\n`/`\r` are
-  the only allowed control characters), `base` R1–R5 (git-ref charset with `/`, no leading
-  dash, no `..`, component rules, ≤ 240 bytes).
+  <jsonEncodedValue>` (the offending value is JSON-encoded — except rule T4
+  (`non-english-token`), which JSON-encodes the offending *token* and appends a fixed
+  translate-and-retry hint). `<field>` is `title`, `body`, `base`, `taskId`, or `head` —
+  the last when the branch you are standing on itself violates the ref rules, checked as
+  defense-in-depth before the push. The rules: `title` T1–T4 (non-empty, ≤ 256 code points,
+  no control characters, no non-English token), `taskId` K1–K2 (`A–Z a–z 0–9 . _ -`, no
+  leading dash), `body` B1–B2 (≤ 64 000 bytes; `\t`/`\n`/`\r` are the only allowed control
+  characters), `base` R1–R5 (git-ref charset with `/`, no leading dash, no `..`, component
+  rules, ≤ 240 bytes).
 - Requirements on the host: GitHub origin, `gh` installed and authenticated
   (`gh auth login`). Fork workflows: set the target once with `gh repo set-default`.
 - The existing prohibitions are unchanged: never push via bash, never `git commit` via
@@ -115,15 +122,17 @@ never with bash `git checkout -b` (blocked for executors) or hand-typed `git bra
 
 - Arguments: `type` (required — one of `feature`, `fix`, `hotfix`, `release`, `docs`,
   `chore`, `refactor`, case-sensitive), `id` (optional ticket id, e.g. `INC-212` — never
-  rewritten), `description` (required — plain English is fine), `checkout` (optional,
-  default `true`).
+  rewritten), `description` (required — MUST be English; non-English tokens are rejected),
+  `checkout` (optional, default `true`).
 - The tool composes the name itself: `<type>/<id>-<description>` (or `<type>/<description>`
   without an id), collapsing description whitespace to dashes. `fix alert dialog` becomes
   `feature/INC-212-fix-alert-dialog` with `type: "feature", id: "INC-212"`.
 - Validation is layered and fail-fast (zero git runs on invalid input): per-segment rules
-  (charset `A–Z a–z 0–9 . _ -`, no leading dash/dot, no `--`, no `..`, no `.lock`/trailing-dot
-  suffix), then whole-name rules including a single `/` and a 240-byte cap. Errors name the
-  violated rule (`S1`–`S8`, `N1`–`N11`) so you can self-correct.
+  (charset `A–Z a–z 0–9 . _ -`, no leading dash/dot, no `--`, no `..`, no
+  `.lock`/trailing-dot suffix, and no non-English token in `description`), then whole-name
+  rules including a single `/` and a 240-byte cap. Errors name the violated rule
+  (`S1`–`S9`, `N1`–`N11`) so you can self-correct — S9 JSON-encodes the offending token and
+  appends a fixed translate-and-retry hint.
 - Valid: `feature/INC-212-fix-alert-dialog`, `release/2026.07.21`, `chore/update-dependencies`.
   Invalid: `feat/x` (type not in list), `feature/fix--alert` (double hyphen),
   `feature/.hidden` (leading dot), an `id` with spaces (`INC 212` — pass `INC-212`).
