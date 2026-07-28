@@ -49,7 +49,9 @@ export const AppVerkCommitPlugin: Plugin = async () => {
         args: {
           message: tool.schema
             .string()
-            .describe("The Conventional Commit message to create"),
+            .describe(
+              "The Conventional Commit message to create (the subject line MUST be in English — translate first; non-English tokens in the subject are rejected; the body is not checked and may quote non-English text verbatim)",
+            ),
           files: tool.schema
             .array(tool.schema.string())
             .optional()
@@ -74,7 +76,11 @@ export const AppVerkCommitPlugin: Plugin = async () => {
         description:
           "Push the current branch to origin and open a pull request through the AppVerk workflow",
         args: {
-          title: tool.schema.string().describe("Pull request title"),
+          title: tool.schema
+            .string()
+            .describe(
+              "Pull request title (MUST be in English — translate first; non-English tokens are rejected)",
+            ),
           body: tool.schema
             .string()
             .optional()
@@ -122,7 +128,7 @@ export const AppVerkCommitPlugin: Plugin = async () => {
           description: tool.schema
             .string()
             .describe(
-              "Short plain-English or kebab-case description; whitespace becomes dashes",
+              "Short English description (MUST be in English — translate first; non-English tokens are rejected); whitespace becomes dashes",
             ),
           checkout: tool.schema
             .boolean()

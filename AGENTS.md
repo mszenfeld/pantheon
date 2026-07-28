@@ -409,6 +409,11 @@ BOTH the plugin deny-map AND the markdown allowlist behavior for plugin tools**
   preventing Perun from loading skills needs a handler/hook gate in `skill-registry`
   — tracked follow-up, not done here.
 
+Publish-chain artifacts that humans read — branch descriptions, commit subjects,
+and PR titles — are always written in English, regardless of the conversation
+language; commit and PR bodies may quote non-English source material verbatim, and
+ticket identifiers are never translated.
+
 ## Common Pitfalls
 
 - Do not run `git commit` or `git push` via the bash tool in this repo — the commit plugin blocks direct commits and pushes at runtime (`tool.execute.before` hook). Use `/commit` (or the `av_commit` tool) to commit, and the `create_pr` tool to push and open a PR. This bash gate (`classifyBashCommand` in `src/modules/commit/bash-policy.ts`) is **defense-in-depth / a workflow rail, not a security boundary** — it keeps the `/commit` workflow consistent but is bypassable by shapes the literal `git` token-match misses (`/usr/bin/git …`, `bash -c "git …"`, `hub commit`, `command git …`, alias indirection, `$(echo git) commit`, plumbing subcommands like `commit-tree` / `fast-import` / `update-ref`). Per project doctrine ([`docs/plugins/coordinator.md`](docs/plugins/coordinator.md): *"Treat code-enforced rules as the security boundary. The LLM-requested rules are defense in depth — they raise the cost of a successful prompt-injection escalation but are not the last line of defense."*), real shell-execution boundaries live outside this plugin. See [`docs/plugins/commit.md`](docs/plugins/commit.md#classifybashcommand-is-defense-in-depth-not-a-security-boundary) for the full bypass list.
