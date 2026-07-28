@@ -33,7 +33,8 @@ Enforce English in the three human-facing publish-chain fields with two layers:
 - Schema-description copy updates for the three arguments in `src/modules/commit/index.ts`.
 - One-line English-only doctrine note in `AGENTS.md`, `src/modules/stribog/stribog.md`,
   `src/modules/svarog/svarog.md`, `src/commands/commit.md`.
-- Unit tests for the module and one reject + one accept vector per integration surface.
+- Unit tests for the module, and at least one reject + one accept vector per integration
+  surface (plus the `create_branch` id-exemption vector).
 
 **Out of scope**
 
@@ -137,7 +138,9 @@ token of each group.
 | `av_commit` | first line of the trimmed message (subject) | — (plain sentence) | Conventional-Commits header check | `message-policy.ts` |
 | `create_pr` | trimmed `title` | **T4** `non-english-token` | T3 | `create-pr.ts` |
 
-Error templates (normative; `<token>` is the JSON-encoded offending token):
+Error templates (normative; `<token>` is the JSON encoding of the value returned by
+`findNonEnglishToken` — the lowercased, diacritic-folded token, which may differ from the
+caller's spelling, e.g. `"obsluga"` for `obsługa`):
 
 - **S9:** `create_branch: segment 'description' violates rule S9 (non-english-token): <token> — branch names must be English; translate the description and retry.`
 - **av_commit:** `Commit message subject must be English; found non-English token <token>. Translate the subject and retry.`
@@ -172,11 +175,15 @@ Added to: `AGENTS.md` (under `## Plugin-tool enforcement model`), `src/modules/s
 `src/modules/svarog/svarog.md`, `src/commands/commit.md`. In `src/commands/commit.md`, additionally
 reconcile the existing copy: "`description` (required — plain English is fine)" becomes
 "`description` (required — MUST be English; non-English tokens are rejected)", and the rule
-enumerations `title` T1–T3 → T1–T4 and (`S1`–`S8`, `N1`–`N11`) → (`S1`–`S9`, `N1`–`N11`). The
-same file's error-contract sentence ("the offending value is JSON-encoded") gains the T4/S9
-exception — those rules JSON-encode the offending token and append a fixed translate-and-retry
-hint — and the `title` parenthetical becomes "(non-empty, ≤ 256 code points, no control
-characters, no non-English token)".
+enumerations `title` T1–T3 → T1–T4 and (`S1`–`S8`, `N1`–`N11`) → (`S1`–`S9`, `N1`–`N11`). In
+that file's `create_pr` bullet, the error-contract sentence ("the offending value is
+JSON-encoded") gains the T4 exception — T4 JSON-encodes the offending *token*, not the field
+value, and appends a fixed translate-and-retry hint — and the `title` parenthetical becomes
+"(non-empty, ≤ 256 code points, no control characters, no non-English token)". In the
+`create_branch` bullet, the per-segment enumeration gains ", and no non-English token in
+`description`", and its error sentence becomes "Errors name the violated rule (`S1`–`S9`,
+`N1`–`N11`) so you can self-correct — S9 JSON-encodes the offending token and appends a
+fixed translate-and-retry hint."
 
 ## 7. Testing requirements
 
@@ -195,6 +202,10 @@ characters, no non-English token)".
     process module component date state stage rate mode note base case user file folder view page
     form table column row error log build deploy config option value type` — and is extended
     whenever a collision is discovered;
+  - fixture format (normative): one token per line, lowercase ASCII in the same
+    diacritic-folded spelling as the list (`/^[a-z0-9]{3,}$/`); blank lines and `#` comments
+    are ignored; the test validates every parsed entry against that pattern before
+    intersecting;
   - list invariants: non-empty, every entry matches `/^[a-z0-9]{3,}$/`, the set size equals
     the literal 221 stated in §3.2 (per-group: 76/113/32), and the first and last token of
     each §3.2 group are members.
@@ -202,8 +213,10 @@ characters, no non-English token)".
   - `create_branch`: `description: "naprawa bledu logowania"` → exact S9 message with token
     `"naprawa"`; `id: "ZMIANA-12"` with an English description → **passes** (id exemption);
     `description: "fix login flow"` → passes. Zero recorded git calls on rejection.
-  - `av_commit`: `"fix: naprawa logowania"` → exact subject error; a message with an English
-    subject and Polish body content → **passes** (body exemption).
+  - `av_commit`: `"fix: naprawa logowania"` → exact subject error; a message whose subject is English
+    and whose body contains a listed token → **passes** (body exemption):
+    `"fix: add login retry\n\nNaprawa logowania: opisano zmiany."` — the body token
+    `naprawa` must not be reported.
   - `create_pr`: `title: "Naprawa bledu logowania"` → exact T4 message, zero recorded runner
     calls; an English title → the existing `create_pr` happy-path suite passes unchanged.
 - Existing English vectors across the three suites keep passing (regression).
@@ -230,5 +243,7 @@ characters, no non-English token)".
 - **AC-2:** The collision-sanity and list-invariant tests pass, including the §3.2
   literal-size (221; 76/113/32) and spot-membership checks.
 - **AC-3:** Schema descriptions match §5 verbatim; the four §6 docs each contain the doctrine
-  sentence.
+  sentence; and `src/commands/commit.md` carries every §6 reconciliation edit (description
+  copy, `title` T1–T4 parenthetical, `S1`–`S9` enumeration with the S9 note, and the T4
+  error-contract exception).
 - **AC-4:** `bun run check` (build + typecheck + test) passes; `dist/` is synced.
