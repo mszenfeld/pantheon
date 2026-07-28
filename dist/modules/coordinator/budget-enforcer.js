@@ -7,12 +7,28 @@ const DEFAULT_RESULT_MAX_BYTES = 100 * 1024;
 const DEFAULT_AGGREGATE_MAX_BYTES = 128 * 1024;
 const VELES_IDLE_TIMEOUT_MS = 5 * 60 * 1e3;
 const VELES_WALLCLOCK_BACKSTOP_MS = 45 * 60 * 1e3;
+const ZMORA_IDLE_TIMEOUT_MS = 5 * 60 * 1e3;
+const ZMORA_WALLCLOCK_BACKSTOP_MS = 30 * 60 * 1e3;
 const AGENT_TIMEOUT_OVERRIDES = /* @__PURE__ */ new Map([
   [
     "Veles - Planner",
     {
       wallClockMs: VELES_WALLCLOCK_BACKSTOP_MS,
       idleMs: VELES_IDLE_TIMEOUT_MS
+    }
+  ],
+  [
+    "zmora-fe",
+    {
+      wallClockMs: ZMORA_WALLCLOCK_BACKSTOP_MS,
+      idleMs: ZMORA_IDLE_TIMEOUT_MS
+    }
+  ],
+  [
+    "zmora-be",
+    {
+      wallClockMs: ZMORA_WALLCLOCK_BACKSTOP_MS,
+      idleMs: ZMORA_IDLE_TIMEOUT_MS
     }
   ]
 ]);
@@ -43,6 +59,8 @@ export {
   DEFAULT_TASK_TIMEOUT_MS,
   VELES_IDLE_TIMEOUT_MS,
   VELES_WALLCLOCK_BACKSTOP_MS,
+  ZMORA_IDLE_TIMEOUT_MS,
+  ZMORA_WALLCLOCK_BACKSTOP_MS,
   enforceAggregateBudget,
   resolveAgentTimeout
 };

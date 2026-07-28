@@ -24,7 +24,9 @@ import {
   enforceAggregateBudget as enforceAggregateBudget2,
   resolveAgentTimeout as resolveAgentTimeout2,
   VELES_IDLE_TIMEOUT_MS,
-  VELES_WALLCLOCK_BACKSTOP_MS
+  VELES_WALLCLOCK_BACKSTOP_MS,
+  ZMORA_IDLE_TIMEOUT_MS,
+  ZMORA_WALLCLOCK_BACKSTOP_MS
 } from "./budget-enforcer.js";
 import { DISPATCH_MAX_TASKS } from "./task-builder.js";
 const DEFAULT_POLL_INTERVAL_MS = 1e3;
@@ -88,6 +90,8 @@ export {
   DISPATCH_MAX_TASKS,
   VELES_IDLE_TIMEOUT_MS,
   VELES_WALLCLOCK_BACKSTOP_MS,
+  ZMORA_IDLE_TIMEOUT_MS,
+  ZMORA_WALLCLOCK_BACKSTOP_MS,
   authorizeDispatchCaller,
   dispatchParallel,
   enforceAggregateBudget2 as enforceAggregateBudget,
