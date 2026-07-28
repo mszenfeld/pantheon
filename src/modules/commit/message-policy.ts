@@ -39,8 +39,8 @@ export function normalizeCommitMessage(
     throw new Error("Commit message must follow Conventional Commits.")
   }
 
-  // §4: gate the subject (first line) only — the body, including the Refs
-  // footer, is quotable free text and is never scanned (D3).
+  // english-publish-chain spec §4: gate the subject (first line) only — the body,
+  // including the Refs footer, is quotable free text and is never scanned (its D3).
   const nonEnglishToken = findNonEnglishToken(header)
   if (nonEnglishToken !== undefined) {
     throw new Error(

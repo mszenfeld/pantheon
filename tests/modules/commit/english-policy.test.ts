@@ -12,6 +12,16 @@ const fixturePath = path.resolve(
   "../../fixtures/english-collision-words.txt",
 )
 
+/** §7 seed: the fixture may grow, but must always contain these 49 words. */
+const FIXTURE_SEED = [
+  "add", "address", "admin", "base", "build", "case", "client", "column",
+  "component", "config", "dane", "data", "date", "deploy", "error", "file",
+  "fix", "folder", "form", "list", "log", "menu", "mode", "module", "note",
+  "option", "page", "panel", "plan", "pod", "process", "rate", "remove",
+  "report", "row", "server", "stage", "stare", "state", "status", "table",
+  "test", "testy", "token", "type", "update", "user", "value", "view",
+]
+
 /** §7 fixture format: one token per line; blank lines and `#` comments ignored. */
 function readCollisionFixture(): string[] {
   return readFileSync(fixturePath, "utf8")
@@ -45,8 +55,10 @@ describe("english-policy", () => {
 
   it("collision sanity: the exported set never intersects the committed fixture", () => {
     const fixture = readCollisionFixture()
-    // §7 seeds the fixture with 49 enumerated collision words; it may grow, never shrink.
-    expect(fixture.length).toBeGreaterThanOrEqual(49)
+    const fixtureSet = new Set(fixture)
+    for (const word of FIXTURE_SEED) {
+      expect(fixtureSet.has(word)).toBe(true)
+    }
     for (const word of fixture) {
       expect(word).toMatch(/^[a-z0-9]{3,}$/)
     }

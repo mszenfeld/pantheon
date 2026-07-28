@@ -29,7 +29,10 @@ export interface CreateBranchResult {
   checkoutError?: string
 }
 
-/** Normative §5.2 error template. */
+/**
+ * Normative §5.2 error template; the optional hint suffix carries the
+ * english-publish-chain spec's §4 extended (S9) template.
+ */
 function segmentError(
   segment: string,
   ruleId: string,
@@ -148,8 +151,8 @@ export function composeBranchName(input: {
     throw segmentError("description", "S2", "empty-description", description)
   validateSegmentRules("description", description)
 
-  // §4 S9: after S3–S8, on the normalized description only — never `id`
-  // (§1: ticket identifiers are never language-checked).
+  // english-publish-chain spec §4 S9: after S3–S8, on the normalized description
+  // only — never `id` (its §1: ticket identifiers are never language-checked).
   const nonEnglishToken = findNonEnglishToken(description)
   if (nonEnglishToken !== undefined)
     throw segmentError(

@@ -391,6 +391,11 @@ enforcement if a future opencode honors them. **On every opencode bump, re-verif
 BOTH the plugin deny-map AND the markdown allowlist behavior for plugin tools**
 (alongside the `NATIVE_BUILTINS` re-verify note).
 
+Publish-chain artifacts that humans read — branch descriptions, commit subjects,
+and PR titles — are always written in English, regardless of the conversation
+language; commit and PR bodies may quote non-English source material verbatim, and
+ticket identifiers are never translated.
+
 ### Residual gaps (tracked)
 
 - Background-dispatched subagents ARE now registered and gated: the background path
@@ -408,11 +413,6 @@ BOTH the plugin deny-map AND the markdown allowlist behavior for plugin tools**
 - `load_appverk_skill: false` on the coordinator is plugin-map-only (inert). Truly
   preventing Perun from loading skills needs a handler/hook gate in `skill-registry`
   — tracked follow-up, not done here.
-
-Publish-chain artifacts that humans read — branch descriptions, commit subjects,
-and PR titles — are always written in English, regardless of the conversation
-language; commit and PR bodies may quote non-English source material verbatim, and
-ticket identifiers are never translated.
 
 ## Common Pitfalls
 

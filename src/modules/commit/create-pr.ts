@@ -29,7 +29,10 @@ export interface CreatePrResult {
   prError?: string
 }
 
-/** Normative §5.2 error template. */
+/**
+ * Normative §5.2 error template; the optional hint suffix carries the
+ * english-publish-chain spec's §4 extended (T4) template.
+ */
 function ruleError(
   field: string,
   ruleId: string,
