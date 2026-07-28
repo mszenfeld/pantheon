@@ -1,3 +1,5 @@
+import { findNonEnglishToken } from "./english-policy.js"
+
 const COMMIT_HEADER =
   /^(feat|fix|docs|style|refactor|perf|test|chore|build|ci|release|security|i18n|config)(\([a-z0-9-]+\))?!?: .+$/i
 
@@ -35,6 +37,15 @@ export function normalizeCommitMessage(
 
   if (!COMMIT_HEADER.test(header)) {
     throw new Error("Commit message must follow Conventional Commits.")
+  }
+
+  // §4: gate the subject (first line) only — the body, including the Refs
+  // footer, is quotable free text and is never scanned (D3).
+  const nonEnglishToken = findNonEnglishToken(header)
+  if (nonEnglishToken !== undefined) {
+    throw new Error(
+      `Commit message subject must be English; found non-English token ${JSON.stringify(nonEnglishToken)}. Translate the subject and retry.`,
+    )
   }
 
   assertNoDisallowedFooters(lines)
