@@ -45,6 +45,7 @@ describe("english-policy", () => {
 
   it("collision sanity: the exported set never intersects the committed fixture", () => {
     const fixture = readCollisionFixture()
+    // §7 seeds the fixture with 49 enumerated collision words; it may grow, never shrink.
     expect(fixture.length).toBeGreaterThanOrEqual(49)
     for (const word of fixture) {
       expect(word).toMatch(/^[a-z0-9]{3,}$/)

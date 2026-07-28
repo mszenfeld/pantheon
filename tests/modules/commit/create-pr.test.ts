@@ -315,6 +315,23 @@ describe("createPr parameter validation (AC-1: zero spawns, normative template)"
       /field 'body' violates rule B1/,
     )
   })
+
+  it("T4 rejects a non-English title: exact message, folded token, T3 precedence", async () => {
+    await rejectsWithMessage(
+      { title: "Naprawa bledu logowania" },
+      `${prRuleMessage("title", "T4", "non-english-token", "naprawa")} — PR titles must be English; translate the title and retry.`,
+    )
+    // The reported token is the folded, lowercased form of the caller's spelling.
+    await rejectsWith(
+      { title: "Obsługa płatności" },
+      /rule T4 \(non-english-token\): "obsluga"/,
+    )
+    // T4 runs after T3: a control character still reports T3.
+    await rejectsWith(
+      { title: "naprawa\u0007bledu" },
+      /rule T3 \(control-characters\)/,
+    )
+  })
 })
 
 const HAPPY_GIT: Partial<Record<string, GitResult>> = {
@@ -643,37 +660,5 @@ describe("createPr orchestration (AC-3…AC-7)", () => {
       provider,
     })
     expect(calls[0]?.body).toBe("Refs: INC-212")
-  })
-})
-
-describe("T4 non-english-token (english-policy gate)", () => {
-  it("rejects a non-English title with the exact T4 message and zero spawns", async () => {
-    const gitCalls: string[][] = []
-    const runGit: GitRunner = async (_cwd, args) => {
-      gitCalls.push([...args])
-      return { stdout: "", stderr: "", exitCode: 0 }
-    }
-    let message = "<no throw>"
-    try {
-      await createPr({ cwd: "/repo", title: "Naprawa bledu logowania", runGit })
-    } catch (error) {
-      message = (error as Error).message
-    }
-    expect(message).toBe(
-      `create_pr: field 'title' violates rule T4 (non-english-token): "naprawa" — PR titles must be English; translate the title and retry.`,
-    )
-    expect(gitCalls).toEqual([])
-  })
-
-  it("folds an accented title and reports the folded token", async () => {
-    await expect(
-      createPr({ cwd: "/repo", title: "Obsługa płatności" }),
-    ).rejects.toThrow(/rule T4 \(non-english-token\): "obsluga"/)
-  })
-
-  it("T4 runs after T3: a control character still reports T3", async () => {
-    await expect(
-      createPr({ cwd: "/repo", title: "naprawa\u0007bledu" }),
-    ).rejects.toThrow(/rule T3 \(control-characters\)/)
   })
 })

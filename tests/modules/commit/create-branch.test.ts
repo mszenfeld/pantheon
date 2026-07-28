@@ -608,11 +608,7 @@ describe("S9 non-english-token (english-policy gate)", () => {
   })
 
   it("records zero git calls on an S9 rejection", async () => {
-    const calls: string[][] = []
-    const runGit: GitRunner = async (_cwd, args) => {
-      calls.push([...args])
-      return { stdout: "", stderr: "", exitCode: 0 }
-    }
+    const { calls, runGit } = recordingRunner([])
     await expect(
       createBranch({
         cwd: "/repo",
@@ -621,6 +617,6 @@ describe("S9 non-english-token (english-policy gate)", () => {
         runGit,
       }),
     ).rejects.toThrow(/rule S9/)
-    expect(calls).toEqual([])
+    expect(calls).toHaveLength(0)
   })
 })

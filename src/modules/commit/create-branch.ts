@@ -148,7 +148,8 @@ export function composeBranchName(input: {
     throw segmentError("description", "S2", "empty-description", description)
   validateSegmentRules("description", description)
 
-  // §4 S9: after S3–S8, on the normalized description only — never `id` (D3).
+  // §4 S9: after S3–S8, on the normalized description only — never `id`
+  // (§1: ticket identifiers are never language-checked).
   const nonEnglishToken = findNonEnglishToken(description)
   if (nonEnglishToken !== undefined)
     throw segmentError(
