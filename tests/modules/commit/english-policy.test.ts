@@ -18,7 +18,6 @@ function readCollisionFixture(): string[] {
     .split(/\r?\n/)
     .map((line) => line.replace(/#.*$/, "").trim())
     .filter((line) => line !== "")
-    .flatMap((line) => line.split(/\s+/))
 }
 
 describe("english-policy", () => {
