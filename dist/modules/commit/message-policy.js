@@ -1,3 +1,4 @@
+import { findNonEnglishToken } from "./english-policy.js";
 const COMMIT_HEADER = /^(feat|fix|docs|style|refactor|perf|test|chore|build|ci|release|security|i18n|config)(\([a-z0-9-]+\))?!?: .+$/i;
 const DISALLOWED_FOOTERS = [/^co-authored-by:/i];
 function sanitizeTaskId(taskId) {
@@ -22,6 +23,12 @@ function normalizeCommitMessage(message, taskId) {
   const header = lines[0] ?? "";
   if (!COMMIT_HEADER.test(header)) {
     throw new Error("Commit message must follow Conventional Commits.");
+  }
+  const nonEnglishToken = findNonEnglishToken(header);
+  if (nonEnglishToken !== void 0) {
+    throw new Error(
+      `Commit message subject must be English; found non-English token ${JSON.stringify(nonEnglishToken)}. Translate the subject and retry.`
+    );
   }
   assertNoDisallowedFooters(lines);
   if (!taskId) {

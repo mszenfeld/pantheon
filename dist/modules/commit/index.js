@@ -37,7 +37,9 @@ const AppVerkCommitPlugin = async () => {
       av_commit: tool({
         description: "Create a commit through the AppVerk commit workflow",
         args: {
-          message: tool.schema.string().describe("The Conventional Commit message to create"),
+          message: tool.schema.string().describe(
+            "The Conventional Commit message to create (the subject line MUST be in English \u2014 translate first; non-English tokens in the subject are rejected; the body is not checked and may quote non-English text verbatim)"
+          ),
           files: tool.schema.array(tool.schema.string()).optional().describe("Optional file paths to stage before committing"),
           taskId: tool.schema.string().optional().describe("Optional task ID appended as a Refs footer")
         },
@@ -54,7 +56,9 @@ const AppVerkCommitPlugin = async () => {
       create_pr: tool({
         description: "Push the current branch to origin and open a pull request through the AppVerk workflow",
         args: {
-          title: tool.schema.string().describe("Pull request title"),
+          title: tool.schema.string().describe(
+            "Pull request title (MUST be in English \u2014 translate first; non-English tokens are rejected)"
+          ),
           body: tool.schema.string().optional().describe("Pull request description (markdown)"),
           base: tool.schema.string().optional().describe("Base branch; defaults to the origin default branch"),
           draft: tool.schema.boolean().optional().describe("Create the PR as a draft (default: ready for review)"),
@@ -82,7 +86,7 @@ const AppVerkCommitPlugin = async () => {
             "Optional task/ticket id, e.g. INC-212 (never rewritten)"
           ),
           description: tool.schema.string().describe(
-            "Short plain-English or kebab-case description; whitespace becomes dashes"
+            "Short English description (MUST be in English \u2014 translate first; non-English tokens are rejected); whitespace becomes dashes"
           ),
           checkout: tool.schema.boolean().optional().describe(
             "Switch to the new branch after creating it (default: true)"

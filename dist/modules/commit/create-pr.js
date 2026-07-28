@@ -1,12 +1,13 @@
 import { defaultGitRunner } from "./controlled-commit.js";
+import { findNonEnglishToken } from "./english-policy.js";
 import {
   defaultGhRunner,
   githubPrProvider
 } from "./github-pr-provider.js";
 import { detectProvider } from "./pr-provider.js";
-function ruleError(field, ruleId, slug, value) {
+function ruleError(field, ruleId, slug, value, hint = "") {
   return new Error(
-    `create_pr: field '${field}' violates rule ${ruleId} (${slug}): ${JSON.stringify(value)}`
+    `create_pr: field '${field}' violates rule ${ruleId} (${slug}): ${JSON.stringify(value)}${hint}`
   );
 }
 const TITLE_CONTROL = /[\x00-\x1F\x7F-\x9F]/;
@@ -18,6 +19,15 @@ function validateTitle(rawTitle) {
     throw ruleError("title", "T2", "max-length-256-chars", title);
   if (TITLE_CONTROL.test(title))
     throw ruleError("title", "T3", "control-characters", title);
+  const nonEnglishToken = findNonEnglishToken(title);
+  if (nonEnglishToken !== void 0)
+    throw ruleError(
+      "title",
+      "T4",
+      "non-english-token",
+      nonEnglishToken,
+      " \u2014 PR titles must be English; translate the title and retry."
+    );
   return title;
 }
 function validateTaskId(rawTaskId) {
