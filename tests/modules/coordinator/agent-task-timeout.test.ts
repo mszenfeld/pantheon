@@ -5,11 +5,14 @@ import {
   AGENT_TIMEOUT_OVERRIDES,
   VELES_IDLE_TIMEOUT_MS,
   VELES_WALLCLOCK_BACKSTOP_MS,
+  ZMORA_IDLE_TIMEOUT_MS,
+  ZMORA_WALLCLOCK_BACKSTOP_MS,
   DEFAULT_TASK_TIMEOUT_MS,
   type DispatchSpecialist,
   type AgentInfo,
 } from "../../../src/modules/coordinator/dispatch.js"
 import { VELES_AGENT_KEY } from "../../../src/modules/plan/veles.metadata.js"
+import { VARIANTS } from "../../../src/modules/qa/index.js"
 import type { PollerMessage } from "../../../src/modules/coordinator/poller.js"
 
 /**
@@ -127,6 +130,49 @@ describe("resolveAgentTimeout", () => {
       idleMs: VELES_IDLE_TIMEOUT_MS,
     })
   })
+
+  it("returns the QA executors' heartbeat budget (idle window + 30-min backstop)", () => {
+    for (const key of ["zmora-fe", "zmora-be"]) {
+      expect(resolveAgentTimeout(key)).toEqual({
+        wallClockMs: ZMORA_WALLCLOCK_BACKSTOP_MS,
+        idleMs: ZMORA_IDLE_TIMEOUT_MS,
+      })
+    }
+    // Sizing: observed FE max ~20 min + ~50% headroom = 30 min, deliberately
+    // below the planner's 45-min backstop; the idle window stays a fast
+    // hang-catch (≤ the flat default).
+    expect(ZMORA_WALLCLOCK_BACKSTOP_MS).toBe(30 * 60 * 1000)
+    expect(ZMORA_IDLE_TIMEOUT_MS).toBe(5 * 60 * 1000)
+    expect(ZMORA_WALLCLOCK_BACKSTOP_MS).toBeLessThan(VELES_WALLCLOCK_BACKSTOP_MS)
+    expect(ZMORA_IDLE_TIMEOUT_MS).toBeLessThanOrEqual(DEFAULT_TASK_TIMEOUT_MS)
+  })
+
+  it("keeps zmora-setup and unknown agents on the flat pure-wall-clock default", () => {
+    expect(resolveAgentTimeout("zmora-setup")).toEqual({
+      wallClockMs: DEFAULT_TASK_TIMEOUT_MS,
+    })
+    expect(resolveAgentTimeout("some-unknown-agent")).toEqual({
+      wallClockMs: DEFAULT_TASK_TIMEOUT_MS,
+    })
+  })
+
+  it("keys the zmora overrides on the registered variant names (drift pin)", () => {
+    // Mirror of the VELES_AGENT_KEY pin: the override map uses literal keys
+    // (no coordinator→qa import), so pin them against the names qa/index.ts
+    // actually registers (`zmora-${stack}` for each stack of VARIANTS).
+    const registered = VARIANTS.map((stack) => `zmora-${stack}`)
+    expect(registered).toContain("zmora-fe")
+    expect(registered).toContain("zmora-be")
+    for (const key of ["zmora-fe", "zmora-be"]) {
+      expect(AGENT_TIMEOUT_OVERRIDES.get(key)).toEqual({
+        wallClockMs: ZMORA_WALLCLOCK_BACKSTOP_MS,
+        idleMs: ZMORA_IDLE_TIMEOUT_MS,
+      })
+    }
+    // zmora-setup is registered but deliberately NOT overridden.
+    expect(registered).toContain("zmora-setup")
+    expect(AGENT_TIMEOUT_OVERRIDES.has("zmora-setup")).toBe(false)
+  })
 })
 
 describe("dispatchParallel — per-agent heartbeat timeout", () => {
@@ -224,5 +270,64 @@ describe("dispatchParallel — per-agent heartbeat timeout", () => {
     await vi.advanceTimersByTimeAsync(2 * 60 * 1000)
     const results = await promise
     expect(results[0]?.status).toBe("timeout")
+  })
+
+  it("lets a healthy FE scenario run past the 5-min leaf default while it keeps making progress, then completes", async () => {
+    vi.useFakeTimers()
+    const DONE_AFTER = 18 * 60 * 1000
+    const { specialist, aborted } = makeHealthySpecialist("s-zmora", DONE_AFTER)
+
+    let settled = false
+    const promise = dispatchParallel({
+      tasks: [{ name: "zmora-fe", prompt: "run scenario QA-001" }],
+      agentRegistry: { "zmora-fe": { mode: "subagent" } },
+      specialist,
+      pollIntervalMs: 60_000,
+    }).then((r) => {
+      settled = true
+      return r
+    })
+
+    // Past the flat 5-min leaf default — still running, because every poll
+    // shows progress. Under the pre-override code the scenario would already
+    // have been killed here mid-work and recorded as SKIP by Perun.
+    await vi.advanceTimersByTimeAsync(6 * 60 * 1000)
+    expect(settled).toBe(false)
+
+    // Natural finish at 18 min — collected as success, NOT timed out, and the
+    // child is never cancelled server-side.
+    await vi.advanceTimersByTimeAsync(13 * 60 * 1000)
+    const results = await promise
+    expect(results[0]?.status).toBe("success")
+    expect(results[0]?.result).toBe("PLAN COMPLETE")
+    expect(aborted).toEqual([])
+  })
+
+  it("catches a silent-hung FE scenario via the inactivity window, well before the 30-min backstop", async () => {
+    vi.useFakeTimers()
+    const { specialist, aborted } = makeNeverFinishingSpecialist("s-zmora")
+
+    let settled = false
+    const promise = dispatchParallel({
+      tasks: [{ name: "zmora-fe", prompt: "run scenario QA-001" }],
+      agentRegistry: { "zmora-fe": { mode: "subagent" } },
+      specialist,
+      pollIntervalMs: 60_000,
+    }).then((r) => {
+      settled = true
+      return r
+    })
+
+    // Under the idle window — still running.
+    await vi.advanceTimersByTimeAsync(ZMORA_IDLE_TIMEOUT_MS - 60_000)
+    expect(settled).toBe(false)
+
+    // Past the idle window: a scenario with no sign of life is caught HERE,
+    // not at the 30-min backstop, and the child is cancelled server-side.
+    await vi.advanceTimersByTimeAsync(2 * 60 * 1000)
+    const results = await promise
+    expect(results[0]?.status).toBe("timeout")
+    expect(results[0]?.error).toContain("idle")
+    expect(aborted).toEqual(["s-zmora"])
   })
 })
