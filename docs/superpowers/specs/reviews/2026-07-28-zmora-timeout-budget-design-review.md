@@ -280,5 +280,12 @@ None — both fix batches were approved in full.
   `2026-07-28-zmora-timeout-budget-design-review.state.json`.
 - Pre-loop snapshot: `docs/superpowers/specs/reviews/2026-07-28-zmora-timeout-budget-design.pre-loop.bak`
   — restore by copying it back; never `git restore` on the spec (it was
-  uncommitted when the loop started).
+  uncommitted when the loop started). This snapshot is session-local:
+  untracked and working-tree-only, so it is not portable across clones
+  and will not exist in a fresh checkout. The spec entered git only in
+  its final, fully-converged form (commit `40efd43`), so there is no
+  git-history fallback for pre-loop content — the `.bak` file is the
+  only recovery path for that state, for as long as this working tree
+  is preserved. Now that the spec is committed, git history is the
+  durable recovery path for everything after `40efd43`.
 - Nothing was committed by the loop.

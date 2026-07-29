@@ -15,9 +15,9 @@
 - Values are fixed in code, verbatim from the spec: `ZMORA_IDLE_TIMEOUT_MS = 5 * 60 * 1000`, `ZMORA_WALLCLOCK_BACKSTOP_MS = 30 * 60 * 1000`. No `pantheon.json` configurability.
 - `zmora-setup` keeps the flat 5-minute default (`DEFAULT_TASK_TIMEOUT_MS`) — do NOT add an override for it.
 - Non-goals (do not touch): the QA bindings TTL (`TTL_MS = 1 h`) or its sweep; the poller's activity signals; any cap on `busy`-probe deadline resets; `DEFAULT_TASK_TIMEOUT_MS`; partial-result preservation; the `dispatch_parallel` tool schema (the internal `taskTimeoutMs` field must NOT become a tool arg).
-- Background dispatch (`dispatch_background` / `wait_background`) intentionally keeps the flat default — it never consults `AGENT_TIMEOUT_OVERRIDES`. Its `timeoutMs` describe at `src/modules/coordinator/index.ts` (~line 574) stays byte-identical.
+- Background dispatch (`dispatch_background` / `wait_background`) intentionally keeps the flat default — `wait_background`'s `timeoutMs` is prompt-settable but defaults to `DEFAULT_TASK_TIMEOUT_MS`, and `dispatch_background`/`poll_background` take no timeout arg; neither ever consults `AGENT_TIMEOUT_OVERRIDES`. Its `timeoutMs` describe at `src/modules/coordinator/index.ts` (~line 574) stays byte-identical.
 - **Spec rule "Companion surfaces (same commit)":** the core change, tests, and ALL doctrine-surface edits (Tasks 1–2) land in ONE commit. Task 1 therefore does not commit on its own. `dist/` sync is a separate `chore(build)` commit (repo convention).
-- Commits: the pre-commit hook blocks plain `git commit` — prefix the commit command with `AV_COMMIT_SKILL=1`. Conventional Commits format. NEVER push. NEVER add Co-Authored-By or any AI attribution. GPG signing is configured — the key must be unlocked (pinentry) or the commit fails with `gpg: signing failed`.
+- Commits: in Claude Code sessions, the av-marketplace commit plugin's PreToolUse hook blocks plain `git commit` — its sanctioned escape is the `AV_COMMIT_SKILL=1` prefix (inside OpenCode sessions, the pantheon commit module's bash gate has no env-var escape; the sanctioned path there is the `av_commit` tool). Conventional Commits format. NEVER push. NEVER add Co-Authored-By or any AI attribution. GPG signing is configured — the key must be unlocked (pinentry) or the commit fails with `gpg: signing failed`.
 - All user-facing doc/doctrine copy is English (english-policy gate on the publish chain).
 - Verified during planning (spec's Testing item 2): `tests/docs/agent-contracts-doctrine.test.ts` pins only agent verdict vocabularies and a `qa.md → agent-contracts.md` link — none of the strings edited below. No pin updates needed there.
 
@@ -356,7 +356,7 @@ with these two bullets:
 
 ```
 - **Pool starvation by a slow scenario.** A pool slot can now be held for up to 30 minutes by a *healthy* long scenario — `zmora-fe` / `zmora-be` use an inactivity budget (idle 5 min under a 30-min wall-clock backstop) instead of the flat 5-minute leaf timeout. The other 3 workers keep draining, so throughput drops but doesn't halt. Hangs split into two classes:
-  - **Silent hang** (dead Playwright, no sign of life): detection latency after activity stops is unchanged (~5 min), but slot-hold time is not — the idle deadline runs from the last sign of life, not from dispatch, so a scenario that works for N minutes and then goes silent holds the slot for N + ~5 min, up to the 30-min backstop (previously: 5 min from dispatch, always).
+  - **Silent hang** (dead Playwright, no sign of life): the ~5-min inactivity window itself is unchanged, but its reference point moved from dispatch time to the last sign of life — previously (flat cap from dispatch) a scenario that worked N minutes and then went silent was killed (5 − N) min later (the longer it worked, the sooner a subsequent hang was caught, always ≤5 min from dispatch); now it is killed ~5 min after going silent regardless of N, up to the 30-min backstop — so the slot is held for N + ~5 min instead of a flat 5.
   - **Busy hang** (stuck in an in-flight tool call): regression — the `busy` status probe keeps resetting the idle deadline, so the slot is now held up to the 30-min backstop instead of the previous flat 5 min. Accepted risk for this change; there is no cap on `busy`-probe deadline resets.
 - **Long QA runs vs the bindings TTL.** A QA run longer than the 1 h `TTL_MS` can lose minted `QA_BIND_*` values to the sweep between waves (the sweep purges by `createdAt`, never refreshes an entry, and pins only entries held by an in-flight wave); later scenarios then stall as `NEED_INFO` (credentials) / SKIP, and the user cannot restore the value by pasting — it was never disclosed to them. Accepted risk for this change; raising or refreshing the TTL is deferred to a separate project.
 ```
@@ -378,7 +378,7 @@ with:
 - [ ] **Step 9: Verify the two deliberate no-op surfaces are untouched**
 
 Run: `grep -n 'Per-task timeout in ms (default 5 min)' src/modules/coordinator/index.ts; grep -n 'minute' src/agents/perun.md`
-Expected: the first grep prints exactly one line — the `wait_background` `timeoutMs` describe at ~line 574 (background dispatch hard-codes `DEFAULT_TASK_TIMEOUT_MS` and never consults `AGENT_TIMEOUT_OVERRIDES`, so this string stays accurate and byte-identical). The second grep prints nothing (`perun.md` contains no minute figure at all). Do not edit either file.
+Expected: the first grep prints exactly one line — the `wait_background` `timeoutMs` describe at ~line 574 (`wait_background`'s `timeoutMs` is prompt-settable and defaults to `DEFAULT_TASK_TIMEOUT_MS`; `dispatch_background`/`poll_background` have no timeout arg; neither background path ever consults `AGENT_TIMEOUT_OVERRIDES`, so this string stays accurate and byte-identical). The second grep prints nothing (`perun.md` contains no minute figure at all). Do not edit either file.
 
 - [ ] **Step 10: Sanity grep for leftover doctrine drift**
 

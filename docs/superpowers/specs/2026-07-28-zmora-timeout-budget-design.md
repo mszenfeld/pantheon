@@ -84,8 +84,10 @@ Behavioral result:
   cap. It is NOT exposed on the `dispatch_parallel` tool schema — that
   tool's args are exactly `agent` / `summary` / `tasks` — so it is
   reachable only from TypeScript callers. Nothing passes it today, and no
-  agent prompt can set a per-call timeout. It must not be added to the
-  tool schema: no new configuration surface, so changing the Zmora budget
+  agent prompt can set a per-call timeout for `dispatch_parallel` tasks
+  (`wait_background`'s `timeoutMs` is prompt-settable, but the background
+  path never consults the overrides). It must not be added to the tool
+  schema: no new configuration surface, so changing the Zmora budget
   requires a code change.
 - The QA loop (`qa-loop` module) records state only; all Zmora dispatch
   flows through `dispatch_parallel`, so the override covers both the QA
@@ -144,12 +146,15 @@ Every place that pins the "5 minutes" doctrine:
    a slot can now be held up to 30 min by a *healthy* long scenario. The
    rewrite must state the two hang classes separately, and must state the
    busy-hang regression explicitly:
-   - **Silent hang** (dead Playwright, no sign of life): detection
-     latency after activity stops is unchanged (~5 min), but slot-hold
-     time is not — the idle deadline runs from the last sign of life, not
-     from dispatch, so a scenario that works for N minutes and then goes
-     silent holds the slot for N + ~5 min, up to the 30-min backstop
-     (today: 5 min from dispatch, always).
+   - **Silent hang** (dead Playwright, no sign of life): the ~5-min
+     inactivity window itself is unchanged, but its reference point
+     moved from dispatch time to the last sign of life — previously
+     (flat cap from dispatch) a scenario that worked N minutes and then
+     went silent was killed (5 − N) min later (the longer it worked, the
+     sooner a subsequent hang was caught, always ≤5 min from dispatch);
+     now it is killed ~5 min after going silent regardless of N, up to
+     the 30-min backstop — so the slot is held for N + ~5 min instead of
+     a flat 5.
    - **Busy hang** (stuck in an in-flight tool call): regression — the
      `busy` status probe keeps resetting the idle deadline, so the slot is
      now held up to the 30-min backstop instead of today's flat 5 min.
@@ -171,10 +176,11 @@ Two further surfaces were verified and deliberately left untouched:
 
 - `src/modules/coordinator/index.ts` (~line 574) — the `wait_background`
   `timeoutMs` describe ("Per-task timeout in ms (default 5 min).") stays
-  accurate: `wait_background` / `dispatch_background` hard-code
-  `DEFAULT_TASK_TIMEOUT_MS` and never consult `AGENT_TIMEOUT_OVERRIDES`,
-  so background dispatch keeps the flat default and is unaffected by this
-  change.
+  accurate: `wait_background`'s `timeoutMs` is prompt-settable and
+  defaults to `DEFAULT_TASK_TIMEOUT_MS`; `dispatch_background` /
+  `poll_background` take no timeout arg. Neither background path ever
+  consults `AGENT_TIMEOUT_OVERRIDES`, so background dispatch keeps the
+  flat default and is unaffected by this change.
 - Agent prompts need no edit: `src/agents/perun.md` and the Zmora prompt
   sections were scanned and contain no 5-minute figure. Recorded as a
   deliberate no-op, not an oversight.
