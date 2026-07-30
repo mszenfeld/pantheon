@@ -26,6 +26,9 @@ async function createRepoWithCommit(): Promise<{
     cwd,
   })
   await execFileAsync("git", ["config", "user.name", "Dev User"], { cwd })
+  // Keep the fixture independent of the developer's gpg-agent (a global `commit.gpgsign=true`
+  // would block every fixture commit on pinentry).
+  await execFileAsync("git", ["config", "commit.gpgsign", "false"], { cwd })
   await writeFile(path.join(cwd, "README.md"), "seed\n")
   await execFileAsync("git", ["add", "README.md"], { cwd })
   await execFileAsync("git", ["commit", "-m", "chore: seed"], { cwd })

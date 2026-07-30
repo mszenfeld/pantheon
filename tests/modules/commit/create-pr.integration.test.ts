@@ -43,6 +43,9 @@ describe("createPr (integration: real git, bare origin, injected provider)", () 
       cwd: work,
     })
     await run("git", ["config", "user.name", "Test User"], { cwd: work })
+    // Keep the fixture independent of the developer's gpg-agent (a global `commit.gpgsign=true`
+    // would block every fixture commit on pinentry).
+    await run("git", ["config", "commit.gpgsign", "false"], { cwd: work })
     await writeFile(path.join(work, "README.md"), "hello\n")
     await run("git", ["add", "README.md"], { cwd: work })
     await run("git", ["commit", "-m", "chore: init"], { cwd: work })

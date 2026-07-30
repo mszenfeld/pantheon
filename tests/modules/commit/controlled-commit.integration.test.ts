@@ -19,6 +19,11 @@ async function createRepo(): Promise<string> {
   await execFileAsync("git", ["config", "user.name", "Dev User"], {
     cwd: directory,
   })
+  // A fixture must not depend on the developer's gpg-agent: with a global `commit.gpgsign=true`
+  // every commit here would block on pinentry and fail the suite when the agent is cold.
+  await execFileAsync("git", ["config", "commit.gpgsign", "false"], {
+    cwd: directory,
+  })
   temporaryRepositories.push(directory)
 
   return directory
