@@ -12,11 +12,13 @@ export const DEFAULT_RESULT_MAX_BYTES = 100 * 1024
 export const DEFAULT_AGGREGATE_MAX_BYTES = 128 * 1024
 export const VELES_IDLE_TIMEOUT_MS = 5 * 60 * 1000
 export const VELES_WALLCLOCK_BACKSTOP_MS = 45 * 60 * 1000
+export const SVAROG_IDLE_TIMEOUT_MS = 15 * 60 * 1000
+export const SVAROG_WALLCLOCK_BACKSTOP_MS = 45 * 60 * 1000
 export const ZMORA_IDLE_TIMEOUT_MS = 5 * 60 * 1000
 export const ZMORA_WALLCLOCK_BACKSTOP_MS = 30 * 60 * 1000
 
-// Keys are the registered dispatch task names; literals avoid a
-// coordinator→plan/qa import (drift pins live in agent-task-timeout.test.ts).
+// Keys are the registered dispatch task names; literals avoid coordinator
+// imports from plan, Svarog, or QA (drift pins live in agent-task-timeout.test.ts).
 export const AGENT_TIMEOUT_OVERRIDES: ReadonlyMap<string, AgentTimeout> =
   new Map<string, AgentTimeout>([
     [
@@ -24,6 +26,13 @@ export const AGENT_TIMEOUT_OVERRIDES: ReadonlyMap<string, AgentTimeout> =
       {
         wallClockMs: VELES_WALLCLOCK_BACKSTOP_MS,
         idleMs: VELES_IDLE_TIMEOUT_MS,
+      },
+    ],
+    [
+      "svarog",
+      {
+        wallClockMs: SVAROG_WALLCLOCK_BACKSTOP_MS,
+        idleMs: SVAROG_IDLE_TIMEOUT_MS,
       },
     ],
     [

@@ -5,6 +5,8 @@ import {
   AGENT_TIMEOUT_OVERRIDES,
   VELES_IDLE_TIMEOUT_MS,
   VELES_WALLCLOCK_BACKSTOP_MS,
+  SVAROG_IDLE_TIMEOUT_MS,
+  SVAROG_WALLCLOCK_BACKSTOP_MS,
   ZMORA_IDLE_TIMEOUT_MS,
   ZMORA_WALLCLOCK_BACKSTOP_MS,
   DEFAULT_TASK_TIMEOUT_MS,
@@ -13,6 +15,7 @@ import {
 } from "../../../src/modules/coordinator/dispatch.js"
 import { VELES_AGENT_KEY } from "../../../src/modules/plan/veles.metadata.js"
 import { VARIANTS } from "../../../src/modules/qa/index.js"
+import { SVAROG_AGENT_KEY } from "../../../src/modules/svarog/svarog.metadata.js"
 import type { PollerMessage } from "../../../src/modules/coordinator/poller.js"
 
 /**
@@ -88,6 +91,43 @@ function makeHealthySpecialist(
     },
     async isSessionActive(): Promise<boolean> {
       return Date.now() - startedAt < doneAfterMs
+    },
+  }
+  return { specialist, aborted }
+}
+
+function makeDelayedActivitySpecialist(
+  sessionId: string,
+  activeAfterMs: number,
+  doneAfterMs: number,
+): { specialist: DispatchSpecialist; aborted: string[] } {
+  const aborted: string[] = []
+  let startedAt = 0
+  const specialist: DispatchSpecialist = {
+    async startTask(_agent, _prompt, onSessionCreated): Promise<string> {
+      startedAt = Date.now()
+      onSessionCreated?.(sessionId)
+      return sessionId
+    },
+    async fetchMessages(): Promise<PollerMessage[]> {
+      const elapsed = Date.now() - startedAt
+      if (elapsed >= doneAfterMs) {
+        return [{ role: "assistant", content: "SVAROG COMPLETE", finish_reason: "stop" }]
+      }
+      if (elapsed >= activeAfterMs) {
+        return [{ role: "assistant", content: "working", finish_reason: null }]
+      }
+      return []
+    },
+    async abortTask(id: string): Promise<void> {
+      aborted.push(id)
+    },
+    async startBackground(agentName: string): Promise<string> {
+      return agentName
+    },
+    async isSessionActive(): Promise<boolean> {
+      const elapsed = Date.now() - startedAt
+      return elapsed >= activeAfterMs && elapsed < doneAfterMs
     },
   }
   return { specialist, aborted }
@@ -172,6 +212,20 @@ describe("resolveAgentTimeout", () => {
     // zmora-setup is registered but deliberately NOT overridden.
     expect(registered).toContain("zmora-setup")
     expect(AGENT_TIMEOUT_OVERRIDES.has("zmora-setup")).toBe(false)
+  })
+
+  it("returns Svarog's heartbeat budget and pins its registered identity", () => {
+    expect(SVAROG_IDLE_TIMEOUT_MS).toBe(15 * 60 * 1000)
+    expect(SVAROG_WALLCLOCK_BACKSTOP_MS).toBe(45 * 60 * 1000)
+    expect(SVAROG_AGENT_KEY).toBe("svarog")
+    expect(resolveAgentTimeout(SVAROG_AGENT_KEY)).toEqual({
+      wallClockMs: SVAROG_WALLCLOCK_BACKSTOP_MS,
+      idleMs: SVAROG_IDLE_TIMEOUT_MS,
+    })
+    expect(AGENT_TIMEOUT_OVERRIDES.get(SVAROG_AGENT_KEY)).toEqual({
+      wallClockMs: SVAROG_WALLCLOCK_BACKSTOP_MS,
+      idleMs: SVAROG_IDLE_TIMEOUT_MS,
+    })
   })
 })
 
@@ -329,5 +383,106 @@ describe("dispatchParallel — per-agent heartbeat timeout", () => {
     expect(results[0]?.status).toBe("timeout")
     expect(results[0]?.error).toContain("idle")
     expect(aborted).toEqual(["s-zmora"])
+  })
+
+  it("lets a silent Svarog task exceed five minutes before its 15-minute idle deadline", async () => {
+    vi.useFakeTimers()
+    const { specialist, aborted } = makeNeverFinishingSpecialist("s-svarog-silent")
+    let settled = false
+    const promise = dispatchParallel({
+      tasks: [{ name: SVAROG_AGENT_KEY, prompt: "implement the plan" }],
+      agentRegistry: { [SVAROG_AGENT_KEY]: { mode: "subagent" } },
+      specialist,
+      pollIntervalMs: 60_000,
+    }).then((results) => {
+      settled = true
+      return results
+    })
+
+    await vi.advanceTimersByTimeAsync(6 * 60 * 1000)
+    expect(settled).toBe(false)
+    expect(aborted).toEqual([])
+
+    await vi.advanceTimersByTimeAsync(10 * 60 * 1000)
+    await promise
+  })
+
+  it("resets Svarog's idle deadline when delayed activity begins, then completes", async () => {
+    vi.useFakeTimers()
+    const { specialist, aborted } = makeDelayedActivitySpecialist(
+      "s-svarog-recovery",
+      6 * 60 * 1000,
+      10 * 60 * 1000,
+    )
+    const promise = dispatchParallel({
+      tasks: [{ name: SVAROG_AGENT_KEY, prompt: "implement the plan" }],
+      agentRegistry: { [SVAROG_AGENT_KEY]: { mode: "subagent" } },
+      specialist,
+      pollIntervalMs: 60_000,
+    })
+
+    await vi.advanceTimersByTimeAsync(11 * 60 * 1000)
+    const results = await promise
+    expect(results[0]?.status).toBe("success")
+    expect(results[0]?.result).toBe("SVAROG COMPLETE")
+    expect(aborted).toEqual([])
+  })
+
+  it("expires a silent Svarog task at its idle deadline and discards output", async () => {
+    vi.useFakeTimers()
+    const { specialist, aborted } = makeNeverFinishingSpecialist("s-svarog-idle")
+    const promise = dispatchParallel({
+      tasks: [{ name: SVAROG_AGENT_KEY, prompt: "implement the plan" }],
+      agentRegistry: { [SVAROG_AGENT_KEY]: { mode: "subagent" } },
+      specialist,
+      pollIntervalMs: 60_000,
+    })
+
+    await vi.advanceTimersByTimeAsync(SVAROG_IDLE_TIMEOUT_MS + 60_000)
+    const results = await promise
+    expect(results[0]?.status).toBe("timeout")
+    expect(results[0]?.error).toContain("idle")
+    expect(results[0]?.result).toBe("")
+    expect(aborted).toEqual(["s-svarog-idle"])
+  })
+
+  it("enforces Svarog's wall-clock backstop despite continuous activity", async () => {
+    vi.useFakeTimers()
+    const { specialist, aborted } = makeHealthySpecialist(
+      "s-svarog-wall-clock",
+      SVAROG_WALLCLOCK_BACKSTOP_MS + 60_000,
+    )
+    const promise = dispatchParallel({
+      tasks: [{ name: SVAROG_AGENT_KEY, prompt: "implement the plan" }],
+      agentRegistry: { [SVAROG_AGENT_KEY]: { mode: "subagent" } },
+      specialist,
+      pollIntervalMs: 60_000,
+    })
+
+    await vi.advanceTimersByTimeAsync(SVAROG_WALLCLOCK_BACKSTOP_MS + 60_000)
+    const results = await promise
+    expect(results[0]?.status).toBe("timeout")
+    expect(results[0]?.error).toContain("wall-clock")
+    expect(results[0]?.result).toBe("")
+    expect(aborted).toEqual(["s-svarog-wall-clock"])
+  })
+
+  it("honors an explicit pure wall-clock timeout over Svarog's default", async () => {
+    vi.useFakeTimers()
+    const { specialist, aborted } = makeHealthySpecialist("s-svarog-explicit", 60_000)
+    const promise = dispatchParallel({
+      tasks: [{ name: SVAROG_AGENT_KEY, prompt: "implement the plan" }],
+      agentRegistry: { [SVAROG_AGENT_KEY]: { mode: "subagent" } },
+      specialist,
+      taskTimeoutMs: 30_000,
+      pollIntervalMs: 60_000,
+    })
+
+    await vi.advanceTimersByTimeAsync(60_000)
+    const results = await promise
+    expect(results[0]?.status).toBe("timeout")
+    expect(results[0]?.error).toContain("wall-clock")
+    expect(results[0]?.result).toBe("")
+    expect(aborted).toEqual(["s-svarog-explicit"])
   })
 })
