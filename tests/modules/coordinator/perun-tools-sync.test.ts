@@ -7,6 +7,7 @@ import {
   PERUN_TOOLS,
 } from "../../../src/modules/coordinator/index.js"
 import { QA_LOOP_TOOL_NAMES } from "../../../src/modules/qa-loop/index.js"
+import { AppVerkCommitPlugin } from "../../../src/modules/commit/index.js"
 
 const here = path.dirname(fileURLToPath(import.meta.url))
 const PERUN_MD = path.resolve(here, "../../../src/agents/perun.md")
@@ -32,6 +33,22 @@ describe("Perun tool sync", () => {
     for (const tool of [...PERUN_TOOLS, ...PERUN_CROSS_MODULE_TOOLS]) {
       expect(allowedTools.has(tool)).toBe(true)
     }
+  })
+
+  it("binds every cross-module grant to a tool the commit plugin really registers", async () => {
+    // A hand-copied literal is only defense in depth if it is pinned to the other module's actual
+    // tool ids — otherwise a rename there silently turns Perun's grant into a dead string.
+    const commitPlugin = await AppVerkCommitPlugin({} as never)
+    const registered = new Set(Object.keys(commitPlugin.tool ?? {}))
+
+    for (const tool of PERUN_CROSS_MODULE_TOOLS) {
+      expect(registered.has(tool)).toBe(true)
+    }
+    // The publication tools exist in the same module and are deliberately NOT granted to Perun.
+    expect(registered.has("create_pr")).toBe(true)
+    expect(registered.has("create_branch")).toBe(true)
+    expect([...PERUN_CROSS_MODULE_TOOLS]).not.toContain("create_pr")
+    expect([...PERUN_CROSS_MODULE_TOOLS]).not.toContain("create_branch")
   })
 
   it("declares all Perun commit-consent tools as cross-module grants", () => {
