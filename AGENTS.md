@@ -388,8 +388,10 @@ Per-agent `config.agent[<name>].tools` has TWO distinct meanings; do not conflat
 - Perun's local `av_commit` exception is enforced in the commit module: runtime caller
   classification fails closed when unavailable, exact changed-file authorization is internal
   rather than caller-selectable, and `create_branch` / `create_pr` reject **every non-executor
-  identity** (Perun included) before any Git or provider call. Perun's `av_commit: true` and
-  publication-denial tool-map entries are declarative defense in depth only.
+  identity** (Perun included) before any Git or provider call. There is no tool-map counterpart
+  here: Perun's grant lives only in its `allowed-tools` frontmatter (`PERUN_CROSS_MODULE_TOOLS`),
+  and no `config.agent` entry enables `av_commit` or denies the publication tools — the commit
+  module is the whole boundary.
 
 Keep the (inert) maps in place as declarative defense-in-depth — they become free
 enforcement if a future opencode honors them. **On every opencode bump, re-verify

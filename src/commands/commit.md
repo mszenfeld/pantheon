@@ -45,8 +45,10 @@ operation outside Perun's local-commit exception before requesting a commit.
 This exception is terminal: Perun must not edit, test, shell, or dispatch while committing, and
 afterward must not create a branch, push, or open a pull request.
 
-When `APPVERK_PERUN_COMMIT_CONSENT=enabled`, Perun must instead call
-`prepare_perun_commit_scope`, print its returned proposal unchanged, and stop. After the user's
+Perun cannot read `APPVERK_PERUN_COMMIT_CONSENT`, so it always calls
+`prepare_perun_commit_scope` first and lets the answer pick the mode: `{"status":"disabled"}` means
+the confirmed-exact-files flow above. When consent is enabled, Perun instead prints the returned
+proposal unchanged and stops. After the user's
 fresh exact challenge response, it calls `authorize_perun_commit_scope` with only the opaque
 proposal ID, then calls `av_commit` once with the returned authorization and no `files`. The
 proposal expires five minutes after it is created and the authorization inherits that same deadline;
