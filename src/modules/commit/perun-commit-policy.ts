@@ -1,5 +1,6 @@
 import path from "node:path"
 import {
+  escapeControlBytes,
   formatCommitPath,
   isScopedCommitPath,
 } from "../_shared/commit-staging-scope.js"
@@ -24,6 +25,13 @@ export interface PerunExactFileAuthorizationInput {
   repositoryRoot: string
   changedFiles: ReadonlySet<string>
   isDirectory: (absolutePath: string) => boolean
+  /**
+   * Optional new-path → source-path map from `parsePorcelainV1StatusDetailed`. When supplied, a
+   * rename must be authorized as a whole: naming one half alone would commit half a rename (an
+   * add without its deletion, or a deletion without its add), which the workflow contract in
+   * `commit.md` / `perun.md` promises cannot happen.
+   */
+  renamePairs?: ReadonlyMap<string, string>
 }
 
 function scopeError(message: string): Error {
@@ -35,8 +43,12 @@ function invalidStatusRecord(record: string): Error {
 }
 
 function formatUnknownPath(value: unknown): string {
+  if (typeof value === "string") return formatCommitPath(value)
   try {
-    return JSON.stringify(value) ?? '"<unserializable>"'
+    const encoded = JSON.stringify(value)
+    return encoded === undefined
+      ? '"<unserializable>"'
+      : escapeControlBytes(encoded)
   } catch {
     return '"<unserializable>"'
   }
@@ -68,15 +80,41 @@ export function canonicalizeRepositoryPath(
   return canonicalPath
 }
 
-/** Parse machine-readable `git status --porcelain=v1 -z` output fail-closed. */
-export function parsePorcelainV1Status(output: string): Set<string> {
-  if (output === "") return new Set<string>()
+export interface PorcelainV1Status {
+  /** Every path git reports as a current change — the authoritative authorizable set. */
+  changedFiles: Set<string>
+  /**
+   * Paths git reports as absent from BOTH the worktree and the index: an already-staged deletion
+   * (`git rm`), or the source half of an already-staged rename/copy (`git mv`). `git add -- <path>`
+   * cannot match these ("pathspec did not match any files"), so they must be kept out of the
+   * staging call — the commit pathspec still records them from the index. Unmerged records are
+   * deliberately excluded: their paths still have index entries.
+   */
+  indexAbsentFiles: Set<string>
+  /** new path → source path, for renames/copies git reports. Both halves belong to one change. */
+  renamePairs: Map<string, string>
+}
+
+function isUnmergedStatus(status: string): boolean {
+  return (
+    status[0] === "U" || status[1] === "U" || status === "DD " || status === "AA "
+  )
+}
+
+/**
+ * Parse machine-readable `git status --porcelain=v1 -z` output fail-closed, keeping the index half
+ * of each record so the caller can tell an addable path from a git-recorded removal.
+ */
+export function parsePorcelainV1StatusDetailed(output: string): PorcelainV1Status {
+  const changedFiles = new Set<string>()
+  const indexAbsentFiles = new Set<string>()
+  const renamePairs = new Map<string, string>()
+  if (output === "") return { changedFiles, indexAbsentFiles, renamePairs }
   if (!output.endsWith("\0")) {
     throw invalidStatusRecord(output)
   }
 
   const records = output.slice(0, -1).split("\0")
-  const changedFiles = new Set<string>()
 
   for (let index = 0; index < records.length; index += 1) {
     const record = records[index]
@@ -100,17 +138,31 @@ export function parsePorcelainV1Status(output: string): Set<string> {
     if (pathname === "") throw invalidStatusRecord(record)
     changedFiles.add(pathname)
 
+    const unmerged = isUnmergedStatus(status)
+    if (status[0] === "D" && !unmerged) {
+      indexAbsentFiles.add(pathname)
+    }
+
     if (status[0] === "R" || status[0] === "C" || status[1] === "R" || status[1] === "C") {
       const sourcePath = records[index + 1]
       if (sourcePath === undefined || sourcePath === "") {
         throw invalidStatusRecord(record)
       }
       changedFiles.add(sourcePath)
+      renamePairs.set(pathname, sourcePath)
+      if ((status[0] === "R" || status[0] === "C") && !unmerged) {
+        indexAbsentFiles.add(sourcePath)
+      }
       index += 1
     }
   }
 
-  return changedFiles
+  return { changedFiles, indexAbsentFiles, renamePairs }
+}
+
+/** Flat authorizable set — the shape callers that only need membership consume. */
+export function parsePorcelainV1Status(output: string): Set<string> {
+  return parsePorcelainV1StatusDetailed(output).changedFiles
 }
 
 /**
@@ -161,6 +213,18 @@ export function authorizePerunExactFiles(
 
     seenFiles.add(canonicalPath)
     authorizedFiles.push(canonicalPath)
+  }
+
+  for (const [newPath, sourcePath] of input.renamePairs ?? []) {
+    const canonicalNew = canonicalizeRepositoryPath(newPath, input.repositoryRoot)
+    const canonicalSource = canonicalizeRepositoryPath(sourcePath, input.repositoryRoot)
+    const hasNew = seenFiles.has(canonicalNew)
+    const hasSource = seenFiles.has(canonicalSource)
+    if (hasNew !== hasSource) {
+      throw scopeError(
+        `a rename must be authorized as a whole — name both ${formatCommitPath(canonicalSource)} and ${formatCommitPath(canonicalNew)}.`,
+      )
+    }
   }
 
   return authorizedFiles

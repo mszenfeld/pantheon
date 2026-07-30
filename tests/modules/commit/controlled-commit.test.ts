@@ -4,6 +4,8 @@ import {
   type GitResult,
   type GitRunner,
 } from "../../../src/modules/commit/controlled-commit.js"
+import { createCommitScopeSnapshot } from "../../../src/modules/commit/git-scope-snapshot.js"
+import type { CommitAuthorization } from "../../../src/modules/commit/perun-commit-consent.js"
 
 interface FakeGitCall {
   cwd: string
@@ -508,6 +510,117 @@ describe("createControlledCommit (unit, injected git runner)", () => {
       "commit",
       "-m",
       "fix: resolve conflict",
+    ])
+  })
+})
+
+describe("createControlledCommit (unit, authorized Perun consent flow)", () => {
+  const root = process.cwd()
+  // porcelain v2 `-z`: one modified file plus one ALREADY-STAGED deletion (index half `D`).
+  const porcelainV2 =
+    "1 .M N... 100644 100644 100644 1111111 2222222 note.ts\0" +
+    "1 D. N... 100644 000000 000000 1111111 0000000 gone.txt\0"
+
+  function authorizedRunner(): { runGit: GitRunner; calls: FakeGitCall[] } {
+    return fakeGitRunner({
+      responses: {
+        "rev-parse": { stdout: `${root}\n`, stderr: "", exitCode: 0 },
+        status: { stdout: porcelainV2, stderr: "", exitCode: 0 },
+        add: { stdout: "", stderr: "", exitCode: 0 },
+        diff: { stdout: "", stderr: "", exitCode: 1 },
+        commit: { stdout: "[main abc] feat: consent\n", stderr: "", exitCode: 0 },
+      },
+    })
+  }
+
+  async function authorizationFor(runGit: GitRunner): Promise<CommitAuthorization> {
+    return {
+      token: "token",
+      sessionId: "session",
+      message: "feat: consent",
+      snapshot: await createCommitScopeSnapshot(root, runGit),
+      state: "pending",
+      expiresAt: 1,
+    }
+  }
+
+  it("commits the snapshot-derived scope instead of re-validating caller files", async () => {
+    const { runGit, calls } = authorizedRunner()
+
+    const result = await createControlledCommit({
+      cwd: root,
+      message: "feat: consent",
+      scopePolicy: "perun-exact",
+      authorization: await authorizationFor(runGit),
+      runGit,
+      pathExists: () => false,
+    })
+
+    expect(result.commitMessage).toContain("feat: consent")
+    // The caller-supplied exact-file gate must NOT run: it would inspect `files`, which the
+    // consent flow never passes, and dead-end every authorized commit.
+    expect(
+      calls.some((call) => call.args.includes("--porcelain=v1")),
+    ).toBe(false)
+    // An already-staged deletion cannot be handed to `git add` (the path is in neither the
+    // worktree nor the index) but must still reach the commit pathspec.
+    expect(calls.find((call) => call.args[0] === "add")?.args).toEqual([
+      "add",
+      "--",
+      "note.ts",
+    ])
+    expect(calls.find((call) => call.args[0] === "commit")?.args).toEqual([
+      "commit",
+      "-m",
+      "feat: consent",
+      "--",
+      "gone.txt",
+      "note.ts",
+    ])
+  })
+
+  it("still refuses when a rebase is in progress on the authorized path", async () => {
+    const { runGit } = authorizedRunner()
+    const authorization = await authorizationFor(runGit)
+
+    await expect(
+      createControlledCommit({
+        cwd: root,
+        message: "feat: consent",
+        scopePolicy: "perun-exact",
+        authorization,
+        runGit,
+        pathExists: () => true,
+      }),
+    ).rejects.toThrow(/rebase is active/i)
+  })
+
+  it("skips git add entirely when every authorized path is a git-recorded removal", async () => {
+    const { runGit, calls } = fakeGitRunner({
+      responses: {
+        "rev-parse": { stdout: `${root}\n`, stderr: "", exitCode: 0 },
+        // porcelain v1 `-z`: a staged deletion only.
+        status: { stdout: "D  gone.txt\0", stderr: "", exitCode: 0 },
+        diff: { stdout: "", stderr: "", exitCode: 1 },
+        commit: { stdout: "[main abc] chore: drop\n", stderr: "", exitCode: 0 },
+      },
+    })
+
+    await createControlledCommit({
+      cwd: root,
+      message: "chore: drop gone.txt",
+      files: ["gone.txt"],
+      scopePolicy: "perun-exact",
+      runGit,
+    })
+
+    expect(calls.some((call) => call.args[0] === "add")).toBe(false)
+    expect(calls.find((call) => call.args[0] === "commit")?.args).toEqual([
+      "commit",
+      "-m",
+      "chore: drop gone.txt",
+      "--",
+      "gone.txt",
     ])
   })
 })

@@ -5,10 +5,13 @@ import { promisify } from "node:util"
 import { normalizeCommitMessage } from "./message-policy.js"
 import {
   authorizePerunExactFiles,
-  parsePorcelainV1Status,
+  parsePorcelainV1StatusDetailed,
 } from "./perun-commit-policy.js"
 import type { CommitScopePolicy } from "./perun-commit-policy.js"
-import { createCommitScopeSnapshot } from "./git-scope-snapshot.js"
+import {
+  collectIndexAbsentPaths,
+  createCommitScopeSnapshot,
+} from "./git-scope-snapshot.js"
 import type { CommitAuthorization } from "./perun-commit-consent.js"
 
 const execFileAsync = promisify(execFile)
@@ -176,11 +179,14 @@ export async function createControlledCommit(input: ControlledCommitInput) {
     throw new Error("Current directory is not a git repository.")
   }
 
-  if (input.scopePolicy === "perun-exact" && input.authorization === undefined) {
+  // The sequencer gate binds to the POLICY, not to how the scope was authorized: an authorized
+  // consent-flow commit is exactly as unsafe on top of a half-finished rebase as a file-list one.
+  if (input.scopePolicy === "perun-exact") {
     await assertPerunSequencerIsInactive(runGit, input.cwd, pathExists)
   }
 
   let files = input.files
+  let indexAbsentFiles: ReadonlySet<string> = new Set<string>()
   if (input.authorization !== undefined) {
     const current = await createCommitScopeSnapshot(input.cwd, runGit)
     const authorized = input.authorization.snapshot
@@ -188,8 +194,12 @@ export async function createControlledCommit(input: ControlledCommitInput) {
       throw new Error("Perun commit authorization: selected Git scope changed before staging.")
     }
     files = authorized.changes.flatMap((change): string[] => change.renameFrom === undefined ? [change.path] : [change.path, change.renameFrom])
+    indexAbsentFiles = collectIndexAbsentPaths(authorized.changes)
   }
-  if (input.scopePolicy === "perun-exact") {
+  // An authorization already carries a git-derived, snapshot-verified file list; re-running the
+  // caller-supplied exact-file gate here would validate `input.files` (always absent in the consent
+  // flow, which rejects `files`) and dead-end every authorized commit.
+  if (input.scopePolicy === "perun-exact" && input.authorization === undefined) {
     const repositoryRoot = await runGit(input.cwd, [
       "rev-parse",
       "--show-toplevel",
@@ -210,20 +220,29 @@ export async function createControlledCommit(input: ControlledCommitInput) {
       )
     }
 
+    const parsedStatus = parsePorcelainV1StatusDetailed(status.stdout)
     files = authorizePerunExactFiles({
       files: input.files,
       repositoryRoot: repositoryRoot.stdout.trim(),
-      changedFiles: parsePorcelainV1Status(status.stdout),
+      changedFiles: parsedStatus.changedFiles,
+      renamePairs: parsedStatus.renamePairs,
       isDirectory,
     })
+    indexAbsentFiles = parsedStatus.indexAbsentFiles
   }
 
-  const addArgs =
-    files && files.length > 0
-      ? ["add", "--", ...files]
-      : ["add", "-A"]
-
-  const addResult = await runGit(input.cwd, addArgs)
+  // Git-recorded removals (a staged deletion, a staged rename's source) exist in neither the
+  // worktree nor the index, so `git add -- <path>` fails outright on them. They still belong in the
+  // commit pathspec — a partial commit records them from the index — so they are filtered out of
+  // the staging call only. With no scope at all the caller asked for the whole tree (`add -A`);
+  // with a scope whose every path is already a recorded removal there is nothing left to stage.
+  const stageableFiles = files?.filter((file) => !indexAbsentFiles.has(file))
+  const addResult =
+    files === undefined || files.length === 0
+      ? await runGit(input.cwd, ["add", "-A"])
+      : stageableFiles !== undefined && stageableFiles.length > 0
+        ? await runGit(input.cwd, ["add", "--", ...stageableFiles])
+        : { stdout: "", stderr: "", exitCode: 0 }
 
   if (addResult.exitCode !== 0) {
     throw new Error(

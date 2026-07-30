@@ -52,12 +52,20 @@ const ROOT_EQUIVALENT = new Set([
   "./.",
 ])
 
-/** Encode a path for denial text without allowing terminal-control injection. */
-export function formatCommitPath(path: string): string {
-  return JSON.stringify(path).replace(
+/**
+ * Escape the control bytes `JSON.stringify` leaves intact (it covers `\x00-\x1f`, but not the
+ * `\x7f-\x9f` range that still drives a terminal), so denial text cannot carry an escape sequence.
+ */
+export function escapeControlBytes(encoded: string): string {
+  return encoded.replace(
     /[\x00-\x1f\x7f-\x9f]/g,
     (byte: string): string => `\\u${byte.charCodeAt(0).toString(16).padStart(4, "0")}`,
   )
+}
+
+/** Encode a path for denial text without allowing terminal-control injection. */
+export function formatCommitPath(path: string): string {
+  return escapeControlBytes(JSON.stringify(path))
 }
 
 /**

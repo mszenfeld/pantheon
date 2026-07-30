@@ -4,6 +4,7 @@ import {
   assertPublicationCaller,
   classifyCommitCaller,
   parsePorcelainV1Status,
+  parsePorcelainV1StatusDetailed,
   PUBLICATION_AGENT_IDENTITIES,
 } from "../../../src/modules/commit/perun-commit-policy.js"
 import { SVAROG_AGENT_KEY } from "../../../src/modules/svarog/svarog.metadata.js"
@@ -176,5 +177,80 @@ describe("Perun exact-file authorization", () => {
     expect((): void => {
       authorize([unsafe])
     }).toThrow(JSON.stringify(unsafe))
+  })
+
+  it("requires both halves of a rename, and ignores renames outside the scope", () => {
+    const changed = new Set(["renamed.ts", "orig.ts", "modified.ts"])
+    const renamePairs = new Map([["renamed.ts", "orig.ts"]])
+    const withPairs = (files: unknown): string[] =>
+      authorizePerunExactFiles({
+        files,
+        repositoryRoot,
+        changedFiles: changed,
+        renamePairs,
+        isDirectory: (): boolean => false,
+      })
+
+    expect(withPairs(["renamed.ts", "orig.ts"])).toEqual(["renamed.ts", "orig.ts"])
+    // A rename that is not part of the requested scope at all stays none of its business.
+    expect(withPairs(["modified.ts"])).toEqual(["modified.ts"])
+    expect((): void => {
+      withPairs(["renamed.ts"])
+    }).toThrow(/rename must be authorized as a whole/i)
+    expect((): void => {
+      withPairs(["orig.ts"])
+    }).toThrow(/rename must be authorized as a whole/i)
+  })
+})
+
+describe("parsePorcelainV1StatusDetailed", () => {
+  it("marks a staged deletion as absent from the index", () => {
+    const parsed = parsePorcelainV1StatusDetailed("D  gone.txt\0")
+
+    expect([...parsed.changedFiles]).toEqual(["gone.txt"])
+    expect([...parsed.indexAbsentFiles]).toEqual(["gone.txt"])
+  })
+
+  it("keeps an unstaged deletion stageable — it still has an index entry", () => {
+    const parsed = parsePorcelainV1StatusDetailed(" D unstaged.txt\0")
+
+    expect([...parsed.changedFiles]).toEqual(["unstaged.txt"])
+    expect([...parsed.indexAbsentFiles]).toEqual([])
+  })
+
+  it("pairs a staged rename and marks only its source as index-absent", () => {
+    const parsed = parsePorcelainV1StatusDetailed("R  dir/new.txt\0dir/old.txt\0")
+
+    expect([...parsed.changedFiles].sort()).toEqual([
+      "dir/new.txt",
+      "dir/old.txt",
+    ])
+    expect([...parsed.indexAbsentFiles]).toEqual(["dir/old.txt"])
+    expect(parsed.renamePairs.get("dir/new.txt")).toBe("dir/old.txt")
+  })
+
+  it("never marks an unmerged record as index-absent", () => {
+    for (const record of ["DD both.txt\0", "UD theirs.txt\0", "AU ours.txt\0"]) {
+      const parsed = parsePorcelainV1StatusDetailed(record)
+
+      expect(parsed.changedFiles.size).toBe(1)
+      expect([...parsed.indexAbsentFiles]).toEqual([])
+    }
+  })
+
+  it("treats an untracked file as a plain stageable change", () => {
+    const parsed = parsePorcelainV1StatusDetailed("?? fresh.txt\0")
+
+    expect([...parsed.changedFiles]).toEqual(["fresh.txt"])
+    expect([...parsed.indexAbsentFiles]).toEqual([])
+    expect(parsed.renamePairs.size).toBe(0)
+  })
+
+  it("keeps the flat wrapper in sync with the detailed parse", () => {
+    const output = "R  dir/new.txt\0dir/old.txt\0 M note.txt\0"
+
+    expect([...parsePorcelainV1Status(output)].sort()).toEqual(
+      [...parsePorcelainV1StatusDetailed(output).changedFiles].sort(),
+    )
   })
 })
