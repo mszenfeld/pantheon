@@ -49,7 +49,10 @@ When `APPVERK_PERUN_COMMIT_CONSENT=enabled`, Perun must instead call
 `prepare_perun_commit_scope`, print its returned proposal unchanged, and stop. After the user's
 fresh exact challenge response, it calls `authorize_perun_commit_scope` with only the opaque
 proposal ID, then calls `av_commit` once with the returned authorization and no `files`. The
-proposal and authorization expire after five minutes; any stale state requires a new proposal.
+proposal expires five minutes after it is created and the authorization inherits that same deadline;
+any stale state requires a new proposal. The consent check anchors on the proposal message rather than
+on the last turn, so it still holds while Perun's own turn is in flight, but a user turn after the
+reply invalidates the consent.
 `disabled` (and an unset flag) retains the individual-file fallback above. This does not grant
 Perun branch, push, or PR authority.
 

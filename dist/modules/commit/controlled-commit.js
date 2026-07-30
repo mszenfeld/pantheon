@@ -5,9 +5,12 @@ import { promisify } from "node:util";
 import { normalizeCommitMessage } from "./message-policy.js";
 import {
   authorizePerunExactFiles,
-  parsePorcelainV1Status
+  parsePorcelainV1StatusDetailed
 } from "./perun-commit-policy.js";
-import { createCommitScopeSnapshot } from "./git-scope-snapshot.js";
+import {
+  collectIndexAbsentPaths,
+  createCommitScopeSnapshot
+} from "./git-scope-snapshot.js";
 const execFileAsync = promisify(execFile);
 const defaultGitRunner = async (cwd, args) => {
   try {
@@ -115,10 +118,11 @@ async function createControlledCommit(input) {
   if (repoCheck.exitCode !== 0) {
     throw new Error("Current directory is not a git repository.");
   }
-  if (input.scopePolicy === "perun-exact" && input.authorization === void 0) {
+  if (input.scopePolicy === "perun-exact") {
     await assertPerunSequencerIsInactive(runGit, input.cwd, pathExists);
   }
   let files = input.files;
+  let indexAbsentFiles = /* @__PURE__ */ new Set();
   if (input.authorization !== void 0) {
     const current = await createCommitScopeSnapshot(input.cwd, runGit);
     const authorized = input.authorization.snapshot;
@@ -126,8 +130,9 @@ async function createControlledCommit(input) {
       throw new Error("Perun commit authorization: selected Git scope changed before staging.");
     }
     files = authorized.changes.flatMap((change) => change.renameFrom === void 0 ? [change.path] : [change.path, change.renameFrom]);
+    indexAbsentFiles = collectIndexAbsentPaths(authorized.changes);
   }
-  if (input.scopePolicy === "perun-exact") {
+  if (input.scopePolicy === "perun-exact" && input.authorization === void 0) {
     const repositoryRoot = await runGit(input.cwd, [
       "rev-parse",
       "--show-toplevel"
@@ -146,15 +151,18 @@ async function createControlledCommit(input) {
         status.stderr.trim() || status.stdout.trim() || "git status failed."
       );
     }
+    const parsedStatus = parsePorcelainV1StatusDetailed(status.stdout);
     files = authorizePerunExactFiles({
       files: input.files,
       repositoryRoot: repositoryRoot.stdout.trim(),
-      changedFiles: parsePorcelainV1Status(status.stdout),
+      changedFiles: parsedStatus.changedFiles,
+      renamePairs: parsedStatus.renamePairs,
       isDirectory
     });
+    indexAbsentFiles = parsedStatus.indexAbsentFiles;
   }
-  const addArgs = files && files.length > 0 ? ["add", "--", ...files] : ["add", "-A"];
-  const addResult = await runGit(input.cwd, addArgs);
+  const stageableFiles = files?.filter((file) => !indexAbsentFiles.has(file));
+  const addResult = files === void 0 || files.length === 0 ? await runGit(input.cwd, ["add", "-A"]) : stageableFiles !== void 0 && stageableFiles.length > 0 ? await runGit(input.cwd, ["add", "--", ...stageableFiles]) : { stdout: "", stderr: "", exitCode: 0 };
   if (addResult.exitCode !== 0) {
     throw new Error(
       addResult.stderr.trim() || addResult.stdout.trim() || "git add failed."

@@ -36,10 +36,20 @@ class PerunCommitConsentStore {
       this.audit.emit({ event: "consent.expired", timestamp: new Date(this.now()).toISOString(), sessionId, proposalId });
       throw new Error("Perun commit consent: proposal is missing, expired, or belongs to another session.");
     }
-    const last = transcript.at(-1);
-    const previous = transcript.at(-2);
-    if (previous?.role !== "assistant" || previous.text !== proposal.rendered || last?.role !== "user") {
+    let proposalIndex = -1;
+    for (let index = transcript.length - 1; index >= 0; index -= 1) {
+      const message = transcript[index];
+      if (message?.role === "assistant" && message.text === proposal.rendered) {
+        proposalIndex = index;
+        break;
+      }
+    }
+    const last = proposalIndex === -1 ? void 0 : transcript[proposalIndex + 1];
+    if (last?.role !== "user") {
       throw new Error("Perun commit consent: the exact proposal must be immediately followed by a user response.");
+    }
+    if (transcript.slice(proposalIndex + 2).some((message) => message.role === "user")) {
+      throw new Error("Perun commit consent: the conversation moved on after the reply; re-propose the scope.");
     }
     if (last.text === "Abort") {
       this.proposals.delete(proposalId);

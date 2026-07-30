@@ -12,7 +12,10 @@ import {
 } from "./perun-commit-policy.js";
 import { createCommitScopeSnapshot } from "./git-scope-snapshot.js";
 import { PerunCommitConsentStore } from "./perun-commit-consent.js";
-import { isCoordinatorSession } from "../_shared/session-identity.js";
+import {
+  COORDINATOR_AGENT_NAME,
+  isCoordinatorSession
+} from "../_shared/session-identity.js";
 const COMMIT_COMMAND_DESCRIPTION = "Create a git commit with the AppVerk commit workflow";
 const moduleDirectory = path.dirname(fileURLToPath(import.meta.url));
 const packagedCommandPath = path.resolve(
@@ -36,7 +39,7 @@ const AppVerkCommitPlugin = async (input) => {
   const consentStore = new PerunCommitConsentStore();
   async function assertPerunContext(context) {
     const sessionId = context.sessionID;
-    if (context.agent !== "Perun - Coordinator" || sessionId === void 0 || sessionId === "" || !await isCoordinatorSession(sessionId, input.client)) {
+    if (context.agent !== COORDINATOR_AGENT_NAME || sessionId === void 0 || sessionId === "" || !await isCoordinatorSession(sessionId, input.client)) {
       throw new Error("Perun commit consent: caller identity is unavailable or unauthorized.");
     }
     return sessionId;

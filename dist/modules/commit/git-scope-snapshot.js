@@ -70,6 +70,19 @@ function parsePorcelainV2(output) {
   }
   return changes.sort((left, right) => left.path.localeCompare(right.path));
 }
+function collectIndexAbsentPaths(changes) {
+  const absent = /* @__PURE__ */ new Set();
+  for (const change of changes) {
+    const indexHalf = change.porcelain[0];
+    if (change.status === "deleted" && indexHalf === "D") {
+      absent.add(change.path);
+    }
+    if (change.status === "renamed" && change.renameFrom !== void 0 && (indexHalf === "R" || indexHalf === "C")) {
+      absent.add(change.renameFrom);
+    }
+  }
+  return absent;
+}
 function digest(value) {
   return createHash("sha256").update(value).digest("hex");
 }
@@ -96,6 +109,7 @@ async function createCommitScopeSnapshot(cwd, runGit = defaultGitRunner) {
   return { repository, head, changes, digest: digest(JSON.stringify({ repository, head, changes })) };
 }
 export {
+  collectIndexAbsentPaths,
   createCommitScopeSnapshot,
   parsePorcelainV2
 };

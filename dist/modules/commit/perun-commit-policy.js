@@ -1,5 +1,6 @@
 import path from "node:path";
 import {
+  escapeControlBytes,
   formatCommitPath,
   isScopedCommitPath
 } from "../_shared/commit-staging-scope.js";
@@ -20,8 +21,10 @@ function invalidStatusRecord(record) {
   return scopeError(`invalid git status record ${formatCommitPath(record)}.`);
 }
 function formatUnknownPath(value) {
+  if (typeof value === "string") return formatCommitPath(value);
   try {
-    return JSON.stringify(value) ?? '"<unserializable>"';
+    const encoded = JSON.stringify(value);
+    return encoded === void 0 ? '"<unserializable>"' : escapeControlBytes(encoded);
   } catch {
     return '"<unserializable>"';
   }
@@ -41,13 +44,18 @@ function canonicalizeRepositoryPath(value, repositoryRoot) {
   }
   return canonicalPath;
 }
-function parsePorcelainV1Status(output) {
-  if (output === "") return /* @__PURE__ */ new Set();
+function isUnmergedStatus(status) {
+  return status[0] === "U" || status[1] === "U" || status === "DD " || status === "AA ";
+}
+function parsePorcelainV1StatusDetailed(output) {
+  const changedFiles = /* @__PURE__ */ new Set();
+  const indexAbsentFiles = /* @__PURE__ */ new Set();
+  const renamePairs = /* @__PURE__ */ new Map();
+  if (output === "") return { changedFiles, indexAbsentFiles, renamePairs };
   if (!output.endsWith("\0")) {
     throw invalidStatusRecord(output);
   }
   const records = output.slice(0, -1).split("\0");
-  const changedFiles = /* @__PURE__ */ new Set();
   for (let index = 0; index < records.length; index += 1) {
     const record = records[index];
     if (record === void 0 || record.length < 4) {
@@ -66,16 +74,27 @@ function parsePorcelainV1Status(output) {
     const pathname = record.slice(3);
     if (pathname === "") throw invalidStatusRecord(record);
     changedFiles.add(pathname);
+    const unmerged = isUnmergedStatus(status);
+    if (status[0] === "D" && !unmerged) {
+      indexAbsentFiles.add(pathname);
+    }
     if (status[0] === "R" || status[0] === "C" || status[1] === "R" || status[1] === "C") {
       const sourcePath = records[index + 1];
       if (sourcePath === void 0 || sourcePath === "") {
         throw invalidStatusRecord(record);
       }
       changedFiles.add(sourcePath);
+      renamePairs.set(pathname, sourcePath);
+      if ((status[0] === "R" || status[0] === "C") && !unmerged) {
+        indexAbsentFiles.add(sourcePath);
+      }
       index += 1;
     }
   }
-  return changedFiles;
+  return { changedFiles, indexAbsentFiles, renamePairs };
+}
+function parsePorcelainV1Status(output) {
+  return parsePorcelainV1StatusDetailed(output).changedFiles;
 }
 function authorizePerunExactFiles(input) {
   if (!path.isAbsolute(input.repositoryRoot)) {
@@ -114,6 +133,17 @@ function authorizePerunExactFiles(input) {
     seenFiles.add(canonicalPath);
     authorizedFiles.push(canonicalPath);
   }
+  for (const [newPath, sourcePath] of input.renamePairs ?? []) {
+    const canonicalNew = canonicalizeRepositoryPath(newPath, input.repositoryRoot);
+    const canonicalSource = canonicalizeRepositoryPath(sourcePath, input.repositoryRoot);
+    const hasNew = seenFiles.has(canonicalNew);
+    const hasSource = seenFiles.has(canonicalSource);
+    if (hasNew !== hasSource) {
+      throw scopeError(
+        `a rename must be authorized as a whole \u2014 name both ${formatCommitPath(canonicalSource)} and ${formatCommitPath(canonicalNew)}.`
+      );
+    }
+  }
   return authorizedFiles;
 }
 function assertKnownCaller(agent, operation) {
@@ -137,5 +167,6 @@ export {
   authorizePerunExactFiles,
   canonicalizeRepositoryPath,
   classifyCommitCaller,
-  parsePorcelainV1Status
+  parsePorcelainV1Status,
+  parsePorcelainV1StatusDetailed
 };

@@ -10,11 +10,14 @@ const ROOT_EQUIVALENT = /* @__PURE__ */ new Set([
   "",
   "./."
 ]);
-function formatCommitPath(path) {
-  return JSON.stringify(path).replace(
+function escapeControlBytes(encoded) {
+  return encoded.replace(
     /[\x00-\x1f\x7f-\x9f]/g,
     (byte) => `\\u${byte.charCodeAt(0).toString(16).padStart(4, "0")}`
   );
+}
+function formatCommitPath(path) {
+  return escapeControlBytes(JSON.stringify(path));
 }
 function isScopedCommitPath(value) {
   if (typeof value !== "string") return false;
@@ -49,6 +52,7 @@ function unbudgetedCommitPathMessage(marker, path, edited) {
 export {
   bareCommitDenialMessage,
   directoryCommitDenialMessage,
+  escapeControlBytes,
   findDirectoryPath,
   formatCommitPath,
   hasExplicitCommitFiles,

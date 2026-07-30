@@ -35,6 +35,11 @@
  *    filesystem check that no named path is a directory — `git add -- src` would otherwise stage
  *    every modified and untracked file beneath it.
  */
+/**
+ * Escape the control bytes `JSON.stringify` leaves intact (it covers `\x00-\x1f`, but not the
+ * `\x7f-\x9f` range that still drives a terminal), so denial text cannot carry an escape sequence.
+ */
+declare function escapeControlBytes(encoded: string): string;
 /** Encode a path for denial text without allowing terminal-control injection. */
 declare function formatCommitPath(path: string): string;
 /**
@@ -70,4 +75,4 @@ declare function directoryCommitDenialMessage(marker: string, agent: string, pat
  */
 declare function unbudgetedCommitPathMessage(marker: string, path: string, edited: readonly string[]): string;
 
-export { bareCommitDenialMessage, directoryCommitDenialMessage, findDirectoryPath, formatCommitPath, hasExplicitCommitFiles, isScopedCommitPath, unbudgetedCommitPathMessage };
+export { bareCommitDenialMessage, directoryCommitDenialMessage, escapeControlBytes, findDirectoryPath, formatCommitPath, hasExplicitCommitFiles, isScopedCommitPath, unbudgetedCommitPathMessage };
