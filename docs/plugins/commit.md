@@ -27,7 +27,11 @@ The commit plugin is an **absorbed module** — its source, tests, and command a
 
 | Path | Role |
 |------|------|
-| `src/modules/commit/index.ts` | Plugin factory (`AppVerkCommitPlugin`); registers the `av_commit`, `create_pr`, and `create_branch` tools and the `/commit` command. |
+| `src/modules/commit/index.ts` | Plugin factory (`AppVerkCommitPlugin`); registers the `av_commit`, `prepare_perun_commit_scope`, `authorize_perun_commit_scope`, `create_pr`, and `create_branch` tools and the `/commit` command. The two consent tools return `{"status":"disabled"}` unless `APPVERK_PERUN_COMMIT_CONSENT=enabled`; `create_pr` / `create_branch` refuse any caller that is not `svarog` / `stribog`. |
+| `src/modules/commit/perun-commit-policy.ts` | Caller classification (`classifyCommitCaller`, `assertPublicationCaller` — both fail closed on an unresolved identity), the Git-authoritative exact-file gate (`authorizePerunExactFiles`, whole-rename rule), and the fail-closed `git status --porcelain=v1 -z` parser. |
+| `src/modules/commit/perun-commit-consent.ts` | Transcript-bound consent store for Perun's local-commit exception: proposal → challenge → single-use authorization, 5-minute TTL, per-session clearing. |
+| `src/modules/commit/git-scope-snapshot.ts` | Porcelain-v2 snapshot of the current changes (digest, repository identity, `HEAD`) plus `collectIndexAbsentPaths` — the git-recorded removals that must stay out of `git add`. |
+| `src/modules/commit/commit-audit.ts` | Audit sink for the consent lifecycle events. |
 | `src/modules/commit/bash-policy.ts` | `classifyBashCommand` workflow rail — blocks raw `git commit` / `git push` through the bash tool. |
 | `src/modules/commit/controlled-commit.ts` | Implements the `av_commit` tool (stage selected files, run `git commit` with the supplied message). |
 | `src/modules/commit/message-policy.ts` | Validates commit messages (Conventional Commits, rejects `Co-Authored-By` footers, rejects non-English subjects via the english-policy stoplist). |

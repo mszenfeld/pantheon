@@ -9,15 +9,20 @@ default-disabled consent flow that lets **Perun** create one local commit itself
 
 | Caller | `av_commit` | `create_branch` / `create_pr` |
 |---|---|---|
-| Operator session (`/commit`) | Yes — `files` optional (omitting it stages the whole worktree) | Yes |
-| Svarog / Stribog (executors) | Yes — `files` must name individual files the session edited | Yes — the only publisher identities |
-| Perun (coordinator) | Yes — one terminal, explicitly authorized local commit | **No** — refused before any Git or provider call |
-| Anything else / unresolved identity | Refused (fails closed) | Refused (fails closed) |
+| Svarog / Stribog (executors) | Yes — `files` must name individual files: Stribog only paths it edited this session, Svarog anything but a directory | Yes — **the only** publisher identities |
+| Perun (coordinator) | Yes — one terminal, explicitly authorized local commit | No — refused before any Git or provider call |
+| Any other resolved identity (a custom agent, a non-Perun operator session) | Yes — `files` optional (omitting it stages the whole worktree) | No — refused with `caller is not authorized` |
+| Unresolved identity | Refused (fails closed) | Refused (fails closed) |
 
 Caller policy is selected from the **runtime identity**, never from a tool argument
 (`classifyCommitCaller` in `perun-commit-policy.ts`); an unavailable identity is refused before
 mutation. `assertPublicationCaller` restricts publication to the canonical `svarog` / `stribog`
 identities, so Perun's local commit can never grow into a branch, a push, or a PR.
+
+**Publication is reachable only from a dispatched executor session.** A human `/commit` (in this
+harness that is a Perun session) commits locally; branching and opening the PR happen through
+Svarog or Stribog, never from the operator's own session — `create_pr` / `create_branch` throw
+`caller is not authorized` for every other identity.
 
 ## Perun's local-commit exception
 
@@ -36,11 +41,16 @@ Perun calls `av_commit` with `files` naming only the user's confirmed individual
 - non-empty list of concrete paths — no omitted list, broad scope, directory, glob, or duplicate;
 - every path canonicalized against the repository root, and refused if it escapes the root;
 - every path must be a **current repository change**, taken from `git status --porcelain=v1 -z`
-  parsed fail-closed (`parsePorcelainV1Status`) — a Git-proven deletion is allowed, and a rename
-  contributes both its old and new path.
+  parsed fail-closed (`parsePorcelainV1StatusDetailed`) — a Git-proven deletion is allowed, and a
+  rename contributes both its old and new path;
+- a rename must be authorized **as a whole**: naming one half alone is refused, because committing it
+  would record an add without its deletion (or the reverse).
 
 The same canonical list drives staging and the commit pathspec, so nothing staged out-of-band rides
-along. During a merge or cherry-pick Git can only commit the whole resolved index, so the commit is
+along. Paths git reports as already-recorded removals — a staged deletion, a staged rename's source —
+are kept out of the `git add` call, because `git add -- <path>` cannot match a path that is in
+neither the worktree nor the index; they stay in the commit pathspec, which records them from the
+index. During a merge or cherry-pick Git can only commit the whole resolved index, so the commit is
 allowed only when that index equals the authorized set.
 
 ### `enabled` — transcript-bound consent flow
@@ -53,23 +63,31 @@ allowed only when that index equals the authorized set.
    random challenge phrase. Perun prints that proposal **unchanged** and stops.
 2. The user replies with the exact `Commit this exact scope <challenge>` line (or `Abort`).
 3. **`authorize_perun_commit_scope`** takes only the `proposal_id` and re-reads the session
-   transcript: the immediately preceding assistant message must be the exact rendered proposal, and
-   the last message must be the user's matching challenge response. Anything else — a paraphrased
-   proposal, a stale turn, a mismatched challenge — is refused. It returns a single-use
-   authorization token.
+   transcript. It anchors on the proposal, not on the tail: the assistant message carrying the exact
+   rendered proposal must be **immediately followed** by the user's matching challenge response, and
+   no later user turn may exist (that would mean the conversation moved on and the consent is stale).
+   Trailing assistant content is expected and ignored — this tool runs inside Perun's own in-flight
+   turn. A paraphrased proposal, a mismatched challenge, or `Abort` is refused. On success it returns
+   a single-use authorization token.
 4. **`av_commit`** is called once with that authorization and the same message. The token is
    single-use (`pending → in-flight → consumed`) and bound to the session that created it.
 
-Proposals and authorizations expire after **5 minutes**; stale state requires a new proposal.
-Sessions are swept on every plugin event and cleared on `session.deleted`. Every transition emits an
-audit record (`commit-audit.ts`): `proposal.created`, `consent.accepted` / `consent.rejected` /
-`consent.expired`, `authorization.started`, `commit.succeeded` / `commit.failed`.
+A proposal expires **5 minutes** after it is created, and the authorization it mints inherits that
+same deadline — an authorization is therefore always at most 5 minutes old, never a fresh window.
+Stale state requires a new proposal. Both maps are swept on every plugin event and cleared on
+`session.deleted`. The audit sink (`commit-audit.ts`) records `proposal.created`, `consent.accepted`,
+`consent.rejected` (an explicit `Abort`), `consent.expired` (a missing, expired, or cross-session
+proposal), `authorization.started`, and `commit.succeeded` / `commit.failed`. A refusal that never
+reached a decision — a wrong challenge phrase, an unanchored transcript — is surfaced to the caller
+as an error but is not an audit event.
 
-Before staging and again before committing, `controlled-commit.ts` re-reads the repository and
-refuses when the snapshot bound into the authorization no longer matches ("selected Git scope changed
-before staging" / "repository state changed before commit"). A commit is also refused outright while
-a **rebase or revert** is in progress — including when that state cannot be inspected, which fails
-closed — so the operator finishes or aborts that operation outside this exception first.
+`controlled-commit.ts` re-verifies the authorization twice: before staging it recomputes the whole
+snapshot and refuses on any drift in the change set, the repository identity, or `HEAD` ("selected
+Git scope changed before staging"); after staging it re-checks the repository identity and `HEAD`
+only — the index has deliberately changed by then — and refuses on "repository state changed before
+commit". A commit is also refused outright while a **rebase or revert** is in progress, in both
+modes, including when that state cannot be inspected (fail-closed), so the operator finishes or
+aborts that operation outside this exception first.
 
 ## Enforcement points
 
@@ -80,10 +98,10 @@ rules are declarative defense in depth:
 |---|---|
 | Caller classification (fails closed) | `perun-commit-policy.ts` (`classifyCommitCaller`, `assertPublicationCaller`) |
 | Perun identity for the consent tools | `assertPerunContext` in `src/modules/commit/index.ts` (agent name **and** `isCoordinatorSession`) |
-| Exact-file authorization against Git | `perun-commit-policy.ts` (`authorizePerunExactFiles`, `parsePorcelainV1Status`) |
+| Exact-file authorization against Git, whole-rename authorization | `perun-commit-policy.ts` (`authorizePerunExactFiles`, `parsePorcelainV1StatusDetailed`) |
 | Path shape (whole-tree, pathspec magic, globs, traversal) | `src/modules/_shared/commit-staging-scope.ts` |
-| Consent freshness, single use, TTL | `perun-commit-consent.ts` |
-| Snapshot re-verification, merge/cherry-pick index equality, rebase/revert refusal | `controlled-commit.ts` |
+| Consent freshness, transcript anchoring, single use, TTL | `perun-commit-consent.ts` |
+| Snapshot re-verification, merge/cherry-pick index equality, rebase/revert refusal, staging vs. git-recorded removals | `controlled-commit.ts` (`collectIndexAbsentPaths` in `git-scope-snapshot.ts`) |
 | Bash `git commit` / `git push` | `bash-policy.ts` (workflow rail, not a security boundary) |
 
 Prompt-side contracts: `src/agents/perun.md` ("Terminal local-commit workflow") and
