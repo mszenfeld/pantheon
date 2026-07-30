@@ -5,6 +5,8 @@ declare const DEFAULT_RESULT_MAX_BYTES: number;
 declare const DEFAULT_AGGREGATE_MAX_BYTES: number;
 declare const VELES_IDLE_TIMEOUT_MS: number;
 declare const VELES_WALLCLOCK_BACKSTOP_MS: number;
+declare const SVAROG_IDLE_TIMEOUT_MS: number;
+declare const SVAROG_WALLCLOCK_BACKSTOP_MS: number;
 declare const ZMORA_IDLE_TIMEOUT_MS: number;
 declare const ZMORA_WALLCLOCK_BACKSTOP_MS: number;
 declare const AGENT_TIMEOUT_OVERRIDES: ReadonlyMap<string, AgentTimeout>;
@@ -12,4 +14,4 @@ declare function resolveAgentTimeout(agentName: string, defaultMs?: number): Age
 /** Bound the total UTF-8 payload emitted for successful results in one wave. */
 declare function enforceAggregateBudget(results: DispatchResult[], aggregateMaxBytes: number): void;
 
-export { AGENT_TIMEOUT_OVERRIDES, AgentTimeout, DEFAULT_AGGREGATE_MAX_BYTES, DEFAULT_RESULT_MAX_BYTES, DEFAULT_TASK_TIMEOUT_MS, VELES_IDLE_TIMEOUT_MS, VELES_WALLCLOCK_BACKSTOP_MS, ZMORA_IDLE_TIMEOUT_MS, ZMORA_WALLCLOCK_BACKSTOP_MS, enforceAggregateBudget, resolveAgentTimeout };
+export { AGENT_TIMEOUT_OVERRIDES, AgentTimeout, DEFAULT_AGGREGATE_MAX_BYTES, DEFAULT_RESULT_MAX_BYTES, DEFAULT_TASK_TIMEOUT_MS, SVAROG_IDLE_TIMEOUT_MS, SVAROG_WALLCLOCK_BACKSTOP_MS, VELES_IDLE_TIMEOUT_MS, VELES_WALLCLOCK_BACKSTOP_MS, ZMORA_IDLE_TIMEOUT_MS, ZMORA_WALLCLOCK_BACKSTOP_MS, enforceAggregateBudget, resolveAgentTimeout };

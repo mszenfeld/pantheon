@@ -59,6 +59,7 @@ function getFeatureManifestGitRunner(input) {
     return execFileGitRunner;
   }
 }
+const PERUN_CROSS_MODULE_TOOLS = ["av_commit", "prepare_perun_commit_scope", "authorize_perun_commit_scope"];
 const PERUN_TOOLS = [
   "dispatch_parallel",
   "assign_issue_ids",
@@ -111,7 +112,7 @@ const AppVerkCoordinatorPlugin = async (input) => {
       "Guarantees and limits:",
       "- Maximum 4 tasks per call (aligned with the worker pool size; over-limit calls are rejected before any session is created). For larger workloads, chunk into multiple sequential dispatch_parallel calls.",
       "- A 4-worker pool runs every task in this call in parallel. `tasks.length \u2264 4` is enforced, so concurrency equals the call size. Result order is preserved.",
-      '- Each task has a hard timeout (5 minutes for most agents; the planner Veles and the QA executors (`zmora-fe` / `zmora-be`) get an inactivity-based budget: the deadline resets on signs of life, under a longer wall-clock backstop). On expiry the task is returned with status "timeout" and the partial result is discarded.',
+      '- Each foreground task uses a 5-minute hard timeout unless its specialist has an inactivity-aware policy: Svarog uses a 15-minute inactivity window under a 45-minute wall-clock backstop; Veles and the QA executors (`zmora-fe` / `zmora-be`) retain their configured inactivity-aware backstops. On expiry the task is returned with status "timeout" and the partial result is discarded.',
       '- Each successful result is truncated at 100KB (UTF-8 bytes). Truncated results end with the marker "[\u2026truncated\u2026]" \u2014 synthesize what is present, do not retry.',
       "- A second, whole-wave aggregate cap (~128KB total across all successful results in this call) is applied on top of the per-task cap so one call can never flood the context. When a wave exceeds it, later results (in input order) are trimmed and end with a marker pointing to that task's child session for the full output \u2014 read the child session if you need the omitted tail; do not retry.",
       "- Anti-recursion pre-flight: every task is validated against the live agent registry BEFORE any session is created. Tasks targeting an unknown agent or a `mode: primary` agent are rejected. A `mode: all` agent is rejected UNLESS it is on the dispatch allowlist AND the caller is a primary agent; this lets the coordinator dispatch the planner while blocking self/nested recursion. " + dispatchableAllowlistSentence + " Rejections throw and dispatch nothing.",
@@ -537,6 +538,7 @@ const AppVerkCoordinatorPlugin = async (input) => {
 export {
   AppVerkCoordinatorPlugin,
   DISPATCH_TOOL_NAMES2 as DISPATCH_TOOL_NAMES,
+  PERUN_CROSS_MODULE_TOOLS,
   PERUN_TOOLS,
   createSDKSpecialist,
   deriveReportPath,

@@ -35,6 +35,8 @@
  *    filesystem check that no named path is a directory — `git add -- src` would otherwise stage
  *    every modified and untracked file beneath it.
  */
+/** Encode a path for denial text without allowing terminal-control injection. */
+declare function formatCommitPath(path: string): string;
 /**
  * True when `value` names one concrete path that cannot by itself expand to the whole tree.
  * Shape only — it cannot tell a file from a directory (see `findDirectoryPath`).
@@ -68,4 +70,4 @@ declare function directoryCommitDenialMessage(marker: string, agent: string, pat
  */
 declare function unbudgetedCommitPathMessage(marker: string, path: string, edited: readonly string[]): string;
 
-export { bareCommitDenialMessage, directoryCommitDenialMessage, findDirectoryPath, hasExplicitCommitFiles, isScopedCommitPath, unbudgetedCommitPathMessage };
+export { bareCommitDenialMessage, directoryCommitDenialMessage, findDirectoryPath, formatCommitPath, hasExplicitCommitFiles, isScopedCommitPath, unbudgetedCommitPathMessage };
