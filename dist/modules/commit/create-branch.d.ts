@@ -1,4 +1,8 @@
 import { GitRunner } from './controlled-commit.js';
+import './perun-commit-policy.js';
+import './perun-commit-consent.js';
+import './commit-audit.js';
+import './git-scope-snapshot.js';
 
 declare const BRANCH_TYPES: readonly ["feature", "fix", "hotfix", "release", "docs", "chore", "refactor"];
 type BranchType = (typeof BRANCH_TYPES)[number];

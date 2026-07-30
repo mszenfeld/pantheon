@@ -1,6 +1,10 @@
 import { GitRunner } from './controlled-commit.js';
 import { GhRunner } from './github-pr-provider.js';
 import { PrProvider } from './pr-provider.js';
+import './perun-commit-policy.js';
+import './perun-commit-consent.js';
+import './commit-audit.js';
+import './git-scope-snapshot.js';
 
 interface CreatePrInput {
     title: string;

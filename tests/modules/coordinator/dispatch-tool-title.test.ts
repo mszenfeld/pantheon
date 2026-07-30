@@ -66,6 +66,18 @@ function makeFailingClient(): SDKClient {
 }
 
 describe("dispatch_parallel agent + summary surfacing", () => {
+  it("documents the foreground timeout budgets and discarded timeout output", async () => {
+    const dispatch = await loadDispatchTool(makeFailingClient())
+
+    expect(dispatch.description).toContain("Each foreground task uses a 5-minute hard timeout")
+    expect(dispatch.description).toContain("Svarog uses a 15-minute inactivity window")
+    expect(dispatch.description).toContain("45-minute wall-clock backstop")
+    expect(dispatch.description).toContain("Veles and the QA executors")
+    expect(dispatch.description).toContain("inactivity-aware")
+    expect(dispatch.description).toContain('status "timeout"')
+    expect(dispatch.description).toContain("partial result is discarded")
+  })
+
   it("joins `agent` and `summary` into state.title via context.metadata", async () => {
     const metadataSpy = vi.fn()
     const dispatch = await loadDispatchTool(makeFailingClient())

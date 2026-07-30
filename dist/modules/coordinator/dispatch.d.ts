@@ -4,7 +4,7 @@ export { AgentTimeout, DispatchScrubberSession } from './dispatch-types.js';
 export { DISPATCH_MAX_TASKS } from './task-builder.js';
 import { DispatchSpecialist } from './worker-pool.js';
 export { DISPATCHABLE_ALL_AGENTS, authorizeDispatchCaller, validateDispatchable } from './dispatch-authorizer.js';
-export { AGENT_TIMEOUT_OVERRIDES, DEFAULT_AGGREGATE_MAX_BYTES, DEFAULT_RESULT_MAX_BYTES, DEFAULT_TASK_TIMEOUT_MS, VELES_IDLE_TIMEOUT_MS, VELES_WALLCLOCK_BACKSTOP_MS, enforceAggregateBudget, resolveAgentTimeout } from './budget-enforcer.js';
+export { AGENT_TIMEOUT_OVERRIDES, DEFAULT_AGGREGATE_MAX_BYTES, DEFAULT_RESULT_MAX_BYTES, DEFAULT_TASK_TIMEOUT_MS, SVAROG_IDLE_TIMEOUT_MS, SVAROG_WALLCLOCK_BACKSTOP_MS, VELES_IDLE_TIMEOUT_MS, VELES_WALLCLOCK_BACKSTOP_MS, ZMORA_IDLE_TIMEOUT_MS, ZMORA_WALLCLOCK_BACKSTOP_MS, enforceAggregateBudget, resolveAgentTimeout } from './budget-enforcer.js';
 import './poller.js';
 
 declare const DEFAULT_POLL_INTERVAL_MS = 1000;

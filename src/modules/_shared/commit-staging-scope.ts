@@ -53,6 +53,22 @@ const ROOT_EQUIVALENT = new Set([
 ])
 
 /**
+ * Escape the control bytes `JSON.stringify` leaves intact (it covers `\x00-\x1f`, but not the
+ * `\x7f-\x9f` range that still drives a terminal), so denial text cannot carry an escape sequence.
+ */
+export function escapeControlBytes(encoded: string): string {
+  return encoded.replace(
+    /[\x00-\x1f\x7f-\x9f]/g,
+    (byte: string): string => `\\u${byte.charCodeAt(0).toString(16).padStart(4, "0")}`,
+  )
+}
+
+/** Encode a path for denial text without allowing terminal-control injection. */
+export function formatCommitPath(path: string): string {
+  return escapeControlBytes(JSON.stringify(path))
+}
+
+/**
  * True when `value` names one concrete path that cannot by itself expand to the whole tree.
  * Shape only — it cannot tell a file from a directory (see `findDirectoryPath`).
  */
@@ -127,7 +143,7 @@ export function directoryCommitDenialMessage(
   path: string,
 ): string {
   return (
-    `${marker}: av_commit named ${JSON.stringify(path)}, which is not a single existing file — a ` +
+    `${marker}: av_commit named ${formatCommitPath(path)}, which is not a single existing file — a ` +
     `DIRECTORY would stage every modified and untracked file beneath it (including unrelated ` +
     `operator changes in the shared worktree, which create_pr would then publish), and a path ` +
     `that does not resolve cannot be checked at all. ${agent} must name individual, existing ` +
@@ -147,8 +163,8 @@ export function unbudgetedCommitPathMessage(
   edited: readonly string[],
 ): string {
   return (
-    `${marker}: av_commit named ${JSON.stringify(path)}, which Stribog did not edit this session ` +
-    `(edited: ${edited.length > 0 ? edited.map((p) => JSON.stringify(p)).join(", ") : "nothing yet"}). A leaf actuator ` +
+    `${marker}: av_commit named ${formatCommitPath(path)}, which Stribog did not edit this session ` +
+    `(edited: ${edited.length > 0 ? edited.map(formatCommitPath).join(", ") : "nothing yet"}). A leaf actuator ` +
     `commits only the files it changed — staging anything else would publish unrelated work ` +
     `past the edit budget. Retry naming exactly those paths (the same spelling works: an ` +
     `absolute path, or one relative to the repo root). If the task genuinely requires ` +

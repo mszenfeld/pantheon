@@ -33,8 +33,12 @@ export {
   DEFAULT_TASK_TIMEOUT_MS,
   enforceAggregateBudget,
   resolveAgentTimeout,
+  SVAROG_IDLE_TIMEOUT_MS,
+  SVAROG_WALLCLOCK_BACKSTOP_MS,
   VELES_IDLE_TIMEOUT_MS,
   VELES_WALLCLOCK_BACKSTOP_MS,
+  ZMORA_IDLE_TIMEOUT_MS,
+  ZMORA_WALLCLOCK_BACKSTOP_MS,
 } from "./budget-enforcer.js"
 export type { AgentTimeout } from "./budget-enforcer.js"
 export type {

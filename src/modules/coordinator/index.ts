@@ -78,6 +78,13 @@ function getFeatureManifestGitRunner(input: unknown): GitRunner {
 }
 
 /**
+ * Tools owned by other modules that Perun may declare in its `allowed-tools`
+ * frontmatter. These are deliberately separate from `PERUN_TOOLS`: listing one
+ * here documents the cross-module grant without registering a duplicate tool.
+ */
+export const PERUN_CROSS_MODULE_TOOLS = ["av_commit", "prepare_perun_commit_scope", "authorize_perun_commit_scope"] as const
+
+/**
  * Coordinator-provided tools that MUST appear in perun.md's `allowed-tools`
  * frontmatter. Kept as an exported constant so a test can enforce the sync that
  * is otherwise manual (there is no programmatic link between tool registration
@@ -167,7 +174,7 @@ export const AppVerkCoordinatorPlugin: Plugin = async (input) => {
       "Guarantees and limits:",
       "- Maximum 4 tasks per call (aligned with the worker pool size; over-limit calls are rejected before any session is created). For larger workloads, chunk into multiple sequential dispatch_parallel calls.",
       "- A 4-worker pool runs every task in this call in parallel. `tasks.length ≤ 4` is enforced, so concurrency equals the call size. Result order is preserved.",
-      '- Each task has a hard timeout (5 minutes for most agents; the planner Veles gets a longer budget because it authors and self-verifies plans). On expiry the task is returned with status "timeout" and the partial result is discarded.',
+      '- Each foreground task uses a 5-minute hard timeout unless its specialist has an inactivity-aware policy: Svarog uses a 15-minute inactivity window under a 45-minute wall-clock backstop; Veles and the QA executors (`zmora-fe` / `zmora-be`) retain their configured inactivity-aware backstops. On expiry the task is returned with status "timeout" and the partial result is discarded.',
       '- Each successful result is truncated at 100KB (UTF-8 bytes). Truncated results end with the marker "[…truncated…]" — synthesize what is present, do not retry.',
       "- A second, whole-wave aggregate cap (~128KB total across all successful results in this call) is applied on top of the per-task cap so one call can never flood the context. When a wave exceeds it, later results (in input order) are trimmed and end with a marker pointing to that task's child session for the full output — read the child session if you need the omitted tail; do not retry.",
       "- Anti-recursion pre-flight: every task is validated against the live agent registry BEFORE any session is created. Tasks targeting an unknown agent or a `mode: primary` agent are rejected. A `mode: all` agent is rejected UNLESS it is on the dispatch allowlist AND the caller is a primary agent; this lets the coordinator dispatch the planner while blocking self/nested recursion. " +

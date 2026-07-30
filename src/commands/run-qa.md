@@ -125,6 +125,6 @@ Perun will then:
 
 - `src/agents/perun.md` — Perun coordinator spec, including Workflow 1 (QA Run) and the dispatch contract.
 - `docs/plugins/qa.md` — QA plugin architecture, variant-split rationale, `**Depends-on:**` semantics, plan/report formats.
-- `docs/plugins/coordinator.md` — `dispatch_parallel` runtime characteristics (4-wide pool, max 4 tasks per call, 5-minute per-task timeout).
+- `docs/plugins/coordinator.md` — `dispatch_parallel` runtime characteristics (4-wide pool, max 4 tasks per call, 5-minute per-task timeout; exceptions: the Zmora executors `zmora-fe` / `zmora-be` use an inactivity budget — idle 5 min under a 30-min backstop — and `svarog` uses idle 15 min under a 45-min backstop, while `zmora-setup` keeps the 5-minute default).
 - `src/modules/qa/index.ts` — `AppVerkQAPlugin` registers the `zmora-fe` / `zmora-be` variants exposed to Perun.
 - `src/modules/coordinator/dispatch.ts` — `dispatch_parallel` implementation used by Perun.
