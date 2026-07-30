@@ -78,6 +78,13 @@ function getFeatureManifestGitRunner(input: unknown): GitRunner {
 }
 
 /**
+ * Tools owned by other modules that Perun may declare in its `allowed-tools`
+ * frontmatter. These are deliberately separate from `PERUN_TOOLS`: listing one
+ * here documents the cross-module grant without registering a duplicate tool.
+ */
+export const PERUN_CROSS_MODULE_TOOLS = ["av_commit", "prepare_perun_commit_scope", "authorize_perun_commit_scope"] as const
+
+/**
  * Coordinator-provided tools that MUST appear in perun.md's `allowed-tools`
  * frontmatter. Kept as an exported constant so a test can enforce the sync that
  * is otherwise manual (there is no programmatic link between tool registration

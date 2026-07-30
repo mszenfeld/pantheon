@@ -40,7 +40,7 @@ describe("create_pr wrapper registration (AC-16)", () => {
     ])
   })
 
-  it("resolves cwd as worktree ?? directory and returns pretty JSON", async () => {
+  it.each(["svarog", "stribog"])("allows sanctioned executor %s with preserved wrapper behavior", async (agent: string) => {
     const plugin = await AppVerkCommitPlugin({} as never)
     const tool = plugin.tool?.create_pr as {
       execute: (args: object, context: object) => Promise<string>
@@ -48,7 +48,7 @@ describe("create_pr wrapper registration (AC-16)", () => {
 
     const withWorktree = await tool.execute(
       { title: "t" },
-      { worktree: "/wt", directory: "/dir" },
+      { agent, worktree: "/wt", directory: "/dir" },
     )
     expect(createPrMock.mock.calls[0]?.[0]?.cwd).toBe("/wt")
     expect(JSON.parse(withWorktree)).toMatchObject({ prCreated: true })
@@ -56,16 +56,35 @@ describe("create_pr wrapper registration (AC-16)", () => {
       JSON.stringify(await createPrMock.mock.results[0]?.value, null, 2),
     )
 
-    await tool.execute({ title: "t" }, { directory: "/dir" })
+    await tool.execute({ title: "t" }, { agent, directory: "/dir" })
     expect(createPrMock.mock.calls[1]?.[0]?.cwd).toBe("/dir")
   })
 
-  it("defaults draft to false when omitted", async () => {
+  it.each(["svarog", "stribog"])("defaults draft to false for sanctioned executor %s", async (agent: string) => {
     const plugin = await AppVerkCommitPlugin({} as never)
     const tool = plugin.tool?.create_pr as {
       execute: (args: object, context: object) => Promise<string>
     }
-    await tool.execute({ title: "t" }, { directory: "/dir" })
+    await tool.execute({ title: "t" }, { agent, directory: "/dir" })
     expect(createPrMock.mock.calls[0]?.[0]?.draft).toBe(false)
+  })
+
+  it("rejects all non-publishers before pull-request implementation", async () => {
+    const plugin = await AppVerkCommitPlugin({} as never)
+    const tool = plugin.tool?.create_pr as {
+      execute: (args: object, context: object) => Promise<string>
+    }
+
+    for (const context of [
+      { agent: "Perun - Coordinator", directory: "/dir" },
+      { agent: "zmora-fe", directory: "/dir" },
+      { agent: "custom-agent", directory: "/dir" },
+      { directory: "/dir" },
+    ]) {
+      await expect(tool.execute({ title: "blocked" }, context)).rejects.toThrow(
+        /create_pr: (caller is not authorized|caller identity is unavailable)/,
+      )
+    }
+    expect(createPrMock).not.toHaveBeenCalled()
   })
 })

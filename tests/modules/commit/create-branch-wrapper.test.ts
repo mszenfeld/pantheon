@@ -53,7 +53,7 @@ describe("create_branch wrapper registration (AC-13)", () => {
     expect(typeSchema?.safeParse("feat").success).toBe(true)
   })
 
-  it("resolves cwd as worktree ?? directory, defaults checkout to true, returns pretty JSON", async () => {
+  it.each(["svarog", "stribog"])("allows sanctioned executor %s with preserved wrapper behavior", async (agent: string) => {
     const plugin = await AppVerkCommitPlugin({} as never)
     const toolDef = plugin.tool?.create_branch as {
       execute: (args: object, context: object) => Promise<string>
@@ -61,7 +61,7 @@ describe("create_branch wrapper registration (AC-13)", () => {
 
     const withWorktree = await toolDef.execute(
       { type: "feature", description: "x" },
-      { worktree: "/wt", directory: "/dir" },
+      { agent, worktree: "/wt", directory: "/dir" },
     )
     expect(createBranchMock.mock.calls[0]?.[0]?.cwd).toBe("/wt")
     expect(createBranchMock.mock.calls[0]?.[0]?.checkout).toBe(true)
@@ -72,13 +72,13 @@ describe("create_branch wrapper registration (AC-13)", () => {
 
     await toolDef.execute(
       { type: "feature", description: "x" },
-      { directory: "/dir" },
+      { agent, directory: "/dir" },
     )
     expect(createBranchMock.mock.calls[1]?.[0]?.cwd).toBe("/dir")
 
     await toolDef.execute(
       { type: "feature", description: "x", checkout: false },
-      { directory: "/dir" },
+      { agent, directory: "/dir" },
     )
     expect(createBranchMock.mock.calls[2]?.[0]?.checkout).toBe(false)
 
@@ -86,8 +86,27 @@ describe("create_branch wrapper registration (AC-13)", () => {
     // same as omitted (a `"checkout" in args` rewrite would break this case).
     await toolDef.execute(
       { type: "feature", description: "x", checkout: undefined },
-      { directory: "/dir" },
+      { agent, directory: "/dir" },
     )
     expect(createBranchMock.mock.calls[3]?.[0]?.checkout).toBe(true)
+  })
+
+  it("rejects all non-publishers before branch implementation", async () => {
+    const plugin = await AppVerkCommitPlugin({} as never)
+    const toolDef = plugin.tool?.create_branch as {
+      execute: (args: object, context: object) => Promise<string>
+    }
+
+    for (const context of [
+      { agent: "Perun - Coordinator", directory: "/dir" },
+      { agent: "zmora-fe", directory: "/dir" },
+      { agent: "custom-agent", directory: "/dir" },
+      { directory: "/dir" },
+    ]) {
+      await expect(
+        toolDef.execute({ type: "feature", description: "blocked" }, context),
+      ).rejects.toThrow(/create_branch: (caller is not authorized|caller identity is unavailable)/)
+    }
+    expect(createBranchMock).not.toHaveBeenCalled()
   })
 })

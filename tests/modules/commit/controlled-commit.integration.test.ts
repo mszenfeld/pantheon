@@ -1,12 +1,13 @@
 import { execFile } from "node:child_process"
-import { chmod, mkdtemp, mkdir, writeFile } from "node:fs/promises"
+import { chmod, mkdtemp, mkdir, rm, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import path from "node:path"
 import { promisify } from "node:util"
-import { describe, expect, it } from "vitest"
+import { afterEach, describe, expect, it } from "vitest"
 import { createControlledCommit } from "../../../src/modules/commit/controlled-commit.js"
 
 const execFileAsync = promisify(execFile)
+const temporaryRepositories: string[] = []
 
 async function createRepo(): Promise<string> {
   const directory = await mkdtemp(path.join(tmpdir(), "av-opencode-commit-"))
@@ -18,11 +19,24 @@ async function createRepo(): Promise<string> {
   await execFileAsync("git", ["config", "user.name", "Dev User"], {
     cwd: directory,
   })
+  temporaryRepositories.push(directory)
 
   return directory
 }
 
+async function gitOutput(directory: string, args: string[]): Promise<string> {
+  const result = await execFileAsync("git", args, { cwd: directory })
+  return result.stdout
+}
+
 describe("createControlledCommit", () => {
+  afterEach(async () => {
+    await Promise.all(
+      temporaryRepositories.splice(0).map((directory: string): Promise<void> =>
+        rm(directory, { recursive: true, force: true }),
+      ),
+    )
+  })
   it("creates a commit for staged changes", async () => {
     const directory = await createRepo()
 
@@ -154,4 +168,66 @@ describe("createControlledCommit", () => {
       }),
     ).rejects.toThrow(/blocked by hook/i)
   })
+
+  it.each([
+    ["rebase-merge", async (directory: string): Promise<void> => {
+      await mkdir(path.join(directory, ".git", "rebase-merge"))
+    }],
+    ["rebase-apply", async (directory: string): Promise<void> => {
+      await mkdir(path.join(directory, ".git", "rebase-apply"))
+    }],
+    ["revert", async (directory: string): Promise<void> => {
+      const head = (await gitOutput(directory, ["rev-parse", "HEAD"])).trim()
+      await execFileAsync("git", ["update-ref", "REVERT_HEAD", head], {
+        cwd: directory,
+      })
+    }],
+  ])(
+    "leaves an active %s operation unchanged when denying a Perun commit",
+    async (
+      operation: string,
+      setOperationState: (directory: string) => Promise<void>,
+    ) => {
+      const directory = await createRepo()
+      await writeFile(path.join(directory, "seed.txt"), "seed\n")
+      await execFileAsync("git", ["add", "seed.txt"], { cwd: directory })
+      await execFileAsync("git", ["commit", "-m", "chore: seed"], {
+        cwd: directory,
+      })
+      await writeFile(path.join(directory, "note.txt"), "note\n")
+      await setOperationState(directory)
+
+      const before = await Promise.all([
+        gitOutput(directory, ["rev-parse", "HEAD"]),
+        gitOutput(directory, ["status", "--porcelain=v1"]),
+        gitOutput(directory, ["diff", "--cached"]),
+        gitOutput(directory, ["diff"]),
+      ])
+
+      await expect(
+        createControlledCommit({
+          cwd: directory,
+          files: ["note.txt"],
+          message: "fix: resolve operation",
+          scopePolicy: "perun-exact",
+        }),
+      ).rejects.toThrow(operation === "revert" ? /revert is active/i : /rebase is active/i)
+
+      await expect(
+        Promise.all([
+          gitOutput(directory, ["rev-parse", "HEAD"]),
+          gitOutput(directory, ["status", "--porcelain=v1"]),
+          gitOutput(directory, ["diff", "--cached"]),
+          gitOutput(directory, ["diff"]),
+        ]),
+      ).resolves.toEqual(before)
+      if (operation === "revert") {
+        await expect(
+          execFileAsync("git", ["rev-parse", "-q", "--verify", "REVERT_HEAD"], {
+            cwd: directory,
+          }),
+        ).resolves.toBeDefined()
+      }
+    },
+  )
 })
